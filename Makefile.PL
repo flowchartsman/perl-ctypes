@@ -23,9 +23,8 @@ WriteMakefile(
     AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
   : () ),
     LIBS              => [ '-Llibffi -lffi' ],
-    INC               => '-I. -I./include -I./include/win32',
+    INC               => '-I. -I./include',
     OPTIMIZE          => '-ggdb3 -O0',
-    DEFINE            => '-DCTYPES_TEST_VERBOSE -DMULTIPLICITY',
     LDDLFLAGS         => '-shared -L/usr/local/lib -fstack-protector',
     NEEDS_LINKING     => 1,
 #    XS                => { 'xs/Ctypes.xs' => 'xs/Ctypes.c' },  # this opt didn't work; had to move files to top dir
