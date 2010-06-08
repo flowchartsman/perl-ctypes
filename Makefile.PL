@@ -18,12 +18,14 @@ WriteMakefile(
     NAME              => 'Ctypes',
     VERSION_FROM      => 'lib/Ctypes.pm',
     PREREQ_PM         => {},
- ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
+ ($] >= 5.005 ?  
    (ABSTRACT_FROM     => 'lib/Ctypes.pm',
     AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
   : () ),
-    LIBS              => [ '-L/libffi -llibffi-5' ],
-    INC               => '-I. -I./include -I./include/win32',
+    LIBS              => [ '-Llibffi -lffi' ],
+    INC               => '-I. -I./include',
+    OPTIMIZE          => '-ggdb3 -O0',
+    LDDLFLAGS         => '-shared -L/usr/local/lib -fstack-protector',
     NEEDS_LINKING     => 1,
 #    XS                => { 'xs/Ctypes.xs' => 'xs/Ctypes.c' },  # this opt didn't work; had to move files to top dir
 

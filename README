@@ -1,20 +1,33 @@
 Ctypes
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+Call and wrap native C functions and libraries from Perl, using only
+Perl.
 
-A README file is required for CPAN modules since CPAN extracts the README
-file from a module distribution so that people browsing the archive
-can use it to get an idea of the module's uses. It is usually a good idea
-to provide version information here so that people can decide whether
-fixes for the module are worth downloading.
+This module requires the C library libffi to run. If you're on a unix-
+like system, you should install this via your favoured package
+manager. If you're on Win32 (using Strawberry Perl) you should go
+download the libffi-3.0.9 sources yourself from the following URL,
+compile the libraries and put them somewhere your Strawberry compiler
+toolchain will find them when it needs to. I can't remember just now
+whether the Strawberry toolchain is sufficient to compile libffi; you
+might be lucky.
 
+http://sourceware.org/libffi/
+
+Ctypes (current v0.001) is based on libffi to provide a way of calling
+native C library functions directly from Perl, using only Perl, and
+hence not requiring a compiler.
+
+Of course, the Ctypes module itself is written with XS. Haven't really
+thought that one through entirely. Perhaps we'll provide binaries? Or
+perhaps (wonder of wonders) it could someday be rolled into Perl5 core?
 
 INSTALLATION
 
-To install this module, run the following commands:
+This module uses ExtUtils::ModuleMaker because I couldn't see how to
+get Module::Build to compile stuff the way I wanted. Module::Install
+is currently still a bit limited for this fancy stuff too. So what
+you do is:
 
 	perl Makefile.PL
 	make
@@ -26,7 +39,7 @@ SUPPORT AND DOCUMENTATION
 After installing, you can find documentation for this module with the
 perldoc command.
 
-    perldoc Cdll
+    perldoc Ctypes
 
 You can also look for information at:
 
@@ -48,8 +61,6 @@ LICENSE AND COPYRIGHT
 Copyright (C) 2010 Ryan Jendoubi
 
 This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
+under the terms of the Perl Artistic License.
 
 See http://dev.perl.org/licenses/ for more information.
-

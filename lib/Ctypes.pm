@@ -7,15 +7,15 @@ use Carp;
 
 =head1 NAME
 
-Ctypes - Call C libraries from Perl, using Perl
+Ctypes - Call and wrap C libraries and functions from Perl, using Perl
 
 =head1 VERSION
 
-Version 0.01
+Version 0.001
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.001';
 
 require Exporter;
 use AutoLoader;
@@ -89,82 +89,43 @@ XSLoader::load('Ctypes', $VERSION);
 
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
-
-=head1 NAME
-
-Ptypes - Perl extension for blah blah blah
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
-
-Perhaps a little code snippet.
-
     use Ctypes;
+    use DynaLoader;
+
     # Look Ma, no XS!
-    my $foo = Ctypes->new();
-    ...
+    my $lib =  DynaLoader::dl_load_file( "-lm" );
+    my $func = Dynaloader::dl_find_symbol( $lib, 'sqrt' );
+    my $ret =  Ctypes::call( $func, 'sdd', 16  );
+
+    print $ret # 4! Eureka!
 
 =head1 DESCRIPTION
 
-Stub documentation for Ptypes, created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
+Ctypes is designed to let you, the Perl module author, who likes perl,
+and doesn't want to have to mess about with XS or C or any of that guff,
+to wrap native C libraries in a Perly way. You benefit by writing only
+Perl. Your users benefit from not having to have a compiler properly
+installed and configured.
 
-Blah blah blah.
-
-=head2 EXPORT
-
-None by default.
-
-=head2 Exportable constants
-
-  FFI_BAD_ABI
-  FFI_BAD_TYPEDEF
-  FFI_LONG_LONG_MAX
-  FFI_OK
-  FFI_SIZEOF_ARG
-  FFI_SIZEOF_JAVA_RAW
-  FFI_TYPE_DOUBLE
-  FFI_TYPE_FLOAT
-  FFI_TYPE_INT
-  FFI_TYPE_LAST
-  FFI_TYPE_LONGDOUBLE
-  FFI_TYPE_POINTER
-  FFI_TYPE_SINT16
-  FFI_TYPE_SINT32
-  FFI_TYPE_SINT64
-  FFI_TYPE_SINT8
-  FFI_TYPE_STRUCT
-  FFI_TYPE_UINT16
-  FFI_TYPE_UINT32
-  FFI_TYPE_UINT64
-  FFI_TYPE_UINT8
-  FFI_TYPE_VOID
-  ffi_type_longdouble
-  ffi_type_schar
-  ffi_type_sint
-  ffi_type_slong
-  ffi_type_sshort
-  ffi_type_uchar
-  ffi_type_uint
-  ffi_type_ulong
-  ffi_type_ushort
+The module should also be as useful for the admin, scientist or general
+datamangler who wants to quickly script together a couple of functions
+from different native libraries as for the Perl module author who wants
+to expose the full functionality of a large C/C++ project.
 
 =head1 SUBROUTINES/METHODS
 
-=head2 function1
+Ctypes will offer both a procedural and OO interface (to accommodate
+both types of authors described above). At the moment only the
+procedural interface is working.
 
-=cut
+=head2 call
 
-#sub function1 { }
+The main procedural interface to libffi's functionality.
 
-=head2 function2
-
-=cut
-
-# sub function2 { }
+Toss it some vars, see what you get!
 
 =head1 AUTHOR
 
@@ -176,14 +137,17 @@ Please report any bugs or feature requests to C<bug-ctypes at rt.cpan.org>, or t
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Ctypes>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
 
-
-
 =head1 SUPPORT
+
+You can see the proposed API and keep up to date with development at
+L<http://blogs.perl.org/users/doubi> or by following <at>doubious_code
+on Twitter (if anyone knows a microblogging client that lets me manage
+my Twitter, Facebook and Iden.ti.ca from the one interface, please let
+me know :-)
 
 You can find documentation for this module with the perldoc command.
 
     perldoc Ctypes
-
 
 You can also look for information at:
 
