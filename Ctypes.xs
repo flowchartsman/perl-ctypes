@@ -99,18 +99,19 @@ call( addr, sig, ... )
     rtype = get_ffi_type( sig[1] );
     switch(sig[1])
     {
-      case 'c': Newxc(rvalue, 1, char, char);         break;
-      case 'C': Newxc(rvalue, 1, unsigned char, unsigned char);         break;
-      case 's': Newxc(rvalue, 1, short, short);         break;
-      case 'S': Newxc(rvalue, 1, unsigned short, unsigned short);         break;
-      case 'i': Newxc(rvalue, 1, int, int);         break;
-      case 'I': Newxc(rvalue, 1, unsigned int, unsigned int);          break;
-      case 'l': Newxc(rvalue, 1, long, long);          break;
-      case 'L': Newxc(rvalue, 1, unsigned long, unsigned long);         break;
-      case 'f': Newxc(rvalue, 1, float, float);        break;
-      case 'd': Newxc(rvalue, 1, double, double);         break;
-      case 'D': Newxc(rvalue, 1, long double, long double);        break;
-      case 'p': Newx(rvalue, 1, void);         break;
+      case 'c': Newxc(rvalue, 1, char, char);                       break;
+      case 'C': Newxc(rvalue, 1, unsigned char, unsigned char);     break;
+      case 's': Newxc(rvalue, 1, short, short);                     break;
+      case 'S': Newxc(rvalue, 1, unsigned short, unsigned short);   break;
+      case 'i': Newxc(rvalue, 1, int, int);                         break;
+      case 'I': Newxc(rvalue, 1, unsigned int, unsigned int);       break;
+      case 'l': Newxc(rvalue, 1, long, long);                       break;
+      case 'L': Newxc(rvalue, 1, unsigned long, unsigned long);     break;
+      case 'f': Newxc(rvalue, 1, float, float);                     break;
+      case 'd': Newxc(rvalue, 1, double, double);                   break;
+      case 'D': Newxc(rvalue, 1, long double, long double);         break;
+      case 'p': Newx(rvalue, 1, void);                              break;
+      case 'v': break;
       default: croak( "Unrecognised type: %c!", sig[1] );   // should never happen here
     }        
 #ifdef CTYPES_TEST_VERBOSE
