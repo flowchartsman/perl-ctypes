@@ -243,4 +243,3 @@ call( addr, sig, ... )
 #ifdef CTYPES_TEST_VERBOSE
       warn( "[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
 #endif
-

@@ -137,8 +137,6 @@ Please report any bugs or feature requests to C<bug-ctypes at rt.cpan.org>, or t
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Ctypes>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
 
-
-
 =head1 SUPPORT
 
 You can see the proposed API and keep up to date with development at
