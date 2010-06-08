@@ -1,0 +1,17 @@
+.git
+ignore.txt
+blib
+Makefile
+Makefile.old
+_build
+Build.bat
+Build
+MYMETA.yml
+pm_to_blib
+*~
+*.bak
+META.yml
+libffi-3.0.9*
+libffi*
+*.bs
+*.swp
