@@ -11,7 +11,7 @@
 #
 #  WriteAll;
 
-use 5.010001;
+use 5.010000;
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
