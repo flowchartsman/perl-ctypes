@@ -46,15 +46,6 @@ our @EXPORT_OK = [ qw(
 	FFI_TYPE_UINT64
 	FFI_TYPE_UINT8
 	FFI_TYPE_VOID
-	ffi_type_longdouble
-	ffi_type_schar
-	ffi_type_sint
-	ffi_type_slong
-	ffi_type_sshort
-	ffi_type_uchar
-	ffi_type_uint
-	ffi_type_ulong
-	ffi_type_ushort
 ) ];
 
 sub AUTOLOAD {
@@ -104,11 +95,10 @@ __END__
 
 =head1 DESCRIPTION
 
-Ctypes is designed to let you, the Perl module author, who likes perl,
-and doesn't want to have to mess about with XS or C or any of that guff,
-to wrap native C libraries in a Perly way. You benefit by writing only
-Perl. Your users benefit from not having to have a compiler properly
-installed and configured.
+Ctypes is designed to let you, the Perl module author, who doesn't
+want to have to mess about with XS or C, to wrap native C libraries in
+a Perly way. You benefit by writing only Perl. Your users benefit from
+not having to have a compiler properly installed and configured.
 
 The module should also be as useful for the admin, scientist or general
 datamangler who wants to quickly script together a couple of functions
@@ -121,11 +111,16 @@ Ctypes will offer both a procedural and OO interface (to accommodate
 both types of authors described above). At the moment only the
 procedural interface is working.
 
-=head2 call
+=over
+
+=item call (sig, addr, args)
 
 The main procedural interface to libffi's functionality.
+Calls a external function.
 
-Toss it some vars, see what you get!
+=item constant
+
+=back
 
 =head1 AUTHOR
 

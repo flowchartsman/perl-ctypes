@@ -62,6 +62,8 @@ ffi_type* get_ffi_type(char type)
 
 MODULE = Ctypes		PACKAGE = Ctypes
 
+INCLUDE: const-xs.inc
+
 void
 call( addr, sig, ... )
     void* addr;
@@ -96,8 +98,8 @@ call( addr, sig, ... )
 #endif
     }
     rtype = get_ffi_type( sig[1] );
-    switch(sig[1])
-    {
+    switch(sig[1]) 
+      {
       case 'c': Newxc(rvalue, 1, char, char);                       break;
       case 'C': Newxc(rvalue, 1, unsigned char, unsigned char);     break;
       case 's': Newxc(rvalue, 1, short, short);                     break;
@@ -212,7 +214,7 @@ call( addr, sig, ... )
     warn( "[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
 #endif
     switch (sig[1])
-    {
+      {
       case 'v': break;
       case 'c': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
@@ -222,12 +224,11 @@ call( addr, sig, ... )
       case 'I': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'l': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'L': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)(rvalue))));    break;
-      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)(rvalue))));    break;
-      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)(rvalue))));    break;
-      case 'p': XPUSHs(sv_2mortal(newSVpv(rvalue, 0))); break;
-
-    }
+      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)(rvalue)))); break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)(rvalue))));break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)(rvalue))));break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv((char*)rvalue, 0)));  break;
+      }
 #ifdef CTYPES_TEST_VERBOSE
     warn( "[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
 #endif

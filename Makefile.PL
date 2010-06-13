@@ -38,16 +38,13 @@ if  (eval {require ExtUtils::Constant; 1}) {
 		 FFI_TYPE_LONGDOUBLE FFI_TYPE_POINTER FFI_TYPE_SINT16
 		 FFI_TYPE_SINT32 FFI_TYPE_SINT64 FFI_TYPE_SINT8 FFI_TYPE_STRUCT
 		 FFI_TYPE_UINT16 FFI_TYPE_UINT32 FFI_TYPE_UINT64 FFI_TYPE_UINT8
-		 FFI_TYPE_VOID ffi_type_longdouble ffi_type_schar ffi_type_sint
-		 ffi_type_slong ffi_type_sshort ffi_type_uchar ffi_type_uint
-		 ffi_type_ulong ffi_type_ushort),
+		 FFI_TYPE_VOID),
               {name=>"FFI_BAD_ABI", macro=>"1"},
               {name=>"FFI_BAD_TYPEDEF", macro=>"1"},
               {name=>"FFI_OK", macro=>"1"});
   ExtUtils::Constant::WriteConstants(
                                      NAME         => 'Ctypes',
                                      NAMES        => \@names,
-                                     DEFAULT_TYPE => 'ffi_type',
                                      C_FILE       => 'const-c.inc',
                                      XS_FILE      => 'const-xs.inc',
                                   );
@@ -60,4 +57,14 @@ else {
     my $fallback = File::Spec->catfile('fallback', $file);
     copy ($fallback, $file) or die "Can't copy $fallback to $file: $!";
   }
+}
+
+sub MY::depend {
+    "
+const-xs.inc: $0 \$(CONFIGDEP)
+
+const-c.inc: $0 \$(CONFIGDEP)
+
+Ctypes.c: \$(XSUBPPDEPS) const-xs.inc
+";
 }

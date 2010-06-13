@@ -21,102 +21,15 @@ typedef double NV; /* 5.6 and later define NVTYPE, and typedef NV to it.  */
 #endif
 
 static int
-constant_13 (pTHX_ const char *name, IV *iv_return) {
-  /* When generated this function returned values for the list of names given
-     here.  However, subsequent manual editing may have added or removed some.
-     FFI_TYPE_LAST FFI_TYPE_VOID ffi_type_sint ffi_type_uint */
-  /* Offset 9 gives the best switch position.  */
-  switch (name[9]) {
-  case 'L':
-    if (memEQ(name, "FFI_TYPE_LAST", 13)) {
-    /*                        ^          */
-#ifdef FFI_TYPE_LAST
-      *iv_return = FFI_TYPE_LAST;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 'V':
-    if (memEQ(name, "FFI_TYPE_VOID", 13)) {
-    /*                        ^          */
-#ifdef FFI_TYPE_VOID
-      *iv_return = FFI_TYPE_VOID;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 's':
-    if (memEQ(name, "ffi_type_sint", 13)) {
-    /*                        ^          */
-#ifdef ffi_type_sint
-      *iv_return = ffi_type_sint;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 'u':
-    if (memEQ(name, "ffi_type_uint", 13)) {
-    /*                        ^          */
-#ifdef ffi_type_uint
-      *iv_return = ffi_type_uint;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  }
-  return PERL_constant_NOTFOUND;
-}
-
-static int
 constant_14 (pTHX_ const char *name, IV *iv_return) {
   /* When generated this function returned values for the list of names given
      here.  However, subsequent manual editing may have added or removed some.
-     FFI_SIZEOF_ARG FFI_TYPE_FLOAT FFI_TYPE_SINT8 FFI_TYPE_UINT8 ffi_type_schar
-     ffi_type_slong ffi_type_uchar ffi_type_ulong */
-  /* Offset 10 gives the best switch position.  */
-  switch (name[10]) {
-  case 'I':
-    if (memEQ(name, "FFI_TYPE_SINT8", 14)) {
-    /*                         ^          */
-#ifdef FFI_TYPE_SINT8
-      *iv_return = FFI_TYPE_SINT8;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    if (memEQ(name, "FFI_TYPE_UINT8", 14)) {
-    /*                         ^          */
-#ifdef FFI_TYPE_UINT8
-      *iv_return = FFI_TYPE_UINT8;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 'L':
-    if (memEQ(name, "FFI_TYPE_FLOAT", 14)) {
-    /*                         ^          */
-#ifdef FFI_TYPE_FLOAT
-      *iv_return = FFI_TYPE_FLOAT;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case '_':
+     FFI_SIZEOF_ARG FFI_TYPE_FLOAT FFI_TYPE_SINT8 FFI_TYPE_UINT8 */
+  /* Offset 11 gives the best switch position.  */
+  switch (name[11]) {
+  case 'A':
     if (memEQ(name, "FFI_SIZEOF_ARG", 14)) {
-    /*                         ^          */
+    /*                          ^         */
 #ifdef FFI_SIZEOF_ARG
       *iv_return = FFI_SIZEOF_ARG;
       return PERL_constant_ISIV;
@@ -125,40 +38,31 @@ constant_14 (pTHX_ const char *name, IV *iv_return) {
 #endif
     }
     break;
-  case 'c':
-    if (memEQ(name, "ffi_type_schar", 14)) {
-    /*                         ^          */
-#ifdef ffi_type_schar
-      *iv_return = ffi_type_schar;
+  case 'N':
+    if (memEQ(name, "FFI_TYPE_SINT8", 14)) {
+    /*                          ^         */
+#ifdef FFI_TYPE_SINT8
+      *iv_return = FFI_TYPE_SINT8;
       return PERL_constant_ISIV;
 #else
       return PERL_constant_NOTDEF;
 #endif
     }
-    if (memEQ(name, "ffi_type_uchar", 14)) {
-    /*                         ^          */
-#ifdef ffi_type_uchar
-      *iv_return = ffi_type_uchar;
+    if (memEQ(name, "FFI_TYPE_UINT8", 14)) {
+    /*                          ^         */
+#ifdef FFI_TYPE_UINT8
+      *iv_return = FFI_TYPE_UINT8;
       return PERL_constant_ISIV;
 #else
       return PERL_constant_NOTDEF;
 #endif
     }
     break;
-  case 'l':
-    if (memEQ(name, "ffi_type_slong", 14)) {
-    /*                         ^          */
-#ifdef ffi_type_slong
-      *iv_return = ffi_type_slong;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    if (memEQ(name, "ffi_type_ulong", 14)) {
-    /*                         ^          */
-#ifdef ffi_type_ulong
-      *iv_return = ffi_type_ulong;
+  case 'O':
+    if (memEQ(name, "FFI_TYPE_FLOAT", 14)) {
+    /*                          ^         */
+#ifdef FFI_TYPE_FLOAT
+      *iv_return = FFI_TYPE_FLOAT;
       return PERL_constant_ISIV;
 #else
       return PERL_constant_NOTDEF;
@@ -175,7 +79,7 @@ constant_15 (pTHX_ const char *name, IV *iv_return) {
      here.  However, subsequent manual editing may have added or removed some.
      FFI_BAD_TYPEDEF FFI_TYPE_DOUBLE FFI_TYPE_SINT16 FFI_TYPE_SINT32
      FFI_TYPE_SINT64 FFI_TYPE_STRUCT FFI_TYPE_UINT16 FFI_TYPE_UINT32
-     FFI_TYPE_UINT64 ffi_type_sshort ffi_type_ushort */
+     FFI_TYPE_UINT64 */
   /* Offset 13 gives the best switch position.  */
   switch (name[13]) {
   case '1':
@@ -267,70 +171,6 @@ constant_15 (pTHX_ const char *name, IV *iv_return) {
 #endif
     }
     break;
-  case 'r':
-    if (memEQ(name, "ffi_type_sshort", 15)) {
-    /*                            ^        */
-#ifdef ffi_type_sshort
-      *iv_return = ffi_type_sshort;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    if (memEQ(name, "ffi_type_ushort", 15)) {
-    /*                            ^        */
-#ifdef ffi_type_ushort
-      *iv_return = ffi_type_ushort;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  }
-  return PERL_constant_NOTFOUND;
-}
-
-static int
-constant_19 (pTHX_ const char *name, IV *iv_return) {
-  /* When generated this function returned values for the list of names given
-     here.  However, subsequent manual editing may have added or removed some.
-     FFI_SIZEOF_JAVA_RAW FFI_TYPE_LONGDOUBLE ffi_type_longdouble */
-  /* Offset 18 gives the best switch position.  */
-  switch (name[18]) {
-  case 'E':
-    if (memEQ(name, "FFI_TYPE_LONGDOUBL", 18)) {
-    /*                                 E      */
-#ifdef FFI_TYPE_LONGDOUBLE
-      *iv_return = FFI_TYPE_LONGDOUBLE;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 'W':
-    if (memEQ(name, "FFI_SIZEOF_JAVA_RA", 18)) {
-    /*                                 W      */
-#ifdef FFI_SIZEOF_JAVA_RAW
-      *iv_return = FFI_SIZEOF_JAVA_RAW;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
-  case 'e':
-    if (memEQ(name, "ffi_type_longdoubl", 18)) {
-    /*                                 e      */
-#ifdef ffi_type_longdouble
-      *iv_return = ffi_type_longdouble;
-      return PERL_constant_ISIV;
-#else
-      return PERL_constant_NOTDEF;
-#endif
-    }
-    break;
   }
   return PERL_constant_NOTFOUND;
 }
@@ -348,7 +188,7 @@ constant (pTHX_ const char *name, STRLEN len, IV *iv_return) {
      Regenerate these constant functions by feeding this entire source file to
      perl -x
 
-#!C:\strawberry\perl\bin\perl.exe -w
+#!/usr/bin/perl -w
 use ExtUtils::Constant qw (constant_types C_constant XS_constant);
 
 my $types = {map {($_, 1)} qw(IV)};
@@ -357,9 +197,7 @@ my @names = (qw(FFI_LONG_LONG_MAX FFI_SIZEOF_ARG FFI_SIZEOF_JAVA_RAW
 	       FFI_TYPE_LONGDOUBLE FFI_TYPE_POINTER FFI_TYPE_SINT16
 	       FFI_TYPE_SINT32 FFI_TYPE_SINT64 FFI_TYPE_SINT8 FFI_TYPE_STRUCT
 	       FFI_TYPE_UINT16 FFI_TYPE_UINT32 FFI_TYPE_UINT64 FFI_TYPE_UINT8
-	       FFI_TYPE_VOID ffi_type_longdouble ffi_type_schar ffi_type_sint
-	       ffi_type_slong ffi_type_sshort ffi_type_uchar ffi_type_uint
-	       ffi_type_ulong ffi_type_ushort),
+	       FFI_TYPE_VOID),
             {name=>"FFI_BAD_ABI", type=>"IV", macro=>"1"},
             {name=>"FFI_BAD_TYPEDEF", type=>"IV", macro=>"1"},
             {name=>"FFI_OK", type=>"IV", macro=>"1"});
@@ -397,7 +235,33 @@ __END__
     }
     break;
   case 13:
-    return constant_13 (aTHX_ name, iv_return);
+    /* Names all of length 13.  */
+    /* FFI_TYPE_LAST FFI_TYPE_VOID */
+    /* Offset 9 gives the best switch position.  */
+    switch (name[9]) {
+    case 'L':
+      if (memEQ(name, "FFI_TYPE_LAST", 13)) {
+      /*                        ^          */
+#ifdef FFI_TYPE_LAST
+        *iv_return = FFI_TYPE_LAST;
+        return PERL_constant_ISIV;
+#else
+        return PERL_constant_NOTDEF;
+#endif
+      }
+      break;
+    case 'V':
+      if (memEQ(name, "FFI_TYPE_VOID", 13)) {
+      /*                        ^          */
+#ifdef FFI_TYPE_VOID
+        *iv_return = FFI_TYPE_VOID;
+        return PERL_constant_ISIV;
+#else
+        return PERL_constant_NOTDEF;
+#endif
+      }
+      break;
+    }
     break;
   case 14:
     return constant_14 (aTHX_ name, iv_return);
@@ -426,7 +290,33 @@ __END__
     }
     break;
   case 19:
-    return constant_19 (aTHX_ name, iv_return);
+    /* Names all of length 19.  */
+    /* FFI_SIZEOF_JAVA_RAW FFI_TYPE_LONGDOUBLE */
+    /* Offset 4 gives the best switch position.  */
+    switch (name[4]) {
+    case 'S':
+      if (memEQ(name, "FFI_SIZEOF_JAVA_RAW", 19)) {
+      /*                   ^                     */
+#ifdef FFI_SIZEOF_JAVA_RAW
+        *iv_return = FFI_SIZEOF_JAVA_RAW;
+        return PERL_constant_ISIV;
+#else
+        return PERL_constant_NOTDEF;
+#endif
+      }
+      break;
+    case 'T':
+      if (memEQ(name, "FFI_TYPE_LONGDOUBLE", 19)) {
+      /*                   ^                     */
+#ifdef FFI_TYPE_LONGDOUBLE
+        *iv_return = FFI_TYPE_LONGDOUBLE;
+        return PERL_constant_ISIV;
+#else
+        return PERL_constant_NOTDEF;
+#endif
+      }
+      break;
+    }
     break;
   }
   return PERL_constant_NOTFOUND;
