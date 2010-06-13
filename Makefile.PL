@@ -18,19 +18,15 @@ WriteMakefile(
     NAME              => 'Ctypes',
     VERSION_FROM      => 'lib/Ctypes.pm',
     PREREQ_PM         => {},
- ($] >= 5.005 ?  
-   (ABSTRACT_FROM     => 'lib/Ctypes.pm',
-    AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
-  : () ),
+    ($] >= 5.005 ?  
+     (ABSTRACT_FROM     => 'lib/Ctypes.pm',
+      AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
+     : () ),
     LIBS              => [ '-Llibffi -lffi' ],
     INC               => '-I. -I./include',
-    OPTIMIZE          => '-ggdb3 -O0',
-    LDDLFLAGS         => '-shared -L/usr/local/lib -fstack-protector',
+    #OPTIMIZE         => '-ggdb3 -O0',
+    #LDDLFLAGS        => '-shared -L/usr/local/lib -fstack-protector',
     NEEDS_LINKING     => 1,
-#    XS                => { 'xs/Ctypes.xs' => 'xs/Ctypes.c' },  # this opt didn't work; had to move files to top dir
-
-    # Un-comment this if you add C files to link with later:
-    # OBJECT            => '$(O_FILES)', # link all the C files too
 );
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,
@@ -51,7 +47,7 @@ if  (eval {require ExtUtils::Constant; 1}) {
   ExtUtils::Constant::WriteConstants(
                                      NAME         => 'Ctypes',
                                      NAMES        => \@names,
-                                     DEFAULT_TYPE => 'IV',
+                                     DEFAULT_TYPE => 'ffi_type',
                                      C_FILE       => 'const-c.inc',
                                      XS_FILE      => 'const-xs.inc',
                                   );

@@ -96,7 +96,7 @@ __END__
     use DynaLoader;
 
     # Look Ma, no XS!
-    my $lib =  DynaLoader::dl_load_file( "-lm" );
+    my $lib =  DynaLoader::dl_load_file( DynaLoader::dl_findfile( "-lm" ));
     my $func = Dynaloader::dl_find_symbol( $lib, 'sqrt' );
     my $ret =  Ctypes::call( $func, 'sdd', 16  );
 
