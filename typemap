@@ -1,0 +1,7 @@
+ffi_type	T_FFI_TYPE
+
+INPUT
+T_FFI_TYPE
+	IV tmp = SvIV((SV*)$arg);
+	$var = INT2PTR($type,tmp);
+
