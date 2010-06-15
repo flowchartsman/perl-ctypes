@@ -24,7 +24,7 @@ WriteMakefile(
      : () ),
     LIBS              => [ '-Llibffi -lffi' ],
     INC               => '-I. -I./include',
-    DEFINE            => '-DCTYPES_TEST_VERBOSE',
+    #DEFINE            => '-DCTYPES_DEBUG',
     #OPTIMIZE         => '-ggdb3 -O0',
     #LDDLFLAGS        => '-shared -L/usr/local/lib -fstack-protector',
     NEEDS_LINKING     => 1,

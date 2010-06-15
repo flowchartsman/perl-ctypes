@@ -18,6 +18,12 @@
 
 #include "const-c.inc"
 
+#ifdef CTYPES_DEBUG
+#define debug_warn( ... ) warn( __VA_ARGS__ )
+#else
+#define debug_warn( ... )
+#endif
+
 // Copied verbatim from FFI.xs on 21/05/2010: http://cpansearch.perl.org/src/GAAL/FFI-1.04/FFI.xs
 static int validate_signature (char *sig)
 {
@@ -62,8 +68,6 @@ ffi_type* get_ffi_type(char type)
 
 MODULE = Ctypes		PACKAGE = Ctypes
 
-INCLUDE: const-xs.inc
-
 void
 call( addr, sig, ... )
     void* addr;
@@ -80,26 +84,27 @@ call( addr, sig, ... )
     ffi_type *rtype;
     STRLEN len;
     int args_in_sig;
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "\n\n[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
-    warn( "Module compiled with -DCTYPES_TEST_VERBOSE for detailed output from XS" );
-#endif
+ 
+    debug_warn( "\n\n[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
+    debug_warn( "Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
+
     if( num_args < 0 ) {
       croak( "INIT: You must provide at least the calling convention and return type" );
     }
+
     args_in_sig = validate_signature(sig);
     if( args_in_sig != num_args ) {
       croak( "[Ctypes.xs: %i ] Error: specified %i arguments but supplied %i", 
 	     __LINE__, args_in_sig, num_args );
-#ifdef CTYPES_TEST_VERBOSE
     } else {
-       warn( "[Ctypes.xs: %i ] Sig validated, %i args supplied", 
+       debug_warn( "[Ctypes.xs: %i ] Sig validated, %i args supplied", 
 	     __LINE__, num_args );
-#endif
     }
+
     rtype = get_ffi_type( sig[1] );
-    switch(sig[1]) 
-      {
+
+  /*switch(sig[1])
+    {
       case 'c': Newxc(rvalue, 1, char, char);                       break;
       case 'C': Newxc(rvalue, 1, unsigned char, unsigned char);     break;
       case 's': Newxc(rvalue, 1, short, short);                     break;
@@ -114,21 +119,15 @@ call( addr, sig, ... )
       case 'p': Newx(rvalue, 1, void);                              break;
       case 'v': break;
       default: croak( "Unrecognised type: %c!", sig[1] );   // should never happen here
-    }        
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
-#endif
+    }  */
+    debug_warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
 
     if( num_args > 0 ) {
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
-#endif
+    debug_warn( "[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
       int i;
       for (i = 0; i < num_args; ++i){
         char type = sig[i+2];
-#ifdef CTYPES_TEST_VERBOSE
-        warn( "  type %i: %c", i+1, type);
-#endif
+        debug_warn( "  type %i: %c", i+1, type);
         if (type == 0)
             croak("Ctypes::call - too many args (%d expected)", i - 2); // should never happen here
 
@@ -187,34 +186,27 @@ call( addr, sig, ... )
         default: croak( "Unrecognised type: %c!", type );   // should never happen here
         }        
       }
-#ifdef CTYPES_TEST_VERBOSE
     } else {
-      warn( "[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
-#endif
+      debug_warn( "[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
     }
-    // ABI needs to default to 'SYSV' on Linux/Cygwin
+
     if((status = ffi_prep_cif
          (&cif,
           sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
-#ifdef CTYPES_TEST_VERBOSE
       croak( "[Ctypes.xs: %i ] ffi_prep_cif error: %d", __LINE__, status );
-#endif
     }
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
-    warn( "  addr is: 0x%x ", addr );
-    warn( "  rvalue is: %p ", rvalue );
-    warn( "  argvalues is: %f ", *(double*)argvalues[0] );
-#endif
+
+    debug_warn( "[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
+    debug_warn( "  addr is: 0x%x ", addr );
+    debug_warn( "  rvalue is: %p ", rvalue );
+    debug_warn( "  argvalues is: %f ", *(double*)argvalues[0] );
 
     ffi_call(&cif, FFI_FN(addr), &rvalue, argvalues);
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "ffi_call returned normally with rvalue: %f", *(double*)rvalue );
-    warn( "[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
-#endif
+    debug_warn( "ffi_call returned normally with rvalue: %f", *(double*)rvalue );
+    debug_warn( "[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
-      {
+    {
       case 'v': break;
       case 'c': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
@@ -224,21 +216,16 @@ call( addr, sig, ... )
       case 'I': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'l': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
       case 'L': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)(rvalue)))); break;
-      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)(rvalue))));break;
-      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)(rvalue))));break;
-      case 'p': XPUSHs(sv_2mortal(newSVpv((char*)rvalue, 0)));  break;
-      }
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
-#endif
+      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)(rvalue))));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)(rvalue))));    break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)(rvalue))));    break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv(rvalue, 0))); break;
+    }
+
+    debug_warn( "[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
     int i = 0;
     for( i = 0; i < num_args; i++ ) {
       Safefree(argvalues[i]);
-#ifdef CTYPES_TEST_VERBOSE
-      warn( "[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
-#endif
+      debug_warn( "[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
     }
-#ifdef CTYPES_TEST_VERBOSE
-    warn( "[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
-#endif
+    debug_warn( "[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
