@@ -3,11 +3,12 @@ Changes
 const-xs.inc
 const-c.inc
 Ctypes.xs
+ignore.txt
 Makefile.PL
 MANIFEST
 MANIFEST.SKIP
 README
-ignore.txt
+typemap
 include/ppport.h
 include/ffi_common.h
 include/ffi.h

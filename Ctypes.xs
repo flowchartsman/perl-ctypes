@@ -103,23 +103,6 @@ call( addr, sig, ... )
 
     rtype = get_ffi_type( sig[1] );
 
-  /*switch(sig[1])
-    {
-      case 'c': Newxc(rvalue, 1, char, char);                       break;
-      case 'C': Newxc(rvalue, 1, unsigned char, unsigned char);     break;
-      case 's': Newxc(rvalue, 1, short, short);                     break;
-      case 'S': Newxc(rvalue, 1, unsigned short, unsigned short);   break;
-      case 'i': Newxc(rvalue, 1, int, int);                         break;
-      case 'I': Newxc(rvalue, 1, unsigned int, unsigned int);       break;
-      case 'l': Newxc(rvalue, 1, long, long);                       break;
-      case 'L': Newxc(rvalue, 1, unsigned long, unsigned long);     break;
-      case 'f': Newxc(rvalue, 1, float, float);                     break;
-      case 'd': Newxc(rvalue, 1, double, double);                   break;
-      case 'D': Newxc(rvalue, 1, long double, long double);         break;
-      case 'p': Newx(rvalue, 1, void);                              break;
-      case 'v': break;
-      default: croak( "Unrecognised type: %c!", sig[1] );   // should never happen here
-    }  */
     debug_warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
 
     if( num_args > 0 ) {
@@ -203,23 +186,23 @@ call( addr, sig, ... )
     debug_warn( "  argvalues is: %f ", *(double*)argvalues[0] );
 
     ffi_call(&cif, FFI_FN(addr), &rvalue, argvalues);
-    debug_warn( "ffi_call returned normally with rvalue: %f", *(double*)rvalue );
+    debug_warn( "ffi_call returned normally with rvalue: %d", rvalue );
     debug_warn( "[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {
       case 'v': break;
-      case 'c': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 's': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'S': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'I': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'l': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'L': XPUSHs(sv_2mortal(newSViv(*(int*)(rvalue))));   break;
-      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)(rvalue))));    break;
-      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)(rvalue))));    break;
-      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)(rvalue))));    break;
-      case 'p': XPUSHs(sv_2mortal(newSVpv(rvalue, 0))); break;
+      case 'c': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'C': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 's': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'S': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'i': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'I': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'l': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'L': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'f': XPUSHs(sv_2mortal(newSVnv((float)(rvalue))));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv(rvalue)));    break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv((long double)(rvalue))));    break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
     debug_warn( "[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
