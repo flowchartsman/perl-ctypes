@@ -85,37 +85,36 @@ call( addr, sig, ... )
     STRLEN len;
     int args_in_sig;
  
-    debug_warn( "\n\n[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
-    debug_warn( "Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
+    debug_warn( "\n\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
+    debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
-      croak( "INIT: You must provide at least the calling convention and return type" );
+      croak( "Ctypes::call error: Not enough arguments" );
     }
 
     args_in_sig = validate_signature(sig);
     if( args_in_sig != num_args ) {
-      croak( "[Ctypes.xs: %i ] Error: specified %i arguments but supplied %i", 
+      croak( "Ctypes::call error: specified %i arguments but supplied %i", 
 	     __LINE__, args_in_sig, num_args );
     } else {
-       debug_warn( "[Ctypes.xs: %i ] Sig validated, %i args supplied", 
+       debug_warn( "#[Ctypes.xs: %i ] Sig validated, %i args supplied", 
 	     __LINE__, num_args );
     }
 
     rtype = get_ffi_type( sig[1] );
-
-    debug_warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
+    debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
 
     if( num_args > 0 ) {
-    debug_warn( "[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
       int i;
+      debug_warn( "#[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
       for (i = 0; i < num_args; ++i){
         char type = sig[i+2];
-        debug_warn( "  type %i: %c", i+1, type);
+        debug_warn( "#  type %i: %c", i+1, type);
         if (type == 0)
-            croak("Ctypes::call - too many args (%d expected)", i - 2); // should never happen here
+	  croak("Ctypes::call error: too many args (%d expected)", i - 2); /* should never happen here */
 
         argtypes[i] = get_ffi_type(type);
-        // Could pop ST(0) & ST(1) (func pointer & sig) off beforehand to make this neater?
+        /* Could pop ST(0) & ST(1) (func pointer & sig) off beforehand to make this neater? */
         switch(type)
         {
         case 'c':
@@ -166,49 +165,49 @@ call( addr, sig, ... )
           Newx(argvalues[i], 1, void);
           argvalues[i] = SvPV(ST(i+2), len);
           break;
-        default: croak( "Unrecognised type: %c!", type );   // should never happen here
+        /* should never happen here */
+        default: croak( "Ctypes::call error: Unrecognised type '%c'", type );
         }        
       }
     } else {
-      debug_warn( "[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
+      debug_warn( "#[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
     }
 
     if((status = ffi_prep_cif
          (&cif,
           sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
-      croak( "[Ctypes.xs: %i ] ffi_prep_cif error: %d", __LINE__, status );
+      croak( "Ctypes::call error: ffi_prep_cif error %d", status );
     }
 
-    debug_warn( "[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
-    debug_warn( "  addr is: 0x%x ", addr );
-    debug_warn( "  rvalue is: %p ", rvalue );
-    debug_warn( "  argvalues is: %f ", *(double*)argvalues[0] );
+    debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
+    debug_warn( "#  addr is: 0x%x ", addr );
+    debug_warn( "#  argvalues is: %f", *(double*)argvalues[0] );
 
     ffi_call(&cif, FFI_FN(addr), &rvalue, argvalues);
-    debug_warn( "ffi_call returned normally with rvalue: %d", rvalue );
-    debug_warn( "[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
+    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", rvalue );
+    debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {
       case 'v': break;
-      case 'c': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'c': 
       case 'C': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 's': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 'S': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 's': 
+      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)(rvalue), 0)));   break;
       case 'i': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 'I': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 'l': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 'L': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'I': XPUSHs(sv_2mortal(newSVuv((unsigned int)(rvalue))));   break;
+      case 'l': XPUSHs(sv_2mortal(newSViv((long)(rvalue))));   break;
+      case 'L': XPUSHs(sv_2mortal(newSVuv((unsigned long)(rvalue))));   break;
       case 'f': XPUSHs(sv_2mortal(newSVnv((float)(rvalue))));    break;
-      case 'd': XPUSHs(sv_2mortal(newSVnv(rvalue)));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv((double)(rvalue))));    break;
       case 'D': XPUSHs(sv_2mortal(newSVnv((long double)(rvalue))));    break;
       case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
-    debug_warn( "[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
+    debug_warn( "#[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
     int i = 0;
     for( i = 0; i < num_args; i++ ) {
       Safefree(argvalues[i]);
-      debug_warn( "[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
+      debug_warn( "#[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
     }
-    debug_warn( "[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
+    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
