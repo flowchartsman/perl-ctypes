@@ -85,27 +85,27 @@ call( addr, sig, ... )
     ffi_type *rtype;
     STRLEN len;
     int args_in_sig;
-    if( num_args < 0 ) {
-      croak( "INIT: You must provide at least the calling convention and return type" );
-    }
  
     debug_warn( "\n\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
-      croak( "INIT: You must provide at least the calling convention and return type" );
+      croak( "Ctypes::call error: Not enough arguments" );
     }
 
     args_in_sig = validate_signature(sig);
     if( args_in_sig != num_args ) {
-      croak( "[Ctypes.xs: %i ] Error: specified %i arguments but supplied %i", 
+      croak( "Ctypes::call error: specified %i arguments but supplied %i", 
 	     __LINE__, args_in_sig, num_args );
     } else {
        debug_warn( "#[Ctypes.xs: %i ] Sig validated, %i args supplied", 
 	     __LINE__, num_args );
     }
 
-    rtype = get_ffi_type(sig[1]);
+    rtype = get_ffi_type( sig[1] );
+
+    debug_warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
+
     if( num_args > 0 ) {
       int i;
       debug_warn( "#[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
@@ -113,7 +113,7 @@ call( addr, sig, ... )
         char type = sig[i+2];
         debug_warn( "#  type %i: %c", i+1, type);
         if (type == 0)
-	  croak("Ctypes::call - too many args (%d expected)", i - 2); /* should never happen here */
+	  croak("Ctypes::call error: too many args (%d expected)", i - 2); /* should never happen here */
 
         argtypes[i] = get_ffi_type(type);
         /* Could pop ST(0) & ST(1) (func pointer & sig) off beforehand to make this neater? */
@@ -167,7 +167,8 @@ call( addr, sig, ... )
           Newx(argvalues[i], 1, void);
           argvalues[i] = SvPV(ST(i+2), len);
           break;
-        default: croak( "Unrecognised type: %c!", type );   // should never happen here
+        /* should never happen here */
+        default: croak( "Ctypes::call error: Unrecognised type '%c'", type );
         }        
       }
     } else {
@@ -178,7 +179,7 @@ call( addr, sig, ... )
          (&cif,
           sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
-      croak( "[Ctypes.xs: %i ] ffi_prep_cif error: %d", __LINE__, status );
+      croak( "Ctypes::call error: ffi_prep_cif error %d", status );
     }
 
     debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
