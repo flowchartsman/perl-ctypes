@@ -69,7 +69,7 @@ ffi_type* get_ffi_type(char type)
 MODULE = Ctypes		PACKAGE = Ctypes
 
 void
-call( addr, sig, ... )
+_call( addr, sig, ... )
     void* addr;
     char* sig;
   PROTOTYPE: $$;$
@@ -80,12 +80,12 @@ call( addr, sig, ... )
     unsigned int nargs;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
-    ffi_arg rvalue;
     ffi_type *rtype;
+    ffi_arg rvalue;
     STRLEN len;
     int args_in_sig;
  
-    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
+    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
@@ -181,11 +181,11 @@ call( addr, sig, ... )
     }
 
     debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
-    debug_warn( "#  addr is: 0x%x ", addr );
+    debug_warn( "#  addr is: 0x%x ", (unsigned int)addr );
     debug_warn( "#  argvalues is: %f", *(double*)argvalues[0] );
 
     ffi_call(&cif, FFI_FN(addr), &rvalue, argvalues);
-    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", rvalue );
+    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)rvalue );
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {

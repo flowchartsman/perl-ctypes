@@ -26,7 +26,7 @@ $sig = $^O eq 'MSWin32' ? 'sii' : 'cii';
 $func = DynaLoader::dl_find_symbol( $lib, 'toupper' );
 diag( sprintf("toupper addr: 0x%x", $func ));
 ok( defined $func, 'Load toupper() function' );
-$ret = Ctypes::call( $func, $sig, ord('y') )
+$ret = Ctypes::call( $func, $sig, 'y' )
     or croak( "Call to Ctypes::call failed: $@" );
 is( chr($ret), 'Y', "Gave 'y' to toupper(), got " . chr($ret) );
 

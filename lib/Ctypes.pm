@@ -4,6 +4,7 @@ use 5.010000;
 use strict;
 use warnings;
 use Carp;
+use Scalar::Util;
 
 =head1 NAME
 
@@ -78,9 +79,6 @@ XSLoader::load('Ctypes', $VERSION);
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
-1;
-__END__
-
 =head1 SYNOPSIS
 
     use Ctypes;
@@ -117,6 +115,22 @@ procedural interface is working.
 
 The main procedural interface to libffi's functionality.
 Calls a external function.
+
+=cut
+
+sub call {
+  my $func = shift;
+  my $sig = shift;
+  my @args = @_;
+  my @argtypes = split( //, substr( $sig, 2 ) );
+  for(my $i=0 ; $i<=$#args ; $i++) {
+    if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
+        not Scalar::Util::looks_like_number($args[$i]) ) {
+      $args[$i] = ord($args[$i]);
+    }
+  }
+  return _call( $func, $sig, @args );
+}
 
 =item constant
 
@@ -192,3 +206,5 @@ See http://dev.perl.org/licenses/ for more information.
 =cut
 
 1; # End of Ctypes
+__END__
+
