@@ -85,7 +85,7 @@ call( addr, sig, ... )
     STRLEN len;
     int args_in_sig;
  
-    debug_warn( "\n\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
+    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
@@ -210,4 +210,4 @@ call( addr, sig, ... )
       Safefree(argvalues[i]);
       debug_warn( "#[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
     }
-    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
+    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...\n\n", __LINE__ );
