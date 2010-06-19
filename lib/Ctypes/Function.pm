@@ -3,6 +3,8 @@ package Ctypes::Function;
 use strict;
 use warnings;
 use DynaLoader;
+use Data::Dumper;
+use Devel::Peek;
 
 =head1 NAME
 
@@ -50,34 +52,34 @@ Calls a external function.
 # 3. namespace install from P5NCI
 
 sub _get_args (\@\@;$) {
-  my @args = shift;
-  my @want = shift;
-  my %ret = {};
+  my $args = shift;
+  my $want = shift;
+  my $ret = {};
 
-  if (ref($args[0]) eq 'HASH') {
+  if (ref($args->[0]) eq 'HASH') {
     # Using named parameters.
-    for(@want) {
-      $ret{$_} = $args[0]->{$_} }
+    for(@{$want}) {
+      $ret->{$_} = $args->[0]->{$_} }
   } else {
     # Using positional parameters.
-    for(my $i=0; $i <= $#want; $i++ ) {
-      $ret{$want[$i]} = $want[$i] }
+    for(my $i=0; $i <= $#{$args}; $i++ ) {
+      $ret->{$want->[$i]} = $args->[$i] }
   }
-#  return map ($ret->{$want[$_]}, 0..$#want );
-  return %ret;
+  for( keys %{$ret} ) { print "\$ret->{$_}: " . $ret->{$_} . "\n"; }
+  return $ret;
 }
 
 sub _disambiguate {
   my( $first, $second ) = @_;
   if( defined $first && defined $second ) {
-    die( "disambiguate(): First and second values are different" )
+    die( "First and second values are different" )
       unless ( $second == $second );
   }
   $first ||= $second;
   return $first;
 }
 
-sub _call () {
+sub _call (\@) {
 my $self = shift;
 my @args = shift;
 warn( "_call not implemented!" );
@@ -91,8 +93,12 @@ sub new {
   my @attrs = qw(lib name sig abi rtype func);
   my $ret  =  _get_args(@args, @attrs);
   # func is a function reference returned by dl_find_symbol
-  my($lib, $name, $sig, $abi, $rtype, $func)
-    = map { $ret->{$_} } @attrs;
+  my($lib, $name, $sig, $abi, $rtype, $func);
+  {
+    no strict 'refs';
+    ($lib, $name, $sig, $abi, $rtype, $func)
+      = map { $ret->{$_}; } @attrs;
+  }
 
   if(!$func && !$name) { die( "Need function ref or name" ); }
 
@@ -100,25 +106,28 @@ sub new {
     if(!$lib) {
       die("Can't find function without a library!");
     } else {
-      {
+      do {
         my $found = DynaLoader::dl_findfile( '-lm' )
           or die("-lm not found");
         $lib = DynaLoader::dl_load_file( $found );
-      } unless $lib =~ /^[0-9]$/; # looks like dl_load_file libref
+      } unless ($lib =~ /^[0-9]$/); # looks like dl_load_file libref
     }
     $func = DynaLoader::dl_find_symbol( $lib, $name );
   }
-  
-  *Ctypes::${$func} = $ret;
 
+  no strict 'refs';
+  %{"Ctypes::".$func} = %{$ret};
   # can bless a coderef, bless a glob, or overload &{}. All good.
-  *Ctypes::{$func} = \&{ Ctypes::Function::_call( @_ ); };
-  return bless *Ctypes::{$func}, $class;
+  *{"Ctypes::".$func} = \&{ Ctypes::Function::_call( @_ ); };
+  return bless \*{"Ctypes::".$func}, $class;
 }
 
 sub AUTOLOAD {
   my $self = shift;
-  if( $AUTOLOAD =~  /.*::(.*)/ ) {
+  if( $self->{AUTOLOAD} =~  /.*::(.*)/ ) {
     return if $1 == 'DESTROY';
     return $self->{$1};
+  }
 }
+
+1;
