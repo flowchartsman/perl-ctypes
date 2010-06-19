@@ -11,6 +11,4 @@ use Devel::Peek;
 my $function_01 = Ctypes::Function->new( '-lm', 'sqrt' );
 ok( defined $function_01, '$function_01 created' );
 
-diag( Dumper( $function_01 ) );
-diag( Dump( $function_01 ) );
 $function_01->( 'blork' );

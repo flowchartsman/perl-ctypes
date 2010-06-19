@@ -65,7 +65,6 @@ sub _get_args (\@\@;$) {
     for(my $i=0; $i <= $#{$args}; $i++ ) {
       $ret->{$want->[$i]} = $args->[$i] }
   }
-  for( keys %{$ret} ) { print "\$ret->{$_}: " . $ret->{$_} . "\n"; }
   return $ret;
 }
 
@@ -79,10 +78,11 @@ sub _disambiguate {
   return $first;
 }
 
-sub _call (\@) {
-my $self = shift;
-my @args = shift;
-warn( "_call not implemented!" );
+sub _call (\@;) {
+#  my $self = shift;
+#  my @args = shift;
+  print "In _call():\n";
+  print Dumper( @_ );
 return 0;
 }
 
@@ -93,7 +93,7 @@ sub new {
   my @attrs = qw(lib name sig abi rtype func);
   my $ret  =  _get_args(@args, @attrs);
   # func is a function reference returned by dl_find_symbol
-  my($lib, $name, $sig, $abi, $rtype, $func);
+  our($lib, $name, $sig, $abi, $rtype, $func);
   {
     no strict 'refs';
     ($lib, $name, $sig, $abi, $rtype, $func)
@@ -115,11 +115,12 @@ sub new {
     $func = DynaLoader::dl_find_symbol( $lib, $name );
   }
 
-  no strict 'refs';
-  %{"Ctypes::".$func} = %{$ret};
+  # no strict 'refs';
+  # %{"Ctypes::".$func} = %{$ret};
   # can bless a coderef, bless a glob, or overload &{}. All good.
-  *{"Ctypes::".$func} = \&{ Ctypes::Function::_call( @_ ); };
-  return bless \*{"Ctypes::".$func}, $class;
+  # *{"Ctypes::".$func} = \&{ Ctypes::Function::_call( @_ ); };
+#  our $subref = sub { Ctypes::Function::_call(@_) };
+  return bless sub { Ctypes::Function::_call(@_) }, $class;
 }
 
 sub AUTOLOAD {
