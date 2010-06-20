@@ -1,17 +1,16 @@
 #!perl
 
-use Test::More tests => 1;
+use Test::More tests => 2;
 
 use Ctypes::Function;
 use DynaLoader;
 use Data::Dumper;
 use Devel::Peek;
 
-# my $function_01 = Ctypes::Function->new( { lib =>'-lm', name => 'sqrt' } );
-my $function_01 = Ctypes::Function->new( '-lm', 'sqrt' );
+my $function_01 = Ctypes::Function->new( '-lc', 'toupper' );
 ok( defined $function_01, '$function_01 created' );
 
-diag( $function_01->name('pip') );
-diag( "About to _call..." );
-$function_01->('blork', 'wack');
+$function_01->name('tupperware');
+$function_01->sig('cii');
+is( chr($function_01->('y')), 'Y', "Gave 'y' to \$function_01, got 'Y'");
 

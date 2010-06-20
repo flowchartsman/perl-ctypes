@@ -2,9 +2,12 @@ package Ctypes::Function;
 
 use strict;
 use warnings;
-use DynaLoader;
+
 use Data::Dumper;
 use Devel::Peek;
+
+use Ctypes;
+use DynaLoader;
 use overload '&{}' => \&_call_overload;
 
 =head1 NAME
@@ -124,9 +127,11 @@ sub update {
 sub _call {
   my $self = shift;
   my @args = @_;
-  print Dumper( $self ); 
-  print Dumper( @args );
-return 0;
+  my $retval;
+  unless(defined $self->{sig}) { 
+    die("Function needs a signature (even '' must be defined)");}
+  $retval = Ctypes::call( $self->func, $self->sig, @args );
+  return $retval
 }
 
 sub new {
@@ -159,14 +164,25 @@ sub new {
 
 sub AUTOLOAD {
   our $AUTOLOAD;
-  my $self = shift;
   if( $AUTOLOAD =~  /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
-    my $mem = $1;
+    my $mem = $1; # member
     no strict 'refs';
     *$AUTOLOAD = sub { 
-      @_ and $_setable->{$mem} ? return $self->{$mem} = $_[0]
-              : ( warn("$mem not setable") and return $self->{$mem} );
+      my $self = shift;
+      if($_setable->{$mem}) {
+        if(@_) {
+          return $self->{$mem} = $_[0];
+        }
+        if( defined $self->{$mem} ) {
+          return $self->{$mem};
+        }
+      } else {
+        if(@_) {
+          warn("$mem not setable"); }
+        if( defined $self->{$mem} ) {
+          return $self->{$mem}; }    
+      }
     };
     goto &$AUTOLOAD;
   }
