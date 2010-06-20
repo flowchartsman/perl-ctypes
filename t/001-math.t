@@ -4,7 +4,6 @@ use Test::More tests => 3;
 
 use Ctypes;
 use DynaLoader;
-use Carp;
 
 # Adapted from http://github.com/rurban/c-dynalib/blob/master/lib/C/DynaLib.pm, 31/05/2010
 my ($lib, $func, $sig, $ret);
@@ -27,6 +26,6 @@ $func = DynaLoader::dl_find_symbol( $lib, 'sqrt' );
 diag( sprintf("sqrt addr: 0x%x", $func ));
 ok( defined $func, 'Load sqrt() function' );
 
-$ret = Ctypes::call( $func, $sig, 16 )
-    or croak( "Call to Ctypes::call failed: $@" );
-is( $ret, 4, "Gave 16 to sqrt(), got $ret" );
+$ret = Ctypes::call( $func, $sig, 16.0 )
+    or warn( "Call to Ctypes::call failed: $@" );
+is( $ret, 4.0, "sqrt(16.0) => $ret" );

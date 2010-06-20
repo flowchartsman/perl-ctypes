@@ -35,12 +35,12 @@ static int validate_signature (char *sig)
     if (sig[0] != 'c' && *sig != 's')
         croak("Invalid function signature: '%c' (should be 'c' or 's')", sig[0]);
 
-    if (strchr("cCsSiIlLfdpv", sig[1]) == NULL)
-        croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdpv\")", sig[1]);
+    if (strchr("cCsSiIlLfdDpv", sig[1]) == NULL)
+        croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdDpv\")", sig[1]);
 
-    i = strspn(sig+2, "cCsSiIlLfdp");
+    i = strspn(sig+2, "cCsSiIlLfdDp");
     if (i != len-2)
-        croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdp\")",
+        croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdDp\")",
               i+1, sig[i+2]);
     return (len - 2);
 }
@@ -174,9 +174,9 @@ call( addr, sig, ... )
     } else {
       debug_warn( "#[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
     }
-    /* ABI needs to default to 'SYSV' on Linux/Cygwin */
     if((status = ffi_prep_cif
          (&cif,
+	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
           sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
       croak( "Ctypes::call error: ffi_prep_cif error %d", status );
