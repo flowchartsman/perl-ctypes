@@ -24,16 +24,23 @@ Version 0.001
     my $func = Ctypes::Function->new( $library_name,
                                       $function_name,
                                       $signature );
+    # or:
+    my $func = Ctypes::Function->( { lib  => '-lm',
+                                     name => 'sqrt',
+                                     sig  => 'cdd',
+                                 } );
+    # or simply:
+    my $func = Ctypes::Function->( { func => $func_ref,
+                                     sig  => 'cdd',
+                                 } );
 
-    my $return_type = $func->rtype; #  'i' - integer
-    
-    my $result = $func->('16');
+    my $result = $func->('25');  # 5! Zounds!
 
 =head1 DESCRIPTION
 
 Ctypes::Function abstracts the raw Ctypes::call() API allowing TODO
 
-=head1 SUBROUTINES/METHODS
+=head1 PUBLIC SUBROUTINES/METHODS
 
 Ctypes will offer both a procedural and OO interface (to accommodate
 both types of authors described above). At the moment only the
@@ -51,6 +58,9 @@ Calls a external function.
 # To steal:
 # 1. Accessor generation from Simon Cozens
 # 3. namespace install from P5NCI
+
+# For which members will AUTOLOAD provide mutators?
+my $_setable = { name => 1, sig => 1, abi => 1, rtype => 1 };
 
 sub _get_args (\@\@;$) {
   my $args = shift;
@@ -80,18 +90,42 @@ sub _disambiguate {
 }
 
 sub _call_overload {
-  print "In _call_overload...\n";
-  print Dumper( @_ );
-  return sub { _call(@_) };
+  my $self = shift;
+  return sub { _call($self, @_) };
+}
+
+=over
+
+=item update(name, sig, abi, args)
+
+or 
+
+=item update({ param => value, [...] })
+
+C<update> provides a quick way of changing many attributes of a function
+all at once. Only the function's C<lib> and C<func> references cannot
+be updated (because that wouldn't make any sense).
+
+=cut
+
+sub update {
+  my $self = shift;
+  my @args = @_;
+  my @want = qw(name sig abi rtype);
+  my $update_self = _get_args(@args, @want);
+  for(@want) {
+    if(defined $update_self->{$_}) {
+      $self->{$_} = $update_self->{$_};
+    }
+  }
+  return $self;
 }
 
 sub _call {
-#  my $self = shift;
-#  my $args = shift;
-  print "In _call():\n";
-  print Dumper( @_ ) . "\n";
-#  print Dumper( $args );
-  print "Exiting _call...\n";
+  my $self = shift;
+  my @args = @_;
+  print Dumper( $self ); 
+  print Dumper( @args );
 return 0;
 }
 
@@ -101,41 +135,25 @@ sub new {
   # will never make sense to pass func address or lib address positionally
   my @attrs = qw(lib name sig abi rtype func);
   our $ret  =  _get_args(@args, @attrs);
-  # func is a function reference returned by dl_find_symbol
-  our($lib, $name, $sig, $abi, $rtype, $func);
-  {
-    no strict 'refs';
-    ($lib, $name, $sig, $abi, $rtype, $func)
-      = map { $ret->{$_}; } @attrs;
-  }
 
-  if(!$func && !$name) { die( "Need function ref or name" ); }
+  # Just so we don't have to continually dereference $ret
+  my($lib, $name, $sig, $abi, $rtype, $func)
+      = (map { \$ret->{$_}; } @attrs );
 
-  if(!$func) {
-    if(!$lib) {
+  if(!$$func && !$$name) { die( "Need function ref or name" ); }
+
+  if(!$$func) {
+    if(!$$lib) {
       die("Can't find function without a library!");
     } else {
       do {
         my $found = DynaLoader::dl_findfile( '-lm' )
           or die("-lm not found");
-        $lib = DynaLoader::dl_load_file( $found );
-      } unless ($lib =~ /^[0-9]$/); # looks like dl_load_file libref
+        $$lib = DynaLoader::dl_load_file( $found );
+      } unless ($$lib =~ /^[0-9]$/); # looks like dl_load_file libref
     }
-    $func = DynaLoader::dl_find_symbol( $lib, $name );
+    $$func = DynaLoader::dl_find_symbol( $$lib, $$name );
   }
-
-  $ret->{'_setable'} = { name => 1, sig => 1, abi => 1, rtype => 1 };
-
-  # "can bless a coderef, bless a glob, or overload &{}. All good."
-#  no strict 'refs';
-#  *{"Ctypes::".$func} = \%{$ret};
-#  *{"Ctypes::".$func} = sub { Ctypes::Function::_call( \@_ ); };
-#  local *glob = \*Ctypes::{$func};
-#  bless \*glob, $class;
-#  return *glob;
-
-#  or
-#  return bless sub { Ctypes::Function::_call(@_) }, $class;
   return bless $ret, $class;
 }
 
@@ -145,12 +163,9 @@ sub AUTOLOAD {
   if( $AUTOLOAD =~  /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
     my $mem = $1;
-    print "\@_: @_\n";
-    print "\$1 -> $1\n";
-    print "_setable? -> " . $self->{_setable}->{$1} . "\n";
     no strict 'refs';
     *$AUTOLOAD = sub { 
-      @_ and $self->{_setable}->{$mem} ? return $self->{$mem} = $_[0]
+      @_ and $_setable->{$mem} ? return $self->{$mem} = $_[0]
               : ( warn("$mem not setable") and return $self->{$mem} );
     };
     goto &$AUTOLOAD;

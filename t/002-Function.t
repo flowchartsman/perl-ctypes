@@ -13,5 +13,5 @@ ok( defined $function_01, '$function_01 created' );
 
 diag( $function_01->name('pip') );
 diag( "About to _call..." );
-$function_01->( 'blork' );
+$function_01->('blork', 'wack');
 
