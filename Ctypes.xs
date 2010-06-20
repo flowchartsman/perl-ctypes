@@ -36,12 +36,12 @@ static int validate_signature (char *sig)
     if (sig[0] != 'c' && *sig != 's')
         croak("Invalid function signature: '%c' (should be 'c' or 's')", sig[0]);
 
-    if (strchr("cCsSiIlLfdpv", sig[1]) == NULL)
-        croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdpv\")", sig[1]);
+    if (strchr("cCsSiIlLfdDpv", sig[1]) == NULL)
+        croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdDpv\")", sig[1]);
 
-    i = strspn(sig+2, "cCsSiIlLfdp");
+    i = strspn(sig+2, "cCsSiIlLfdDp");
     if (i != len-2)
-        croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdp\")",
+        croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdDp\")",
               i+1, sig[i+2]);
     return (len - 2);
 }
