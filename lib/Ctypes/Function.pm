@@ -5,6 +5,7 @@ use warnings;
 use DynaLoader;
 use Data::Dumper;
 use Devel::Peek;
+use overload '&{}' => \&_call_overload;
 
 =head1 NAME
 
@@ -78,11 +79,19 @@ sub _disambiguate {
   return $first;
 }
 
-sub _call (\@;) {
-#  my $self = shift;
-#  my @args = shift;
-  print "In _call():\n";
+sub _call_overload {
+  print "In _call_overload...\n";
   print Dumper( @_ );
+  return sub { _call(@_) };
+}
+
+sub _call {
+#  my $self = shift;
+#  my $args = shift;
+  print "In _call():\n";
+  print Dumper( @_ ) . "\n";
+#  print Dumper( $args );
+  print "Exiting _call...\n";
 return 0;
 }
 
@@ -91,7 +100,7 @@ sub new {
   # default positional args are library, function name, function signature
   # will never make sense to pass func address or lib address positionally
   my @attrs = qw(lib name sig abi rtype func);
-  my $ret  =  _get_args(@args, @attrs);
+  our $ret  =  _get_args(@args, @attrs);
   # func is a function reference returned by dl_find_symbol
   our($lib, $name, $sig, $abi, $rtype, $func);
   {
@@ -115,19 +124,36 @@ sub new {
     $func = DynaLoader::dl_find_symbol( $lib, $name );
   }
 
-  # no strict 'refs';
-  # %{"Ctypes::".$func} = %{$ret};
-  # can bless a coderef, bless a glob, or overload &{}. All good.
-  # *{"Ctypes::".$func} = \&{ Ctypes::Function::_call( @_ ); };
-#  our $subref = sub { Ctypes::Function::_call(@_) };
-  return bless sub { Ctypes::Function::_call(@_) }, $class;
+  $ret->{'_setable'} = { name => 1, sig => 1, abi => 1, rtype => 1 };
+
+  # "can bless a coderef, bless a glob, or overload &{}. All good."
+#  no strict 'refs';
+#  *{"Ctypes::".$func} = \%{$ret};
+#  *{"Ctypes::".$func} = sub { Ctypes::Function::_call( \@_ ); };
+#  local *glob = \*Ctypes::{$func};
+#  bless \*glob, $class;
+#  return *glob;
+
+#  or
+#  return bless sub { Ctypes::Function::_call(@_) }, $class;
+  return bless $ret, $class;
 }
 
 sub AUTOLOAD {
+  our $AUTOLOAD;
   my $self = shift;
-  if( $self->{AUTOLOAD} =~  /.*::(.*)/ ) {
-    return if $1 == 'DESTROY';
-    return $self->{$1};
+  if( $AUTOLOAD =~  /.*::(.*)/ ) {
+    return if $1 eq 'DESTROY';
+    my $mem = $1;
+    print "\@_: @_\n";
+    print "\$1 -> $1\n";
+    print "_setable? -> " . $self->{_setable}->{$1} . "\n";
+    no strict 'refs';
+    *$AUTOLOAD = sub { 
+      @_ and $self->{_setable}->{$mem} ? return $self->{$mem} = $_[0]
+              : ( warn("$mem not setable") and return $self->{$mem} );
+    };
+    goto &$AUTOLOAD;
   }
 }
 
