@@ -1,10 +1,12 @@
 package Ctypes;
 
-use 5.010000;
 use strict;
 use warnings;
 use Carp;
+use DynaLoader;
 use Scalar::Util;
+use File::Spec;
+use Config;
 
 =head1 NAME
 
@@ -50,46 +52,40 @@ our @EXPORT_OK = [ qw(
 ) ];
 
 sub AUTOLOAD {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.
+  # This AUTOLOAD is used to 'autoload' constants from the constant()
+  # XS function.
 
-    my $constname;
-    our $AUTOLOAD;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
-    croak "&Ptypes::constant not defined" if $constname eq 'constant';
-    my ($error, $val) = constant($constname);
-    if ($error) { croak $error; }
-    {
-	no strict 'refs';
-	# Fixed between 5.005_53 and 5.005_61
-#XXX	if ($] >= 5.00561) {
-#XXX	    *$AUTOLOAD = sub () { $val };
-#XXX	}
-#XXX	else {
-	    *$AUTOLOAD = sub { $val };
-#XXX	}
-    }
-    goto &$AUTOLOAD;
+  my $constname;
+  our $AUTOLOAD;
+  ($constname = $AUTOLOAD) =~ s/.*:://;
+  croak "&Ptypes::constant not defined" if $constname eq 'constant';
+  my ($error, $val) = constant($constname);
+  if ($error) { croak $error; }
+  {
+    no strict 'refs';
+    *$AUTOLOAD = sub { $val };
+  }
+  goto &$AUTOLOAD;
 }
 
 require XSLoader;
 XSLoader::load('Ctypes', $VERSION);
 
-# Preloaded methods go here.
-
-# Autoload methods go after =cut, and are processed by the autosplit program.
-
 =head1 SYNOPSIS
 
     use Ctypes;
-    use DynaLoader;
 
     # Look Ma, no XS!
+    my $lib  = Ctypes::find_library("-lm");
+    my $func = Ctypes::find_function( $lib, 'sqrt' );
+    my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
+    print $ret; # 4! Eureka!
+
+    # which is the same as:
+    use DynaLoader;
     my $lib =  DynaLoader::dl_load_file( DynaLoader::dl_findfile( "-lm" ));
     my $func = Dynaloader::dl_find_symbol( $lib, 'sqrt' );
-    my $ret =  Ctypes::call( $func, 'sdd', 16  );
-
-    print $ret # 4! Eureka!
+    my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
 
 =head1 DESCRIPTION
 
@@ -113,8 +109,36 @@ procedural interface is working.
 
 =item call (sig, addr, args)
 
-The main procedural interface to libffi's functionality.
-Calls a external function.
+Call an external function, specified by the signature and the address,
+with the given arguments.
+Return a value as specified by the seconf character in sig.
+
+sig is the signature string. The first character specifies the
+calling-convention, s for stdcall, c for cdecl, f for fastcall.  The
+second character specifies the pack-style return type, the subsequent
+characters specify the pack-style argument types.
+
+addr is the function address, the return value of find_function or
+L<DynaLoader::dl_find_symbol>.
+
+args are the optional arguments for the external function. The types
+are converted as specified by sig[2..].
+
+Supported signature characters are (see L<unpack>):
+
+  'v': void
+  'c': signed char
+  'C': unsigned char
+  's': signed short
+  'S': unsigned short
+  'i': signed int
+  'I': unsigned int
+  'l': signed long
+  'L': unsigned long
+  'f': float
+  'd': double
+  'D': long double
+  'p': pointer (also used for strings)
 
 =cut
 
@@ -126,13 +150,112 @@ sub call {
   for(my $i=0 ; $i<=$#args ; $i++) {
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
         not Scalar::Util::looks_like_number($args[$i]) ) {
-      $args[$i] = ord($args[$i]);
+      die "$i-th argument $args[$i] is no number";
+      #$args[$i] = ord($args[$i]);
     }
   }
   return _call( $func, $sig, @args );
 }
 
-=item constant
+=item find_library (lib, [dynaloader args])
+
+Searches the dll/so loadpath for the given library, architecture dependently.
+
+The lib argument is either part of a filename (e.g. "kernel32"),
+a full pathname to the shared library
+or the same as for L<DynaLoader::dl_findfile>:
+"-llib" or "-Lpath -llib", with -L for the optional path.
+
+Returns a libraryhandle, to be used for find_function.
+
+  find_library "-lm"
+    => "/usr/lib/libm.so"
+     | "/usr/bin/cygwin1.dll"
+     | "C:\\WINDOWS\\\\System32\\MSVCRT.DLL
+
+  find_library "-L/usr/local/kde/lib -lkde"
+    => "/usr/local/kde/lib/libkde.so.2.0"
+
+  find_library "kernel32"
+    => "C:\\WINDOWS\\\\System32\\KERNEL32.dll"
+
+=cut
+
+sub find_library($;@) {# copied from C::DynaLib::new
+  my $libname = shift;
+  my $so = $libname;
+  -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
+  my $lib;
+  $lib = DynaLoader::dl_load_file($so, @_) unless $so =~ /\.a$/;
+  if (!$lib) {
+    # Duplicate most of the DynaLoader code, since DynaLoader is
+    # not ready to find MSWin32 dll's.
+    if ($^O =~ /MSWin32|cygwin/) { # activeperl, mingw (strawberry) or cygwin
+      my ($found, @dirs, @names, @dl_library_path);
+      my $lib = $libname;
+      $lib =~ s/^-l//;
+      if ($^O eq 'cygwin' and $lib =~ m{^(c|m|pthread|/usr/lib/libc\.a)$}) {
+        $lib = DynaLoader::dl_load_file("/bin/cygwin1.dll", @_);
+        return $lib;
+      }
+      if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
+        if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}.
+					    "\\System32\\MSVCRT.DLL", @_))
+	{
+          return $lib;
+        }
+        push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
+             "MSVCRT60","MSVCRT40","MSVCRT20");
+      }
+      # Either a dll if there exists a unversioned dll,
+      # or the import lib points to the versioned dll.
+      push(@dirs, "/lib", "/usr/lib", "/usr/bin/", "/usr/local/bin")
+        unless $^O eq 'MSWin32'; # i.e. cygwin
+      push(@dirs, $ENV{SYSTEMROOT}."\\System32", $ENV{SYSTEMROOT}, ".")
+        if $^O eq 'MSWin32';
+      push(@names, "cyg$_.dll", "lib$_.dll.a") if $^O eq 'cygwin';
+      push(@names, "$_.dll", "lib$_.a") if $^O eq 'MSWin32';
+      push(@names, "lib$_.so", "lib$_.a");
+      my $pthsep = $Config::Config{path_sep};
+      push(@dl_library_path, split(/$pthsep/, $ENV{LD_LIBRARY_PATH} || ""))
+        unless $^O eq 'MSWin32';
+      push(@dirs, split(/$pthsep/, $ENV{PATH}));
+    LOOP:
+      for my $name (@names) {
+        for my $dir (@dirs, @dl_library_path) {
+          next unless -d $dir;
+          my $file = File::Spec->catfile($dir,$name);
+          if (-f $file) {
+            $found = $file;
+            last LOOP;
+          }
+        }
+      }
+      if ($found) {
+	# resolve the .a or .dll.a to the dll. dllimport from binutils must be in the path
+        $found = system("dllimport -I $found") if $found =~ /\.a$/;
+        $lib = DynaLoader::dl_load_file($found, @_);
+      }
+    }
+    # last ressort. try $so which might trigger a Windows MessageBox.
+    unless ($lib) {
+      $lib = DynaLoader::dl_load_file($so, @_) if $so;
+      return undef unless $lib;
+    }
+  }
+  return $lib;
+}
+
+=item find_function (libraryhandle, functionname)
+
+Returns the function address of the exported function within the shared library.
+libraryhandle is the return value of find_library or DynaLoader::dl_load_file.
+
+=cut
+
+sub find_function($$) {
+  return DynaLoader::dl_find_symbol( shift, shift );
+}
 
 =back
 
@@ -142,9 +265,11 @@ Ryan Jendoubi, C<< <ryan.jendoubi at gmail.com> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<bug-ctypes at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Ctypes>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
+Please report any bugs or feature requests to C<bug-ctypes at
+rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Ctypes>.  I will be
+notified, and then you'll automatically be notified of progress on
+your bug as I make changes.
 
 =head1 SUPPORT
 

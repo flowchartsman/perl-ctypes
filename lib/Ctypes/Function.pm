@@ -2,9 +2,7 @@ package Ctypes::Function;
 
 use strict;
 use warnings;
-use DynaLoader;
-use Data::Dumper;
-use Devel::Peek;
+use Ctypes;
 
 =head1 NAME
 
@@ -25,7 +23,7 @@ Version 0.001
                                       $signature );
 
     my $return_type = $func->rtype; #  'i' - integer
-    
+
     my $result = $func->('16');
 
 =head1 DESCRIPTION
@@ -40,10 +38,24 @@ procedural interface is working.
 
 =over
 
-=item new (sig, addr, args)
+=item new (lib, name, sig)
 
-The main procedural interface to libffi's functionality.
-Calls a external function.
+The main object-orientated interface to libffi's functionality.
+Call an external function.
+
+  lib   -llibname or soname/dllname. Default: -lc (the "libc")
+  name  external function name
+  sig   signature string, consisting of
+    abi   c for 'cdecl', s for 'stdcall' or f for 'fastcall',
+    rtype  pack-style return type. Default: i for int
+    atypes pack-style characters for the argument types
+
+The arguments may be defined as HASHREF with the additional keys:
+
+  abi   'cdecl', 'stdcall' or 'fastcall'. Default: 'cdecl'
+  rtype  pack-style return type. Default: i for int
+  atypes pack-style characters for the argument types
+  func   function address
 
 =cut
 
@@ -68,67 +80,70 @@ sub _get_args (\@\@;$) {
   return $ret;
 }
 
-sub _disambiguate {
-  my( $first, $second ) = @_;
-  if( defined $first && defined $second ) {
-    die( "First and second values are different" )
-      unless ( $second == $second );
-  }
-  $first ||= $second;
-  return $first;
-}
-
 sub _call (\@;) {
-#  my $self = shift;
-#  my @args = shift;
-  print "In _call():\n";
-  print Dumper( @_ );
-return 0;
+  my $self = shift;
+  return Ctypes::call($self->{func}, $self->{sig}, @_);
 }
 
 sub new {
   my ($class, @args) = @_;
   # default positional args are library, function name, function signature
   # will never make sense to pass func address or lib address positionally
-  my @attrs = qw(lib name sig abi rtype func);
+  my @attrs = qw(lib name sig abi rtype atypes func);
   my $ret  =  _get_args(@args, @attrs);
-  # func is a function reference returned by dl_find_symbol
-  our($lib, $name, $sig, $abi, $rtype, $func);
+  # func is a function address returned by dl_find_symbol
+  our($lib, $name, $sig, $abi, $rtype, $atypes, $func);
   {
     no strict 'refs';
-    ($lib, $name, $sig, $abi, $rtype, $func)
+    ($lib, $name, $sig, $abi, $rtype, $atypes, $func)
       = map { $ret->{$_}; } @attrs;
   }
 
-  if(!$func && !$name) { die( "Need function ref or name" ); }
+  if (!$func && !$name) { die( "Need function name or addr" ); }
 
-  if(!$func) {
-    if(!$lib) {
-      die("Can't find function without a library!");
-    } else {
-      do {
-        my $found = DynaLoader::dl_findfile( '-lm' )
-          or die("-lm not found");
-        $lib = DynaLoader::dl_load_file( $found );
-      } unless ($lib =~ /^[0-9]$/); # looks like dl_load_file libref
-    }
-    $func = DynaLoader::dl_find_symbol( $lib, $name );
+  $lib = '-lc' unless $lib; #default libc
+  $lib = Ctypes::find_library( $lib )
+    or die("Library $lib not found");
+  $func = Ctypes::find_function( $lib, $name )
+    unless $func;
+  die("Function $name not found") unless $func;
+
+  if (!$abi and $sig) {
+    $abi    = substr($sig,0,1);
+    $rtype  = substr($sig,1,1);
+    $atypes = substr($sig,2);
   }
-
+  if (!$abi) { # hash-style: depends on the lib, default: 'c'
+    $abi = 'c';
+    $abi = 's' if $^O eq 'MSWin32' and $lib =~ /(user32|kernel32|gdi)/;
+  } else {
+    $abi =~ /^(cdecl|stdcall|fastcall|c|s|f)$/
+      or die "invalid abi $abi";
+    $abi = 'c' if $abi eq 'cdecl';
+    $abi = 's' if $abi eq 'stdcall';
+    $abi = 'f' if $abi eq 'fastcall';
+  }
+  $rtype = 'i' unless $rtype;
+  $sig = $abi . $rtype . $atypes unless $sig;
+  my $props = {};
+  {
+    no strict 'refs';
+    $props->{$_} = $$_ for @attrs;
+  }
   # no strict 'refs';
   # %{"Ctypes::".$func} = %{$ret};
   # can bless a coderef, bless a glob, or overload &{}. All good.
   # *{"Ctypes::".$func} = \&{ Ctypes::Function::_call( @_ ); };
-#  our $subref = sub { Ctypes::Function::_call(@_) };
-  return bless sub { Ctypes::Function::_call(@_) }, $class;
+  my $self = bless $props, $class;
+  return sub { $self->_call(@_) };
 }
 
-sub AUTOLOAD {
-  my $self = shift;
-  if( $self->{AUTOLOAD} =~  /.*::(.*)/ ) {
-    return if $1 == 'DESTROY';
-    return $self->{$1};
-  }
-}
+#sub AUTOLOAD {
+#  my $self = shift;
+#  if( $self->{AUTOLOAD} =~  /.*::(.*)/ ) {
+#    return if $1 == 'DESTROY';
+#    return $self->{$1};
+#  }
+#}
 
 1;

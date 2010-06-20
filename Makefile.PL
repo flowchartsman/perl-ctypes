@@ -24,10 +24,10 @@ WriteMakefile(
      : () ),
     LIBS              => [ '-Llibffi -lffi' ],
     INC               => '-I. -I./include',
-    DEFINE            => '-DCTYPES_DEBUG',
-    OPTIMIZE         => '-ggdb3 -O0',
-    LDDLFLAGS        => '-shared -L/usr/local/lib -fstack-protector',
-    NEEDS_LINKING     => 1,
+    #DEFINE            => '-DCTYPES_DEBUG',
+    #OPTIMIZE         => '-ggdb3 -O0',
+    #LDDLFLAGS        => '-shared -L/usr/local/lib -fstack-protector',
+    #NEEDS_LINKING     => 1,
 );
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,
