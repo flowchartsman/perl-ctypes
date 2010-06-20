@@ -46,8 +46,7 @@ Version 0.002
 
 =head1 DESCRIPTION
 
-Ctypes::Function abstracts the raw Ctypes::call() API allowing TODO
-
+Ctypes::Function abstracts the raw Ctypes::call() API
 
 =cut
 
@@ -160,7 +159,7 @@ sub AUTOLOAD {
 
 =head1 PUBLIC SUBROUTINES/METHODS
 
-Ctypes::Function's methods have been designed with flexibility in mind.
+Ctypes::Function's methods are designed for flexibility.
 
 =over
 
