@@ -16,7 +16,7 @@ $func = Ctypes::find_function( $libc, 'toupper' );
 diag( sprintf("toupper addr: 0x%x", $func ));
 ok( defined $func, 'Load toupper() function' );
 $ret = Ctypes::call( $func, "cii", ord('y') );
-is( chr($ret), 'Y', "Gave 'y' to toupper(), got " . chr($ret) );
+is( chr($ret), 'Y', "toupper('y') => " . chr($ret) );
 
 my $libm = Ctypes::find_library("m");
 ok( defined $libm, 'Load libm' ) or diag( DynaLoader::dl_error() );

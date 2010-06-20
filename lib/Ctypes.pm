@@ -25,8 +25,8 @@ use AutoLoader;
 
 our @ISA = qw(Exporter);
 
-
-our @EXPORT_OK = [ qw(
+our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL $libc $libm) );
+our @EXPORT_OK = ( qw(
 	FFI_BAD_ABI
 	FFI_BAD_TYPEDEF
 	FFI_LONG_LONG_MAX
@@ -49,7 +49,7 @@ our @EXPORT_OK = [ qw(
 	FFI_TYPE_UINT64
 	FFI_TYPE_UINT8
 	FFI_TYPE_VOID
-) ];
+) );
 
 sub AUTOLOAD {
   # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -58,7 +58,7 @@ sub AUTOLOAD {
   my $constname;
   our $AUTOLOAD;
   ($constname = $AUTOLOAD) =~ s/.*:://;
-  croak "&Ptypes::constant not defined" if $constname eq 'constant';
+  croak "&Ctypes::constant not defined" if $constname eq 'constant';
   my ($error, $val) = constant($constname);
   if ($error) { croak $error; }
   {
@@ -76,8 +76,10 @@ XSLoader::load('Ctypes', $VERSION);
     use Ctypes;
 
     # Look Ma, no XS!
-    my $lib  = Ctypes::find_library("-lm");
-    my $func = Ctypes::find_function( $lib, 'sqrt' );
+    my $lib  = CDLL->LoadLibrary("-lm");
+    my $func = $lib->sqrt;
+    my $ret = $lib->sqrt(16.0); # on Windows only
+
     my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
     print $ret; # 4! Eureka!
 
@@ -124,21 +126,32 @@ L<DynaLoader::dl_find_symbol>.
 args are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Supported signature characters are (see L<unpack>):
+Supported signature characters equivalent to python ctypes:
 
-  'v': void
-  'c': signed char
-  'C': unsigned char
-  's': signed short
-  'S': unsigned short
+  's': pointer to string
+  'c': signed char as char
+  'b': signed char as byte
+  'B': unsigned char as byte
+  'C': unsigned char as char
+  'h': signed short
+  'H': unsigned short
   'i': signed int
   'I': unsigned int
   'l': signed long
   'L': unsigned long
   'f': float
   'd': double
-  'D': long double
-  'p': pointer (also used for strings)
+  'g': long double
+  'q': signed long long
+  'q': unsigned long long
+  'P': pointer
+  'z': pointer to ASCIIZ string
+  'u': unicode string
+  'U': unicode string
+  'Z': unicode string
+  'X': MSWin32 BSTR
+  'v': MSWin32 bool
+  'O': pointer to perl object
 
 =cut
 
@@ -181,89 +194,332 @@ Returns a libraryhandle, to be used for find_function.
 On cygwin or mingw C<find_library> might try to run the external program dllimp
 to resolve the version specific dll from the found unversioned import library.
 
+TODO: On Windows loading a library should also define the ABI and signatures.
+
 =cut
 
-sub find_library($;@) {# copied from C::DynaLib::new
+sub find_library($;@) {
+  my $path = Ctypes::Util::find_library( shift, @_ );
+  # This might trigger a Windows MessageBox
+  return DynaLoader::dl_load_file($path, @_) if $path;
+}
+
+
+=item CDLL (library)
+
+Calls L<find_library> and returns a library object which defaults to the cdecl ABI.
+
+=cut
+
+sub CDLL($;@) {
+  return Ctypes::CDLL->new( @_ );
+}
+
+=item WinDLL (library)
+
+Calls L<find_library> and returns a library object which defaults to the stdcall ABI.
+
+=cut
+
+sub WinDLL($;@) {
+  return Ctypes::WinDLL->new( @_ );
+}
+
+=item OleDLL (library)
+
+Windows only: Objects representing loaded shared libraries, functions
+in these libraries use the stdcall calling convention, and are assumed
+to return the windows specific HRESULT code. HRESULT values contain
+information specifying whether the function call failed or succeeded,
+together with additional error code. If the return value signals a
+failure, a WindowsError is automatically raised.
+
+=cut
+
+sub OleDLL($;@) {
+  return Ctypes::OleDLL->new( @_ );
+}
+
+=item PerlDLL (library)
+
+Instances of this class behave like CDLL instances, except that the
+Perl XS library is not released during the function call, and after
+the function execution the Perl error flag is checked. If the error
+flag is set, a Perl exception is raised.  Thus, this is only useful
+to call Perl XS api functions directly.
+
+=cut
+
+sub PerlDLL($;@) {
+  return Ctypes::PerlDLL->new( @_ );
+}
+
+=item callback (sig, perlfunc)
+
+Creates an external function which calls back into perl, 
+specified by the signature and a reference to a perl sub.
+
+sig is the signature string. The first character specifies the
+calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
+The second character specifies the pack-style return type, 
+the subsequent characters specify the pack-style argument types.
+
+=cut
+
+sub callback($$) { # TODO ffi_prep_closure
+  return Ctypes::Callback->new( @_ );
+}
+
+=item c_array (ARRAYREF)
+
+Alloc a perl array externally and copy the perl values over.
+
+=cut
+
+sub c_array {
+  return 0;
+}
+
+=item c_struct (HASHREF)
+
+Alloc a struct externally and copy the perl values over from a HASHREF.
+
+=cut
+
+sub c_struct {
+  return 0;
+}
+
+=back
+
+=head1 CTypes::Library
+
+Subclasses are CDLL, WinDLL, OleDLL and PerlDLL, returning objects
+defining the path, handle and abi of the found shared library.
+
+Submethods are the functions and variables inside the library. 
+Functions can be called.
+
+  $lib = CDLL::msvcrt;
+
+is more than a fancy name for Ctypes::find_library("msvcrt").
+
+  $func = CDLL::msvcrt::toupper;
+
+returns the function for the Windows clib function toupper.
+
+=cut
+
+package Ctypes::Library;
+use Ctypes;
+use Carp;
+
+sub AUTOLOAD {
+  # This AUTOLOAD is used to define the dll/soname for the library,
+  # or access a function in the library, $lib = CDLL::msvcrt; $func = 
+  # Indexed with CDLL::msvcrt[0]() or
+  # or named with WinDLL::kernel32::GetModuleHandle(32)
+  my ($name, $func, $lib);
+  our $AUTOLOAD;
+  ($name = $AUTOLOAD) =~ s/.*DLL:://;
+  if ($name =~ /^(.+)::(.+)$/) {
+    $name = $1;
+    $func = $2;
+  }
+  $lib = Ctypes::find_library($name)
+    or croak "Ctypes::find_library($name) failed";
+  # TODO: call or just define a function?
+  return $func ? return Ctypes::find_function($lib, $func) : $lib;
+}
+
+=head1 CDLL
+
+  $lib = CDLL::msvcrt;
+
+is a fancy name for Ctypes::find_library("msvcrt").
+
+  $func = CDLL::msvcrt::toupper;
+
+returns the function for the Windows clib function toupper.
+
+  $ret = CDLL::msvcrt::toupper("y");
+
+is possible on Windows only, where the argument and return types are known. 
+
+On windows you can also define and call functions by their ordinal in the library, as in 
+
+  $func = CDLL::kernel32[1];
+
+or
+
+  $ret = CDLL::kernel32[1]();
+
+=head1 WinDLL
+
+  $lib = WinDLL::kernel32;
+
+Windows only: Teturns a library object for the Windows kernel32.dll.
+
+=head1 OleDLL
+
+  $lib = WinDLL::kernel32;
+
+Windows only: Teturns a library object for the Windows kernel32.dll.
+
+=cut
+
+package Ctypes::CDLL;
+our @ISA = qw(Ctypes::Library);
+
+sub new {
+  my $class = shift;
+  my $props = { abi => 'c' };
+  $props->{_name} = Ctypes::Util::find_library(shift);
+  $props->{_handle} = Ctypes::find_library($props->{lib});
+  return bless $props, $class;
+}
+
+package Ctypes::WinDLL;
+our @ISA = qw(Ctypes::Library);
+
+sub new {
+  my $class = shift;
+  my $props = { abi => 's' };
+  $props->{lib} = Ctypes::Util::find_library(shift);
+  $props->{handle} = Ctypes::find_library($props->{lib});
+  return bless $props, $class;
+}
+
+package Ctypes::OleDLL;
+our @ISA = qw(Ctypes::Library);
+
+sub new {
+  my $class = shift;
+  my $props = { abi => 's' };
+  $props->{lib} = Ctypes::Util::find_library(shift);
+  $props->{handle} = Ctypes::find_library($props->{lib});
+  return bless $props, $class;
+}
+
+package Ctypes::PerlDLL;
+our @ISA = qw(Ctypes::Library);
+
+sub new {
+  my $class = shift;
+  my $props = { abi => 'c' };
+  $props->{lib} = Ctypes::Util::find_library(shift);
+  $props->{handle} = Ctypes::find_library($props->{lib});
+  return bless $props, $class;
+}
+
+package Ctypes::Util;
+
+=over
+
+=item Ctypes::Util::find_library (lib, [dynaloader args])
+
+Searches the dll/so loadpath for the given library, architecture dependently.
+
+The lib argument is either part of a filename (e.g. "kernel32"),
+a full pathname to the shared library
+or the same as for L<DynaLoader::dl_findfile>:
+"-llib" or "-Lpath -llib", with -L for the optional path.
+
+Returns the path of the found library or undef.
+
+  find_library "-lm"
+    => "/usr/lib/libm.so"
+     | "/usr/bin/cygwin1.dll"
+     | "C:\\WINDOWS\\\\System32\\MSVCRT.DLL
+
+  find_library "-L/usr/local/kde/lib -lkde"
+    => "/usr/local/kde/lib/libkde.so.2.0"
+
+  find_library "kernel32"
+    => "C:\\WINDOWS\\\\System32\\KERNEL32.dll"
+
+On cygwin or mingw C<find_library> might try to run the external program dllimp
+to resolve the version specific dll from the found unversioned import library.
+
+=cut
+
+sub find_library($;@) {# from C::DynaLib::new
   my $libname = shift;
   my $so = $libname;
   -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
   my $lib;
   $lib = DynaLoader::dl_load_file($so, @_) unless $so =~ /\.a$/;
-  if (!$lib) {
-    # Duplicate most of the DynaLoader code, since DynaLoader is
-    # not ready to find MSWin32 dll's.
-    if ($^O =~ /MSWin32|cygwin/) { # activeperl, mingw (strawberry) or cygwin
-      my ($found, @dirs, @names, @dl_library_path);
-      my $lib = $libname;
-      $lib =~ s/^-l//;
-      if ($^O eq 'cygwin' and $lib =~ m{^(c|m|pthread|/usr/lib/libc\.a)$}) {
-        $lib = DynaLoader::dl_load_file("/bin/cygwin1.dll", @_);
-        return $lib;
+  return $so if $lib;
+
+  # Duplicate most of the DynaLoader code, since DynaLoader is
+  # not ready to find MSWin32 dll's.
+  if ($^O =~ /MSWin32|cygwin/) { # activeperl, mingw (strawberry) or cygwin
+    my ($found, @dirs, @names, @dl_library_path);
+    my $lib = $libname;
+    $lib =~ s/^-l//;
+    if ($^O eq 'cygwin' and $lib =~ m{^(c|m|pthread|/usr/lib/libc\.a)$}) {
+      return "/bin/cygwin1.dll";
+    }
+    if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
+      $so = $ENV{SYSTEMROOT}."\\System32\\MSVCRT.DLL";
+      if ($lib = DynaLoader::dl_load_file($so, @_)) {
+	return $so;
       }
-      if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
-        if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}.
-					    "\\System32\\MSVCRT.DLL", @_))
-	{
-          return $lib;
-        }
-        push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
-             "MSVCRT60","MSVCRT40","MSVCRT20");
-      }
-      # Either a dll if there exists a unversioned dll,
-      # or the import lib points to the versioned dll.
-      push(@dirs, "/lib", "/usr/lib", "/usr/bin/", "/usr/local/bin")
-        unless $^O eq 'MSWin32'; # i.e. cygwin
-      push(@dirs, $ENV{SYSTEMROOT}."\\System32", $ENV{SYSTEMROOT}, ".")
-        if $^O eq 'MSWin32';
-      push(@names, "cyg$_.dll", "lib$_.dll.a") if $^O eq 'cygwin';
-      push(@names, "$_.dll", "lib$_.a") if $^O eq 'MSWin32';
-      push(@names, "lib$_.so", "lib$_.a");
-      my $pthsep = $Config::Config{path_sep};
-      push(@dl_library_path, split(/$pthsep/, $ENV{LD_LIBRARY_PATH} || ""))
-        unless $^O eq 'MSWin32';
-      push(@dirs, split(/$pthsep/, $ENV{PATH}));
-    LOOP:
-      for my $name (@names) {
-        for my $dir (@dirs, @dl_library_path) {
-          next unless -d $dir;
-          my $file = File::Spec->catfile($dir,$name);
-          if (-f $file) {
-            $found = $file;
-            last LOOP;
-          }
-        }
-      }
-      if ($found) {
-	# resolve the .a or .dll.a to the dll. dllimport from binutils must be in the path
-        $found = system("dllimport -I $found") if $found =~ /\.a$/;
-        $lib = DynaLoader::dl_load_file($found, @_);
-      }
-    } else {
-      if (-e $so) {
-	# resolve possible ld script
-	# GROUP ( /lib/libc.so.6 /usr/lib/libc_nonshared.a  AS_NEEDED ( /lib/ld-linux-x86-64.so.2 ) )
-	local $/;
-	my $fh;
-	open($fh, "<", $so);
-	my $slurp = <$fh>;
-	if ($slurp =~ /^\s*GROUP\s*\(\s*(\S+)\s+/m) {
-	  $so = $1;
+      push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
+	   "MSVCRT60","MSVCRT40","MSVCRT20");
+    }
+    # Either a dll if there exists a unversioned dll,
+    # or the import lib points to the versioned dll.
+    push(@dirs, "/lib", "/usr/lib", "/usr/bin/", "/usr/local/bin")
+      unless $^O eq 'MSWin32'; # i.e. cygwin
+    push(@dirs, $ENV{SYSTEMROOT}."\\System32", $ENV{SYSTEMROOT}, ".")
+      if $^O eq 'MSWin32';
+    push(@names, "cyg$_.dll", "lib$_.dll.a") if $^O eq 'cygwin';
+    push(@names, "$_.dll", "lib$_.a") if $^O eq 'MSWin32';
+    push(@names, "lib$_.so", "lib$_.a");
+    my $pthsep = $Config::Config{path_sep};
+    push(@dl_library_path, split(/$pthsep/, $ENV{LD_LIBRARY_PATH} || ""))
+      unless $^O eq 'MSWin32';
+    push(@dirs, split(/$pthsep/, $ENV{PATH}));
+  LOOP:
+    for my $name (@names) {
+      for my $dir (@dirs, @dl_library_path) {
+	next unless -d $dir;
+	my $file = File::Spec->catfile($dir,$name);
+	if (-f $file) {
+	  $found = $file;
+	  last LOOP;
 	}
       }
     }
-    # last ressort. try $so which might trigger a Windows MessageBox.
-    unless ($lib) {
-      $lib = DynaLoader::dl_load_file($so, @_) if $so;
-      return undef unless $lib;
+    if ($found) {
+      # resolve the .a or .dll.a to the dll. dllimport from binutils must be in the path
+      $found = system("dllimport -I $found") if $found =~ /\.a$/;
+      return $found if $found;
+    }
+  } else {
+    if (-e $so) {
+      # resolve possible ld script
+      # GROUP ( /lib/libc.so.6 /usr/lib/libc_nonshared.a  AS_NEEDED ( /lib/ld-linux-x86-64.so.2 ) )
+      local $/;
+      my $fh;
+      open($fh, "<", $so);
+      my $slurp = <$fh>;
+      if ($slurp =~ /^\s*GROUP\s*\(\s*(\S+)\s+/m) {
+	return $1;
+      }
     }
   }
-  return $lib;
 }
+
+package Ctypes;
 
 =item find_function (libraryhandle, functionname)
 
 Returns the function address of the exported function within the shared library.
 libraryhandle is the return value of find_library or DynaLoader::dl_load_file.
+
+=back
 
 =cut
 
@@ -271,7 +527,8 @@ sub find_function($$) {
   return DynaLoader::dl_find_symbol( shift, shift );
 }
 
-=back
+our $libc = find_library("c");
+our $libm = find_library("m");
 
 =head1 AUTHOR
 
