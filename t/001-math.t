@@ -4,6 +4,7 @@ use Test::More tests => 3;
 
 use Ctypes;
 use DynaLoader;
+use Carp;
 
 # Adapted from http://github.com/rurban/c-dynalib/blob/master/lib/C/DynaLib.pm, 31/05/2010
 my ($lib, $func, $sig, $ret);
