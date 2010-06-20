@@ -18,23 +18,21 @@ Version 0.001
 
     use Ctypes::Function;
 
-    my $func = Ctypes::Function->new( $library_name,
-                                      $function_name,
-                                      $signature );
+    $toupper = Ctypes::Function->new( "-lc", "toupper", "cii" );
+    $result = $func->(ord("y"));
 
-    my $return_type = $func->rtype; #  'i' - integer
-
-    my $result = $func->('16');
+    # or
+    $toupper = Ctypes::Function->new({ lib    => 'c',
+                                       name   => 'toupper',
+                                       atypes => 'i',
+                                       rtype  => 'i' } );
+    $result = chr($toupper->(ord("y")));
 
 =head1 DESCRIPTION
 
-Ctypes::Function abstracts the raw Ctypes::call() API allowing TODO
+Ctypes::Function abstracts the raw Ctypes::call() API
 
-=head1 SUBROUTINES/METHODS
-
-Ctypes will offer both a procedural and OO interface (to accommodate
-both types of authors described above). At the moment only the
-procedural interface is working.
+=head1 METHODS
 
 =over
 
@@ -92,7 +90,7 @@ sub new {
   my @attrs = qw(lib name sig abi rtype atypes func);
   my $ret  =  _get_args(@args, @attrs);
   # func is a function address returned by dl_find_symbol
-  our($lib, $name, $sig, $abi, $rtype, $atypes, $func);
+  our ($lib, $name, $sig, $abi, $rtype, $atypes, $func);
   {
     no strict 'refs';
     ($lib, $name, $sig, $abi, $rtype, $atypes, $func)
@@ -137,13 +135,5 @@ sub new {
   my $self = bless $props, $class;
   return sub { $self->_call(@_) };
 }
-
-#sub AUTOLOAD {
-#  my $self = shift;
-#  if( $self->{AUTOLOAD} =~  /.*::(.*)/ ) {
-#    return if $1 == 'DESTROY';
-#    return $self->{$1};
-#  }
-#}
 
 1;

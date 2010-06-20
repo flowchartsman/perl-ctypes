@@ -114,8 +114,8 @@ with the given arguments.
 Return a value as specified by the seconf character in sig.
 
 sig is the signature string. The first character specifies the
-calling-convention, s for stdcall, c for cdecl, f for fastcall.  The
-second character specifies the pack-style return type, the subsequent
+calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
+The second character specifies the pack-style return type, the subsequent
 characters specify the pack-style argument types.
 
 addr is the function address, the return value of find_function or
@@ -151,7 +151,6 @@ sub call {
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
         not Scalar::Util::looks_like_number($args[$i]) ) {
       die "$i-th argument $args[$i] is no number";
-      #$args[$i] = ord($args[$i]);
     }
   }
   return _call( $func, $sig, @args );
@@ -178,6 +177,9 @@ Returns a libraryhandle, to be used for find_function.
 
   find_library "kernel32"
     => "C:\\WINDOWS\\\\System32\\KERNEL32.dll"
+
+On cygwin or mingw C<find_library> might try to run the external program dllimp
+to resolve the version specific dll from the found unversioned import library.
 
 =cut
 
@@ -236,6 +238,18 @@ sub find_library($;@) {# copied from C::DynaLib::new
         $found = system("dllimport -I $found") if $found =~ /\.a$/;
         $lib = DynaLoader::dl_load_file($found, @_);
       }
+    } else {
+      if (-e $so) {
+	# resolve possible ld script
+	# GROUP ( /lib/libc.so.6 /usr/lib/libc_nonshared.a  AS_NEEDED ( /lib/ld-linux-x86-64.so.2 ) )
+	local $/;
+	my $fh;
+	open($fh, "<", $so);
+	my $slurp = <$fh>;
+	if ($slurp =~ /^\s*GROUP\s*\(\s*(\S+)\s+/m) {
+	  $so = $1;
+	}
+      }
     }
     # last ressort. try $so which might trigger a Windows MessageBox.
     unless ($lib) {
@@ -262,6 +276,7 @@ sub find_function($$) {
 =head1 AUTHOR
 
 Ryan Jendoubi, C<< <ryan.jendoubi at gmail.com> >>
+Reini Urban, C<< <rurban at x-ray.at> >>
 
 =head1 BUGS
 
@@ -332,4 +347,3 @@ See http://dev.perl.org/licenses/ for more information.
 
 1; # End of Ctypes
 __END__
-
