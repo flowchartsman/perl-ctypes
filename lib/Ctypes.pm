@@ -12,7 +12,7 @@ Ctypes - Call and wrap C libraries and functions from Perl, using Perl
 
 =head1 VERSION
 
-Version 0.001
+Version 0.002
 
 =cut
 
