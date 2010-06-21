@@ -2,20 +2,10 @@
 use Test::More tests => 3;
 
 use Ctypes;
-my $lib;
-
-#if ($^O =~ /(MSWin32|cygwin)/) {
-#   $lib = CDLL->msvcrt;
-#   ok( defined $lib, 'declare msvcrt' ) 
-#     or diag( DynaLoader::dl_error() );
-#} else {
-
-   # cross-platform
-   $lib = CDLL->libc;
-   ok( defined $lib, 'declare libc' ) 
-     or diag( DynaLoader::dl_error() );
-
-#}
+# cross-platform
+my $lib = CDLL->libc;
+ok( defined $lib, 'declare libc' ) 
+  or diag( Ctypes::load_error() );
 
 my $func = $lib->toupper;
 ok( defined $func, 'found toupper in libc' );

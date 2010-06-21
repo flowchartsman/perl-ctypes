@@ -22,51 +22,8 @@ our $VERSION = '0.001';
 
 require Exporter;
 use AutoLoader;
-
 our @ISA = qw(Exporter);
-
-our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL $libc $libm) );
-our @EXPORT_OK = ( qw(
-	FFI_BAD_ABI
-	FFI_BAD_TYPEDEF
-	FFI_LONG_LONG_MAX
-	FFI_OK
-	FFI_SIZEOF_ARG
-	FFI_SIZEOF_JAVA_RAW
-	FFI_TYPE_DOUBLE
-	FFI_TYPE_FLOAT
-	FFI_TYPE_INT
-	FFI_TYPE_LAST
-	FFI_TYPE_LONGDOUBLE
-	FFI_TYPE_POINTER
-	FFI_TYPE_SINT16
-	FFI_TYPE_SINT32
-	FFI_TYPE_SINT64
-	FFI_TYPE_SINT8
-	FFI_TYPE_STRUCT
-	FFI_TYPE_UINT16
-	FFI_TYPE_UINT32
-	FFI_TYPE_UINT64
-	FFI_TYPE_UINT8
-	FFI_TYPE_VOID
-) );
-
-sub AUTOLOAD {
-  # This AUTOLOAD is used to 'autoload' constants from the constant()
-  # XS function.
-
-  my $constname;
-  our $AUTOLOAD;
-  ($constname = $AUTOLOAD) =~ s/.*:://;
-  croak "&Ctypes::constant not defined" if $constname eq 'constant';
-  my ($error, $val) = constant($constname);
-  if ($error) { croak $error; }
-  {
-    no strict 'refs';
-    *$AUTOLOAD = sub { $val };
-  }
-  goto &$AUTOLOAD;
-}
+our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL libc libm) );
 
 require XSLoader;
 XSLoader::load('Ctypes', $VERSION);
@@ -79,7 +36,10 @@ XSLoader::load('Ctypes', $VERSION);
     my $lib  = CDLL->LoadLibrary("-lm");
     my $func = $lib->sqrt;
     my $ret = $lib->sqrt(16.0); # on Windows only
+    # non-windows
+    my $ret = $lib->sqrt({sig=>"cdd"},16.0);
 
+    # bare
     my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
     print $ret; # 4! Eureka!
 
@@ -201,7 +161,7 @@ Calls L<LoadLibrary> and returns a library object which defaults to the cdecl AB
 
 =cut
 
-sub CDLL($;@) {
+sub CDLL {
   return Ctypes::CDLL->new( @_ );
 }
 
@@ -211,7 +171,7 @@ Calls L<LoadLibrary> and returns a library object which defaults to the stdcall 
 
 =cut
 
-sub WinDLL($;@) {
+sub WinDLL {
   return Ctypes::WinDLL->new( @_ );
 }
 
@@ -226,7 +186,7 @@ failure, a WindowsError is automatically raised.
 
 =cut
 
-sub OleDLL($;@) {
+sub OleDLL {
   return Ctypes::OleDLL->new( @_ );
 }
 
@@ -240,7 +200,7 @@ to call Perl XS api functions directly.
 
 =cut
 
-sub PerlDLL($;@) {
+sub PerlDLL() {
   return Ctypes::PerlDLL->new( @_ );
 }
 
@@ -314,24 +274,64 @@ package Ctypes::Library;
 use Ctypes;
 use Carp;
 
+# This AUTOLOAD is used to define the dll/soname for the library,
+# or access a function in the library.
+# $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper; 
+# Indexed with CDLL->msvcrt[0] (tied array?) on windows only
+# or named with WinDLL->kernel32->GetModuleHandle(32)
 sub AUTOLOAD {
-  # This AUTOLOAD is used to define the dll/soname for the library,
-  # or access a function in the library.
-  # $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper; 
-  # Indexed with CDLL->msvcrt[0] (tied array?) on windows only
-  # or named with WinDLL->kernel32->GetModuleHandle(32)
   my ($name, $func, $lib);
   our $AUTOLOAD;
-  ($name = $AUTOLOAD) =~ s/.*DLL:://;
-  if ($name =~ /^(.+)::(.+)$/) {
-    $name = $1;
-    $func = $2;
+  ($name = $AUTOLOAD) =~ s/.*:://;
+  return if $name eq 'DESTROY';
+  # property
+  if ($name =~ /^_(abi|handle|path|name)/) {
+    *$AUTOLOAD = sub { 
+      my $self = shift;
+      # only _abi is setable
+      if ($name eq 'abi') {
+        if (@_) {
+          return $self->{$name} = $_[0];
+        }
+        if (defined $self->{$name} ) {
+          return $self->{$name};
+        } else { return undef; }
+      } else {
+        warn("$name not setable") if @_;
+        if (defined $self->{$name} ) {
+          return $self->{$name};
+        } else { return undef; }
+      }
+      goto &$AUTOLOAD;
+    }
   }
-  # TODO check for setable properties: abi
-  $lib = Ctypes::load_library($name)
-    or croak "Ctypes::load_library($name) failed";
-  # TODO: call or just define a function? call via goto
-  return $func ? return Ctypes::find_function($lib, $func) : $lib;
+  if (@_) {
+    # ->library
+    $lib = shift;
+    if (ref($lib) =~ /^Ctypes::(CDLL|WinDLL|OleDLL|PerlDLL)$/) {
+      $lib->LoadLibrary($name)
+	or croak "LoadLibrary($name) failed";
+      return $lib;
+    } else { # lib is a ->function
+      if (@_ and ref $_[0] ne 'HASH') { # declare a function via HASHREF
+	my $func = CTypes::Function->new
+	  ({ lib  => $lib->{_path},
+	     abi  => $lib->{_abi}, 
+	     name => $name });
+	return $func->(@_);
+      } else {
+	return CTypes::Function->new
+	  # TODO: merge the two hashes if @_, the sig
+	  ({ lib => $lib->{_path},
+	     abi => $lib->{_abi}, 
+	     name => $name }, @_);
+      }
+    }
+  } else {
+    $lib = Ctypes::load_library($name)
+      or croak "Ctypes::load_library($name) failed";
+    return $func ? return Ctypes::find_function($lib, $func) : $lib;
+  }
 }
 
 =head1 LoadLibrary (name)
@@ -342,6 +342,7 @@ sub LoadLibrary($;@) {
   my $self = shift;
   my $path = $self->{_path};
   $self->{_name} = shift;
+  $self->{_abi} = __PACKAGE__ eq 'Ctypes::CDLL' ? 'c' : 's';
   $path = Ctypes::Util::find_library( $self->{_name} ) unless $path;
   $self->{_handle} = DynaLoader::dl_load_file($path, @_) if $path;
   $self->{_path} = $path if $self->{_handle};
@@ -352,7 +353,7 @@ sub LoadLibrary($;@) {
 
   $lib = CDLL->msvcrt;
 
-is a fancy name for CDLL->LoadLibrary("msvcrt").
+is a fancy name for Ctypes::CDLL->new("msvcrt").
 
   $func = CDLL->msvcrt->toupper;
 
@@ -385,13 +386,19 @@ Windows only.
 =cut
 
 package Ctypes::CDLL;
+use Ctypes;
 our @ISA = qw(Ctypes::Library);
+use Carp;
+
+# *Ctypes::CDLL::AUTOLOAD = *Ctypes::Library::AUTOLOAD;
 
 sub new {
   my $class = shift;
   my $props = { _abi => 'c' };
-  $props->{_name} = Ctypes::Util::find_library(shift);
-  $props->{_handle} = Ctypes::load_library($props->{_name});
+  if (@_) {
+    $props->{_path} = Ctypes::Util::find_library(shift);
+    $props->{_handle} = Ctypes::load_library($props->{_path});
+  }
   return bless $props, $class;
 }
 
@@ -401,8 +408,10 @@ our @ISA = qw(Ctypes::Library);
 sub new {
   my $class = shift;
   my $props = { _abi => 's' };
-  $props->{_name} = Ctypes::Util::find_library(shift);
-  $props->{_handle} = Ctypes::load_library($props->{_name});
+  if (@_) {
+    $props->{_path} = Ctypes::Util::find_library(shift);
+    $props->{_handle} = Ctypes::load_library($props->{_path});
+  }
   return bless $props, $class;
 }
 
@@ -412,8 +421,10 @@ our @ISA = qw(Ctypes::Library);
 sub new {
   my $class = shift;
   my $props = { abi => 's' };
-  $props->{_name} = Ctypes::Util::find_library(shift);
-  $props->{_handle} = Ctypes::load_library($props->{_name});
+  if (@_) {
+    $props->{_path} = Ctypes::Util::find_library(shift);
+    $props->{_handle} = Ctypes::load_library($props->{_path});
+  }
   return bless $props, $class;
 }
 
@@ -539,17 +550,39 @@ package Ctypes;
 Returns the function address of the exported function within the shared library.
 libraryhandle is the return value of find_library or DynaLoader::dl_load_file.
 
-=back
-
 =cut
 
 sub find_function($$) {
   return DynaLoader::dl_find_symbol( shift, shift );
 }
 
-# TODO: defer to autoloaded
-our $libc = load_library("c");
-our $libm = load_library("m");
+=item load_error ()
+
+Returns the error description of the last L<load_library> call, 
+via L<DynaLoader::dl_error>.
+
+=item constant ()
+
+Internal function to access libffi constants.
+Should not be needed.
+
+=back
+
+=cut
+
+sub load_error() {
+  return DynaLoader::dl_error();
+}
+
+our ($libc, $libm);
+sub libc {
+  return $libc if $libc;
+  $libc = load_library("c");
+}
+sub libm {
+  return $libm if $libm;
+  $libm = load_library("m");
+}
 
 =head1 AUTHOR
 
