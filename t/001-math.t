@@ -6,7 +6,7 @@ use Ctypes;
 use DynaLoader;
 
 my ($func, $sig, $ret);
-my $libc = Ctypes::find_library("c");
+my $libc = Ctypes::load_library("c");
 ok( defined $libc, 'Load libc' ) or diag( DynaLoader::dl_error() );
 
 # Testing toupper - integer argument & return type
@@ -16,7 +16,7 @@ ok( defined $func, 'Load toupper() function' );
 $ret = Ctypes::call( $func, "cii", ord('y') );
 is( chr($ret), 'Y', "toupper('y') => " . chr($ret) );
 
-my $libm = Ctypes::find_library("m");
+my $libm = Ctypes::load_library("m");
 ok( defined $libm, 'Load libm' ) or diag( DynaLoader::dl_error() );
 
 # Testing sqrt - double argument & return type

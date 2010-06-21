@@ -78,15 +78,15 @@ sub _call {
   my $self = shift;
   my @args = @_;
   my $retval;
-  unless(defined $self->sig) { 
-    die("Function needs a signature (even '' must be defined)");}
-  print Dumper( $self );
+  die "Function needs a signature (even '' must be defined)"
+    unless defined $self->sig;
+  #print Dumper( $self );
   # Constructing / validating full sig to pass to Ctypes::call
   validate_types($self->sig);
   my $whole_sig;
-  if($self->abi) {
+  if ($self->abi) {
     validate_abi($self->abi); # chops to 1 char & checks letters
-    if($self->rtype) {
+    if ($self->rtype) {
       # validate_types also used for sig so must chop here
       $self->rtype = substr($self->rtype, 0, 1);
       validate_types($self->rtype);
@@ -99,11 +99,11 @@ sub _call {
     $self->abi = abi_default();
     $whole_sig = $self->abi . $self->rtype . $self->sig;
   } 
-  if(!defined $self->abi and !defined $self->rtype) { # for clarity
-    $whole_sig = $self->sig; }
-
+  if (!defined $self->abi and !defined $self->rtype) { # for clarity
+    $whole_sig = $self->sig; 
+  }
   $retval = Ctypes::call( $self->func, $whole_sig, @args );
-  return $retval
+  return $retval;
 }
 
 sub AUTOLOAD {
@@ -141,13 +141,9 @@ sub AUTOLOAD {
 
 Ctypes::Function's methods are designed for flexibility.
 
-=over
+=head2 new ( lib, name, [ sig, [ abi, [ rtype, [ func ]]]] )
 
-=item new ( lib, name, [ sig, [ abi, [ rtype, [ func ]]]] )
-
-or
-
-=item new ( { param => value, ... } )
+or hash-style: new ( { param => value, ... } )
 
 Ctypes is happy to leave as much as possible until later, where it makes
 sense. The only thing on which a Function object insists is knowing
@@ -201,7 +197,7 @@ store any information you want in there.
 =item sig
 
 A string of letters representing the function signature, in the
-same format as Ctypes::call. In a Function object, it can represent the
+same format as L<Ctypes::call>. In a Function object, it can represent the
 full signature (like Ctypes::call), or just the return value + arguments,
 or just the arguments, depending on whether C<abi> and/or C<rtype> have
 been defined. See the note L</"abi, rtype and sig"> below.
@@ -211,7 +207,9 @@ been defined. See the note L</"abi, rtype and sig"> below.
 This is a single character representing the desired Application Binary
 Interface for the call, here used to mean the calling convention. It can
 be 'c' for C<cdecl> or 's' for C<stdcall>. Other values will fail.
-C<fastcall> is not supported. See note L</"abi, rtype and sig"> below.
+'f' for C<fastcall> is for now used implicitly with 'c' on WIN64 
+and UNIX64 architectures, not yet on 64bit libraries. 
+See note L</"abi, rtype and sig"> below.
 
 =item rtype
 
@@ -254,7 +252,7 @@ of your object after its creation. For these occasions, you can set
 those attributes separately with their eponymous mutator methods. The
 important thing to consider is that I<the definedness of> C<$obj->abi>
 I<and> C<$obj->rtype> I<change the way> C<$obj->sig> I<will be
-interpreted.
+interpreted>.
 
 This is pretty much common sense: if you have taken the time to specify
 C<abi> and C<rtype> separately, then C<sig> must only represent the
@@ -272,33 +270,27 @@ sub new {
   our $ret  =  _get_args(@args, @attrs);
 
   # Just so we don't have to continually dereference $ret
-  my($lib, $name, $sig, $abi, $rtype, $func)
+  my ($lib, $name, $sig, $abi, $rtype, $func)
       = (map { \$ret->{$_}; } @attrs );
 
-  if(!$$func && !$$name) { die( "Need function ref or name" ); }
+  if (!$$func && !$$name) { die( "Need function ref or name" ); }
 
-  if(!$$func) {
-    if(!$$lib) {
-      die("Can't find function without a library!");
+  if (!$$func) {
+    if (!$$lib) {
+      die( "Can't find function without a library!" );
     } else {
       do {
-        my $found = DynaLoader::dl_findfile( '-lm' )
-          or die("-lm not found");
-        $$lib = DynaLoader::dl_load_file( $found );
+        $$lib = Ctypes::load_library( $$lib );
       } unless ($$lib =~ /^[0-9]$/); # looks like dl_load_file libref
     }
-    $$func = DynaLoader::dl_find_symbol( $$lib, $$name );
+    $$func = Ctypes::find_function( $$lib, $$name );
   }
   return bless $ret, $class;
 }
 
-=over
+=head2 update(name, sig, abi, args)
 
-=item update(name, sig, abi, args)
-
-or 
-
-=item update({ param => value, [...] })
+Also hash-style: update({ param => value, [...] })
 
 C<update> provides a quick way of changing many attributes of a function
 all at once. Only the function's C<lib> and C<func> references cannot
@@ -319,13 +311,9 @@ sub update {
   return $self;
 }
 
-=over
+=head2 abi_default( [ 'c' | $^O ] );
 
-=item abi_default( [ 'c' | $^O ] );
-
-or
-
-=item abi_default( [ { abi => <char> | os => $^O } ] )
+Also hash-style: abi_default( [ { abi => <char> | os => $^O } ] )
 
 This class method is used to return the default ABI (calling convention)
 for the current system. It can also be used to change the 'default' for
@@ -342,5 +330,15 @@ sub abi_default {
 #  }
   return undef;
 }
+
+=head2 validate_abi
+
+TODO
+
+=head2 validate_types
+
+TODO
+
+=cut
 
 1;

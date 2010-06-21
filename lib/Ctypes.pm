@@ -117,8 +117,8 @@ Return a value as specified by the seconf character in sig.
 
 sig is the signature string. The first character specifies the
 calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
-The second character specifies the pack-style return type, the subsequent
-characters specify the pack-style argument types.
+The second character specifies the pack-style return type, 
+the subsequent characters specify the pack-style argument types.
 
 addr is the function address, the return value of find_function or
 L<DynaLoader::dl_find_symbol>.
@@ -126,7 +126,7 @@ L<DynaLoader::dl_find_symbol>.
 args are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Supported signature characters equivalent to python ctypes:
+Supported signature characters equivalent to python ctypes: (NOT YET)
 
   's': pointer to string
   'c': signed char as char
@@ -143,12 +143,12 @@ Supported signature characters equivalent to python ctypes:
   'd': double
   'g': long double
   'q': signed long long
-  'q': unsigned long long
-  'P': pointer
-  'z': pointer to ASCIIZ string
+  'Q': unsigned long long
+  'P': void * (any pointer)
   'u': unicode string
-  'U': unicode string
-  'Z': unicode string
+  'U': unicode string (?)
+  'z': pointer to ASCIIZ string
+  'Z': pointer to wchar string
   'X': MSWin32 BSTR
   'v': MSWin32 bool
   'O': pointer to perl object
@@ -169,7 +169,7 @@ sub call {
   return _call( $func, $sig, @args );
 }
 
-=item find_library (lib, [dynaloader args])
+=item load_library (lib, [dynaloader args])
 
 Searches the dll/so loadpath for the given library, architecture dependently.
 
@@ -179,26 +179,16 @@ or the same as for L<DynaLoader::dl_findfile>:
 "-llib" or "-Lpath -llib", with -L for the optional path.
 
 Returns a libraryhandle, to be used for find_function.
-
-  find_library "-lm"
-    => "/usr/lib/libm.so"
-     | "/usr/bin/cygwin1.dll"
-     | "C:\\WINDOWS\\\\System32\\MSVCRT.DLL
-
-  find_library "-L/usr/local/kde/lib -lkde"
-    => "/usr/local/kde/lib/libkde.so.2.0"
-
-  find_library "kernel32"
-    => "C:\\WINDOWS\\\\System32\\KERNEL32.dll"
-
-On cygwin or mingw C<find_library> might try to run the external program dllimp
-to resolve the version specific dll from the found unversioned import library.
+Uses L<Ctypes::Util::find_library> to find the path.
 
 TODO: On Windows loading a library should also define the ABI and signatures.
 
+See also L<Ctypes::Library::LoadLibrary> which returns a Library object, 
+not a handle.
+ 
 =cut
 
-sub find_library($;@) {
+sub load_library($;@) {
   my $path = Ctypes::Util::find_library( shift, @_ );
   # This might trigger a Windows MessageBox
   return DynaLoader::dl_load_file($path, @_) if $path;
@@ -207,7 +197,7 @@ sub find_library($;@) {
 
 =item CDLL (library)
 
-Calls L<find_library> and returns a library object which defaults to the cdecl ABI.
+Calls L<LoadLibrary> and returns a library object which defaults to the cdecl ABI.
 
 =cut
 
@@ -217,7 +207,7 @@ sub CDLL($;@) {
 
 =item WinDLL (library)
 
-Calls L<find_library> and returns a library object which defaults to the stdcall ABI.
+Calls L<LoadLibrary> and returns a library object which defaults to the stdcall ABI.
 
 =cut
 
@@ -297,16 +287,26 @@ sub c_struct {
 Subclasses are CDLL, WinDLL, OleDLL and PerlDLL, returning objects
 defining the path, handle and abi of the found shared library.
 
-Submethods are the functions and variables inside the library. 
-Functions can be called.
+Submethods are LoadLibrary and the functions and variables inside the library. 
 
-  $lib = CDLL::msvcrt;
+Properties are _name, _path, _abi, _handle.
 
-is more than a fancy name for Ctypes::find_library("msvcrt").
+  $lib = CDLL->msvcrt;
 
-  $func = CDLL::msvcrt::toupper;
+is the same as CDLL->LoadLibrary("msvcrt"),
+but CDLL->libc should be used for cross-platform compat.
 
-returns the function for the Windows clib function toupper.
+  $func = CDLL->libc->toupper;
+
+returns the function for the clib function toupper, on Windows and Posix.
+
+Functions within libraries can be called directly.
+
+  $ret = CDLL->libc->toupper({sig => "cii"}, ord("y"));
+
+On Windows even without signature declaration. (TODO)
+
+  $ret = CDLL->msvcrt->toupper(ord("y"));
 
 =cut
 
@@ -316,9 +316,10 @@ use Carp;
 
 sub AUTOLOAD {
   # This AUTOLOAD is used to define the dll/soname for the library,
-  # or access a function in the library, $lib = CDLL::msvcrt; $func = 
-  # Indexed with CDLL::msvcrt[0]() or
-  # or named with WinDLL::kernel32::GetModuleHandle(32)
+  # or access a function in the library.
+  # $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper; 
+  # Indexed with CDLL->msvcrt[0] (tied array?) on windows only
+  # or named with WinDLL->kernel32->GetModuleHandle(32)
   my ($name, $func, $lib);
   our $AUTOLOAD;
   ($name = $AUTOLOAD) =~ s/.*DLL:://;
@@ -326,45 +327,60 @@ sub AUTOLOAD {
     $name = $1;
     $func = $2;
   }
-  $lib = Ctypes::find_library($name)
-    or croak "Ctypes::find_library($name) failed";
-  # TODO: call or just define a function?
+  # TODO check for setable properties: abi
+  $lib = Ctypes::load_library($name)
+    or croak "Ctypes::load_library($name) failed";
+  # TODO: call or just define a function? call via goto
   return $func ? return Ctypes::find_function($lib, $func) : $lib;
+}
+
+=head1 LoadLibrary (name)
+
+=cut
+
+sub LoadLibrary($;@) {
+  my $self = shift;
+  my $path = $self->{_path};
+  $self->{_name} = shift;
+  $path = Ctypes::Util::find_library( $self->{_name} ) unless $path;
+  $self->{_handle} = DynaLoader::dl_load_file($path, @_) if $path;
+  $self->{_path} = $path if $self->{_handle};
+  return $self->{_handle};
 }
 
 =head1 CDLL
 
-  $lib = CDLL::msvcrt;
+  $lib = CDLL->msvcrt;
 
-is a fancy name for Ctypes::find_library("msvcrt").
+is a fancy name for CDLL->LoadLibrary("msvcrt").
 
-  $func = CDLL::msvcrt::toupper;
+  $func = CDLL->msvcrt->toupper;
 
 returns the function for the Windows clib function toupper.
 
-  $ret = CDLL::msvcrt::toupper("y");
+  $ret = CDLL->msvcrt->toupper("y");
 
 is possible on Windows only, where the argument and return types are known. 
 
 On windows you can also define and call functions by their ordinal in the library, as in 
 
-  $func = CDLL::kernel32[1];
+  $func = CDLL->kernel32[1];
 
 or
 
-  $ret = CDLL::kernel32[1]();
+  $ret = CDLL->kernel32[1]();
 
 =head1 WinDLL
 
-  $lib = WinDLL::kernel32;
+  $lib = WinDLL->kernel32;
 
-Windows only: Teturns a library object for the Windows kernel32.dll.
+Windows only: Returns a library object for the Windows kernel32.dll.
 
 =head1 OleDLL
 
-  $lib = WinDLL::kernel32;
+  $lib = OleDLL->mshtml;
 
-Windows only: Teturns a library object for the Windows kernel32.dll.
+Windows only.
 
 =cut
 
@@ -373,9 +389,9 @@ our @ISA = qw(Ctypes::Library);
 
 sub new {
   my $class = shift;
-  my $props = { abi => 'c' };
+  my $props = { _abi => 'c' };
   $props->{_name} = Ctypes::Util::find_library(shift);
-  $props->{_handle} = Ctypes::find_library($props->{lib});
+  $props->{_handle} = Ctypes::load_library($props->{_name});
   return bless $props, $class;
 }
 
@@ -384,9 +400,9 @@ our @ISA = qw(Ctypes::Library);
 
 sub new {
   my $class = shift;
-  my $props = { abi => 's' };
-  $props->{lib} = Ctypes::Util::find_library(shift);
-  $props->{handle} = Ctypes::find_library($props->{lib});
+  my $props = { _abi => 's' };
+  $props->{_name} = Ctypes::Util::find_library(shift);
+  $props->{_handle} = Ctypes::load_library($props->{_name});
   return bless $props, $class;
 }
 
@@ -396,8 +412,8 @@ our @ISA = qw(Ctypes::Library);
 sub new {
   my $class = shift;
   my $props = { abi => 's' };
-  $props->{lib} = Ctypes::Util::find_library(shift);
-  $props->{handle} = Ctypes::find_library($props->{lib});
+  $props->{_name} = Ctypes::Util::find_library(shift);
+  $props->{_handle} = Ctypes::load_library($props->{_name});
   return bless $props, $class;
 }
 
@@ -406,10 +422,14 @@ our @ISA = qw(Ctypes::Library);
 
 sub new {
   my $class = shift;
-  my $props = { abi => 'c' };
-  $props->{lib} = Ctypes::Util::find_library(shift);
-  $props->{handle} = Ctypes::find_library($props->{lib});
-  return bless $props, $class;
+  my $name = shift;
+  # TODO: name may be split into subpackages: PerlDLL->new("C::DynaLib")
+  my $props = { _abi => 'c', _name => $name };
+  die "TODO perl xs library search";
+  $name =~ s/::/\//g;
+  #$props->{_path} = $Config{...}.$name.$Config{soext};
+  my $self = bless $props, $class;
+  $self->LoadLibrary($props->{_path});
 }
 
 package Ctypes::Util;
@@ -438,7 +458,7 @@ Returns the path of the found library or undef.
   find_library "kernel32"
     => "C:\\WINDOWS\\\\System32\\KERNEL32.dll"
 
-On cygwin or mingw C<find_library> might try to run the external program dllimp
+On cygwin or mingw C<find_library> might try to run the external program C<dllimport>
 to resolve the version specific dll from the found unversioned import library.
 
 =cut
@@ -527,8 +547,9 @@ sub find_function($$) {
   return DynaLoader::dl_find_symbol( shift, shift );
 }
 
-our $libc = find_library("c");
-our $libm = find_library("m");
+# TODO: defer to autoloaded
+our $libc = load_library("c");
+our $libm = load_library("m");
 
 =head1 AUTHOR
 
