@@ -201,7 +201,7 @@ _call( addr, sig, ... )
       {
       case 'v': break;
       case 'c': 
-      case 'C': XPUSHs(sv_2mortal(newSViv((int)(*rvalue))));   break;
+      case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
       case 's': 
       case 'S': XPUSHs(sv_2mortal(newSVpv((char *)(*rvalue), 0)));   break;
       case 'i': XPUSHs(sv_2mortal(newSViv((int)(*rvalue))));   break;
