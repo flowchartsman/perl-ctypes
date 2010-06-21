@@ -2,10 +2,10 @@
 use Test::More tests => 4;
 
 use Ctypes;
-Ctypes->import('$libc');
+my $libc = CDLL->c;
 
 ok( defined $libc, '$libc created' );
-is( $libc->toupper("cii", ord("y")), ord("Y"), '$libc->toupper()' );
+is( $libc->toupper({sig=>"cii"})->(ord("y")), ord("Y"), 'libc->toupper()' );
 
 SKIP: {
   skip 1, "windows" unless $^O =~ /(MSWin32|cygwin)/;

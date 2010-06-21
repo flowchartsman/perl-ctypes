@@ -10,5 +10,5 @@ ok( defined $lib, 'declare libc' )
 my $func = $lib->toupper;
 ok( defined $func, 'found toupper in libc' );
 
-my $ret = $lib->toupper({sig => "cii"}, ord("y"));
+my $ret = $lib->toupper({sig => "cii"})->(ord("y"));
 is( chr($ret), 'Y', "call toupper('y') => " . chr($ret) );

@@ -312,20 +312,14 @@ sub AUTOLOAD {
       $lib->LoadLibrary($name)
 	or croak "LoadLibrary($name) failed";
       return $lib;
-    } else { # lib is a ->function
-      if (@_ and ref $_[0] ne 'HASH') { # declare a function via HASHREF
-	my $func = CTypes::Function->new
-	  ({ lib  => $lib->{_path},
-	     abi  => $lib->{_abi}, 
-	     name => $name });
-	return $func->(@_);
-      } else {
-	return CTypes::Function->new
-	  # TODO: merge the two hashes if @_, the sig
-	  ({ lib => $lib->{_path},
-	     abi => $lib->{_abi}, 
-	     name => $name }, @_);
+    } else { # name is a ->function
+      my $props = { lib => $lib->{_handle},
+		    abi => $lib->{_abi}, 
+		    name => $name };
+      if (@_ and ref $_[0] eq 'HASH') { # declare the sig via HASHREF
+	$props->{sig} = shift->{sig};
       }
+      return CTypes::Function->new($props, @_);
     }
   } else {
     $lib = Ctypes::load_library($name)
