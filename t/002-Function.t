@@ -1,6 +1,6 @@
 #!perl
-use Test::More tests => 4;
 
+use Test::More tests => 4;
 use Ctypes::Function;
 
 my $function_01 = Ctypes::Function->new( 'c', 'toupper', 'cii' );
