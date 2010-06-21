@@ -341,7 +341,7 @@ sub abi_default {
       $_default_abi = 's'; return 1;
     }
     if( (defined $arg->{abi} and $arg->{abi} eq 'c') or
-        (defined $arg->{os} and $arg->{os} eq 'linux') ) 
+        (defined $arg->{os} and $arg->{os} eq 'linux') or 
         (defined $arg->{os} and $arg->{os} eq 'cygwin') ) {
       $_default_abi = 'c'; return 1;
     }
