@@ -1,18 +1,12 @@
 #!perl
 
-use Test::More tests => 4;
+use Test::More tests => 2;
 use Ctypes::Function;
 
-my $function_01 = Ctypes::Function->new( 'c', 'toupper', 'cii' );
-ok( defined $function_01, '$function_01 created' );
-my $ret = $function_01->( ord("y") );
-is($ret, ord("Y"), "toupper('y') => $ret");
-
-$function_01 = Ctypes::Function->new( { lib    =>'c',
-					name   => 'toupper',
-					abi    => 'c',
-					atypes => 'i',
-					rtype  => 'i' } );
-ok( defined $function_01, '$function_01 created with hashref' );
-$ret = $function_01->( ord("y") );
-is($ret, ord("Y"), "toupper('y') => $ret");
+$to_upper = Ctypes::Function->new( { lib    =>'c',
+                                     name   => 'toupper',
+                                     atypes => 'i',
+                                     rtype  => 'i' } );
+ok( defined $to_upper, '$to_upper created with hashref' );
+$ret = $to_upper->( ord("y") );
+is($ret, ord("Y"));

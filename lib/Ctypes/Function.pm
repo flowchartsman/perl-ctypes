@@ -50,7 +50,7 @@ Ctypes::Function abstracts the raw Ctypes::call() API
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, rtype => 1, lib => 1 };
 # For abi_default():
-my $default_abi = 'c';
+my $_default_abi = ($^O eq 'MSWin32' ? 's' : 'c' );
 
 sub _get_args (\@\@;$) {
   my $args = shift;
@@ -324,11 +324,29 @@ must be specified using a string returned by $^O on the target system.
 =cut
 
 sub abi_default {
-#  my $arg = shift;
-#  # What kind of argument did we get?
-#  if(ref($arg) eq 'SCALAR') {
-#  }
-  return undef;
+  my $arg = shift;
+  if( !defined $arg ) {
+    return $_default_abi;
+  }
+  # What kind of argument did we get?
+  if(ref($arg) eq 'SCALAR') {
+    if( ($arg eq 's') or ($arg eq 'MSWin32') ) { 
+      $_default_abi = 's'; return 1; }
+    if( ($arg eq 'c') or ($arg eq 'linux') or ($arg eq 'cygwin') ) { 
+      $_default_abi = 'c'; return 1; }
+    die("abi_default: unrecognised ABI code or OS identifier");
+  } elsif(ref($arg) eq 'HASH') {
+    if( (defined $arg->{abi} and $arg->{abi} eq 's') or 
+        (defined $arg->{os} and $arg->{os} eq 'MSWin32') ) {
+      $_default_abi = 's'; return 1;
+    }
+    if( (defined $arg->{abi} and $arg->{abi} eq 'c') or
+        (defined $arg->{os} and $arg->{os} eq 'linux') ) 
+        (defined $arg->{os} and $arg->{os} eq 'cygwin') ) {
+      $_default_abi = 'c'; return 1;
+    }
+  }
+  die("abi_default: unrecognised ABI code or OS identifier");
 }
 
 =head2 validate_abi
