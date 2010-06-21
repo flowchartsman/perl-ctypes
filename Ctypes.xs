@@ -70,10 +70,10 @@ MODULE = Ctypes		PACKAGE = Ctypes
 INCLUDE: const-xs.inc
 
 void
-call( addr, sig, ... )
+_call( addr, sig, ... )
     void* addr;
     char* sig;
-  PROTOTYPE: $$;$
+  PROTOTYPE: $$;@
   PPCODE:
     int num_args = items - 2;
     ffi_cif cif;
@@ -81,12 +81,12 @@ call( addr, sig, ... )
     unsigned int nargs;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
-    ffi_arg rvalue;
     ffi_type *rtype;
+    char *rvalue;
     STRLEN len;
-    int args_in_sig;
+    int args_in_sig, rsize;
  
-    debug_warn( "\n\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, addr, sig );
+    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
@@ -103,8 +103,11 @@ call( addr, sig, ... )
     }
 
     rtype = get_ffi_type( sig[1] );
-
-    debug_warn( "[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
+    debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
+    rsize = FFI_SIZEOF_ARG;
+    if (sig[1] == 'd') rsize = sizeof(double);
+    if (sig[1] == 'D') rsize = sizeof(long double);
+    rvalue = (char*)malloc(rsize);
 
     if( num_args > 0 ) {
       int i;
@@ -183,33 +186,34 @@ call( addr, sig, ... )
     }
 
     debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
-    debug_warn( "#  addr is: 0x%x ", addr );
-    debug_warn( "#  argvalues is: %d ", *(double*)argvalues[0] );
+    debug_warn( "#  addr is: 0x%x ", (unsigned int)addr );
+    debug_warn( "#  argvalues is: %f", *(double*)argvalues[0] );
 
     ffi_call(&cif, FFI_FN(addr), &rvalue, argvalues);
-    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", rvalue );
+    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)rvalue );
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {
       case 'v': break;
       case 'c': 
-      case 'C': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
+      case 'C': XPUSHs(sv_2mortal(newSViv((int)(*rvalue))));   break;
       case 's': 
-      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)(rvalue), 0)));   break;
-      case 'i': XPUSHs(sv_2mortal(newSViv((int)(rvalue))));   break;
-      case 'I': XPUSHs(sv_2mortal(newSVuv((unsigned int)(rvalue))));   break;
-      case 'l': XPUSHs(sv_2mortal(newSViv((long)(rvalue))));   break;
-      case 'L': XPUSHs(sv_2mortal(newSVuv((unsigned long)(rvalue))));   break;
-      case 'f': XPUSHs(sv_2mortal(newSVnv((float)(rvalue))));    break;
-      case 'd': XPUSHs(sv_2mortal(newSVnv((double)(rvalue))));    break;
-      case 'D': XPUSHs(sv_2mortal(newSVnv((long double)(rvalue))));    break;
-      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
+      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)(*rvalue), 0)));   break;
+      case 'i': XPUSHs(sv_2mortal(newSViv((int)(*rvalue))));   break;
+      case 'I': XPUSHs(sv_2mortal(newSVuv((unsigned int)(*rvalue))));   break;
+      case 'l': XPUSHs(sv_2mortal(newSViv((long)(*rvalue))));   break;
+      case 'L': XPUSHs(sv_2mortal(newSVuv((unsigned long)(*rvalue))));   break;
+      case 'f': XPUSHs(sv_2mortal(newSVnv((float)(*rvalue))));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv((double)(*rvalue))));    break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv((long double)(*rvalue))));    break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)*rvalue, 0))); break;
     }
 
     debug_warn( "#[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
+    free(rvalue);
     int i = 0;
     for( i = 0; i < num_args; i++ ) {
       Safefree(argvalues[i]);
       debug_warn( "#[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
     }
-    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...", __LINE__ );
+    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...\n\n", __LINE__ );

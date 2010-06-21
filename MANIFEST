@@ -14,6 +14,7 @@ include/ffi_common.h
 include/ffi.h
 include/ffitarget.h
 lib/Ctypes.pm
+lib/Ctypes/Function.pm
 t/000-load.t
 t/001-math.t
 t/manifest.t
