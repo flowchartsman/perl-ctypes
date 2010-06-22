@@ -83,14 +83,10 @@ _call( addr, sig, ... )
     void *argvalues[num_args];
     ffi_type *rtype;
     char *rvalue;
-    float  fvalue;
-    double dvalue;
-    long double ldvalue;
     STRLEN len;
     int args_in_sig, rsize;
  
-    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", 
-		__LINE__, (unsigned int)addr, sig );
+    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 
     if( num_args < 0 ) {
@@ -168,7 +164,6 @@ _call( addr, sig, ... )
           break;
         case 'D':
           Newxc(argvalues[i], 1, long double, long double);
-	  /* XXX This is too short. void* vs long double */
           *(long double*)argvalues[i] = SvNV(ST(i+2));
           break;
         case 'p':
@@ -198,27 +193,20 @@ _call( addr, sig, ... )
     debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)rvalue );
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
-      {
+    {
       case 'v': break;
       case 'c': 
       case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
       case 's': 
-      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)(*rvalue), 0)));   break;
-      case 'i': XPUSHs(sv_2mortal(newSViv((int)(*rvalue))));   break;
-      case 'I': XPUSHs(sv_2mortal(newSVuv((unsigned int)(*rvalue))));   break;
-      case 'l': XPUSHs(sv_2mortal(newSViv((long)(*rvalue))));   break;
-      case 'L': XPUSHs(sv_2mortal(newSVuv((unsigned long)(*rvalue))));   break;
-      case 'f':
-	memcpy(&rvalue,&fvalue,sizeof(fvalue));
-	XPUSHs(sv_2mortal(newSVnv(fvalue))); 
-	break;
-      case 'd': 
-	memcpy(&rvalue,&dvalue,sizeof(dvalue));
-	XPUSHs(sv_2mortal(newSVnv(dvalue)));    break;
-      case 'D': 
-	memcpy(&rvalue,&ldvalue,sizeof(ldvalue));
-	XPUSHs(sv_2mortal(newSVnv(ldvalue)));    break;
-      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)(*rvalue), 0))); break;
+      case 'S': XPUSHs(sv_2mortal(newSVpv(*(char *)rvalue, 0)));   break;
+      case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
+      case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)rvalue)));   break;
+      case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)rvalue)));   break;
+      case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)rvalue)));   break;
+      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)rvalue)));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)rvalue)));    break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)rvalue)));    break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
     debug_warn( "#[Ctypes.xs: %i ] Cleaning up...", __LINE__ );
