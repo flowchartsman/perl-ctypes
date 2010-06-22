@@ -214,6 +214,8 @@ calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall).
 The second character specifies the pack-style return type, 
 the subsequent characters specify the pack-style argument types.
 
+perlfunc is a subref
+
 =cut
 
 sub callback($$) { # TODO ffi_prep_closure
@@ -242,7 +244,9 @@ sub c_struct {
 
 =back
 
-=head1 CTypes::Library
+=head1 CTypes::DLL
+
+Define objects for shared libraries and its abi.
 
 Subclasses are CDLL, WinDLL, OleDLL and PerlDLL, returning objects
 defining the path, handle and abi of the found shared library.
@@ -253,24 +257,20 @@ Properties are _name, _path, _abi, _handle.
 
   $lib = CDLL->msvcrt;
 
-is the same as CDLL->LoadLibrary("msvcrt"),
+is the same as CDLL->new("msvcrt"),
 but CDLL->libc should be used for cross-platform compat.
 
-  $func = CDLL->libc->toupper;
+  $func = CDLL->c->toupper;
 
-returns the function for the clib function toupper, on Windows and Posix.
+returns the function for the libc function toupper, on Windows and Posix.
 
 Functions within libraries can be called directly.
 
-  $ret = CDLL->libc->toupper({sig => "cii"}, ord("y"));
-
-On Windows even without signature declaration. (TODO)
-
-  $ret = CDLL->msvcrt->toupper(ord("y"));
+  $ret = CDLL->libc->toupper({sig => "cii"})->ord("y");
 
 =cut
 
-package Ctypes::Library;
+package Ctypes::DLL;
 use Ctypes;
 use Ctypes::Function;
 use Carp;
@@ -310,7 +310,7 @@ sub AUTOLOAD {
     # ->library
     my $lib = shift;
     # library not yet loaded?
-    if (ref($lib) =~ /^Ctypes::(C|Win|Ole|Perl)DLL$/ and !$lib->{_handle}) {
+    if (ref($lib) =~ /^Ctypes::(|C|Win|Ole|Perl)DLL$/ and !$lib->{_handle}) {
       $lib->LoadLibrary($name)
 	or croak "LoadLibrary($name) failed";
       return $lib;
@@ -349,23 +349,33 @@ sub LoadLibrary($;@) {
 
   $lib = CDLL->msvcrt;
 
-is a fancy name for Ctypes::CDLL->new("msvcrt").
+is a fancy name for Ctypes::CDLL->new("msvcrt"). 
+Note that you should really use the platform compatible 
+CDLL->c for the current libc, which can be any msvcrtxx.dll
 
   $func = CDLL->msvcrt->toupper;
 
-returns the function for the Windows clib function toupper.
+returns the function for the Windows libc function toupper,
+but this function cannot be called, since the sig is missing.
+It only checks if the symbol is define inside the library.
+You can add the sig later, as in
 
-  $ret = CDLL->msvcrt->toupper("y");
+  $func->{sig} = 'cii';
 
-is possible on Windows only, where the argument and return types are known. 
+or call the function like
 
-On windows you can also define and call functions by their ordinal in the library, as in 
+  $ret = CDLL->msvcrt->toupper({sig=>"cii"})->(ord("y"));
+
+On windows you can also define and call functions by their 
+ordinal in the library.
+
+Define:
 
   $func = CDLL->kernel32[1];
 
-or
+Call:
 
-  $ret = CDLL->kernel32[1]();
+  $ret = CDLL->kernel32[1]->();
 
 =head1 WinDLL
 
@@ -383,10 +393,8 @@ Windows only.
 
 package Ctypes::CDLL;
 use Ctypes;
-our @ISA = qw(Ctypes::Library);
+our @ISA = qw(Ctypes::DLL);
 use Carp;
-
-# *Ctypes::CDLL::AUTOLOAD = *Ctypes::Library::AUTOLOAD;
 
 sub new {
   my $class = shift;
@@ -398,8 +406,18 @@ sub new {
   return bless $props, $class;
 }
 
+#our ($libc, $libm);
+#sub libc {
+#  return $libc if $libc;
+#  $libc = load_library("c");
+#}
+#sub libm {
+#  return $libm if $libm;
+#  $libm = load_library("m");
+#}
+
 package Ctypes::WinDLL;
-our @ISA = qw(Ctypes::Library);
+our @ISA = qw(Ctypes::DLL);
 
 sub new {
   my $class = shift;
@@ -412,7 +430,7 @@ sub new {
 }
 
 package Ctypes::OleDLL;
-our @ISA = qw(Ctypes::Library);
+our @ISA = qw(Ctypes::DLL);
 
 sub new {
   my $class = shift;
@@ -425,7 +443,7 @@ sub new {
 }
 
 package Ctypes::PerlDLL;
-our @ISA = qw(Ctypes::Library);
+our @ISA = qw(Ctypes::DLL);
 
 sub new {
   my $class = shift;
@@ -492,6 +510,9 @@ sub find_library($;@) {# from C::DynaLib::new
       if ($lib = DynaLoader::dl_load_file($so, @_)) {
 	return $so;
       }
+      # python has a different logic: The version+subversion is taken from 
+      # msvcrt dll used in the python.exe
+      # We search in the systempath for the first found.
       push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
 	   "MSVCRT60","MSVCRT40","MSVCRT20");
     }
@@ -520,7 +541,8 @@ sub find_library($;@) {# from C::DynaLib::new
       }
     }
     if ($found) {
-      # resolve the .a or .dll.a to the dll. dllimport from binutils must be in the path
+      # resolve the .a or .dll.a to the dll. 
+      # dllimport from binutils must be in the path
       $found = system("dllimport -I $found") if $found =~ /\.a$/;
       return $found if $found;
     }
@@ -532,6 +554,8 @@ sub find_library($;@) {# from C::DynaLib::new
       my $fh;
       open($fh, "<", $so);
       my $slurp = <$fh>;
+      # for now the first in the GROUP. We should use ld 
+      # or /sbin/ldconfig -p or objdump
       if ($slurp =~ /^\s*GROUP\s*\(\s*(\S+)\s+/m) {
 	return $1;
       }
@@ -568,16 +592,6 @@ Should not be needed.
 
 sub load_error() {
   return DynaLoader::dl_error();
-}
-
-our ($libc, $libm);
-sub libc {
-  return $libc if $libc;
-  $libc = load_library("c");
-}
-sub libm {
-  return $libm if $libm;
-  $libm = load_library("m");
 }
 
 =head1 AUTHOR
