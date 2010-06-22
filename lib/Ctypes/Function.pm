@@ -36,7 +36,7 @@ Version 0.002
 
 =head1 DESCRIPTION
 
-Ctypes::Function abstracts the raw Ctypes::call() API
+Ctypes::Function objects abstracts the raw Ctypes::call() API.
 
 =cut
 
@@ -178,7 +178,11 @@ so specifying the unversioned library name will find the most recent DLL.
 
 =item A path to a shared library.
 
-=item A library handle as returned by DynaLoader.
+=item A L<Ctypes::Library> object.
+
+=item A library handle as returned by DynaLoader, or the C<_handle> 
+property of a CTypes::Library object, such as C<CDLL>.
+$lib = CDLL->c; $lib->{_handle}.
 
 =back
 
@@ -271,7 +275,7 @@ logic used in those instances.
 
 sub new {
   my ($class, @args) = @_;
-  # default positional args are library, function name, function signature
+  # default positional args are library, function name, function signature.
   # will never make sense to pass func address or lib address positionally
   my @attrs = qw(lib name sig abi rtype func);
   our $ret  =  _get_args(@args, @attrs);
@@ -286,11 +290,18 @@ sub new {
     if (!$$lib) {
       die( "Can't find function without a library!" );
     } else {
-      do {
-        $$lib = Ctypes::load_library( $$lib );
-      } unless ($$lib =~ /^[0-9]$/); # looks like dl_load_file libref
+      if (ref $lib ne 'SCALAR' and $$lib->isa("Ctypes::Library")) {
+	$$lib = $$lib->{_handle};
+	$ret->{abi} = $$lib->{_abi} unless $ret->{abi};
+      }
+      die "No library $$lib found" unless $$lib;
+      if ($$lib and $$lib !~ /^[0-9]+$/) { # need a number, a dl_load_file handle
+        my $newlib = Ctypes::load_library( $$lib );
+	die "No library $$lib found" unless $newlib;
+	$$lib = $newlib;
+      }
+      $$func = Ctypes::find_function( $$lib, $$name );
     }
-    $$func = Ctypes::find_function( $$lib, $$name );
   }
   return bless $ret, $class;
 }

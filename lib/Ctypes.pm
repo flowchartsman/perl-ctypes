@@ -272,15 +272,16 @@ On Windows even without signature declaration. (TODO)
 
 package Ctypes::Library;
 use Ctypes;
+use Ctypes::Function;
 use Carp;
 
 # This AUTOLOAD is used to define the dll/soname for the library,
 # or access a function in the library.
 # $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper; 
 # Indexed with CDLL->msvcrt[0] (tied array?) on windows only
-# or named with WinDLL->kernel32->GetModuleHandle(32)
+# or named with WinDLL->kernel32->GetModuleHandle({sig=>"sll"})->(32)
 sub AUTOLOAD {
-  my ($name, $func, $lib);
+  my $name;
   our $AUTOLOAD;
   ($name = $AUTOLOAD) =~ s/.*:://;
   return if $name eq 'DESTROY';
@@ -307,8 +308,9 @@ sub AUTOLOAD {
   }
   if (@_) {
     # ->library
-    $lib = shift;
-    if (ref($lib) =~ /^Ctypes::(C|Win|Ole|Perl)DLL$/) {
+    my $lib = shift;
+    # library not yet loaded?
+    if (ref($lib) =~ /^Ctypes::(C|Win|Ole|Perl)DLL$/ and !$lib->{_handle}) {
       $lib->LoadLibrary($name)
 	or croak "LoadLibrary($name) failed";
       return $lib;
@@ -319,12 +321,12 @@ sub AUTOLOAD {
       if (@_ and ref $_[0] eq 'HASH') { # declare the sig via HASHREF
 	$props->{sig} = shift->{sig};
       }
-      return CTypes::Function->new($props, @_);
+      return Ctypes::Function->new($props, @_);
     }
   } else {
-    $lib = Ctypes::load_library($name)
+    my $lib = Ctypes::load_library($name)
       or croak "Ctypes::load_library($name) failed";
-    return $func ? return Ctypes::find_function($lib, $func) : $lib;
+    return $lib; # scalar handle only?
   }
 }
 
