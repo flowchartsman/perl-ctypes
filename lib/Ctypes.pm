@@ -285,7 +285,7 @@ sub AUTOLOAD {
   ($name = $AUTOLOAD) =~ s/.*:://;
   return if $name eq 'DESTROY';
   # property
-  if ($name =~ /^_(abi|handle|path|name)/) {
+  if ($name =~ /^_(abi|handle|path|name)$/) {
     *$AUTOLOAD = sub { 
       my $self = shift;
       # only _abi is setable
@@ -308,7 +308,7 @@ sub AUTOLOAD {
   if (@_) {
     # ->library
     $lib = shift;
-    if (ref($lib) =~ /^Ctypes::(CDLL|WinDLL|OleDLL|PerlDLL)$/) {
+    if (ref($lib) =~ /^Ctypes::(C|Win|Ole|Perl)DLL$/) {
       $lib->LoadLibrary($name)
 	or croak "LoadLibrary($name) failed";
       return $lib;
@@ -336,7 +336,7 @@ sub LoadLibrary($;@) {
   my $self = shift;
   my $path = $self->{_path};
   $self->{_name} = shift;
-  $self->{_abi} = __PACKAGE__ eq 'Ctypes::CDLL' ? 'c' : 's';
+  $self->{_abi} = ref $self eq 'Ctypes::CDLL' ? 'c' : 's';
   $path = Ctypes::Util::find_library( $self->{_name} ) unless $path;
   $self->{_handle} = DynaLoader::dl_load_file($path, @_) if $path;
   $self->{_path} = $path if $self->{_handle};
