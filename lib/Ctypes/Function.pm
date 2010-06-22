@@ -83,26 +83,11 @@ sub _call {
   #print Dumper( $self );
   # Constructing / validating full sig to pass to Ctypes::call
   validate_types($self->sig);
-  my $whole_sig;
-  if ($self->abi) {
-    validate_abi($self->abi); # chops to 1 char & checks letters
-    if ($self->rtype) {
-      # validate_types also used for sig so must chop here
-      $self->rtype = substr($self->rtype, 0, 1);
-      validate_types($self->rtype);
-      $whole_sig = $self->abi . $self->rtype . $self->sig;
-    } else {
-      $whole_sig = $self->abi . $self->sig;
-    }
-  } elsif( $self->rtype ) {
-    warn("Got rtype but no abi; using system default");
-    $self->{abi} = abi_default();
-    $whole_sig = $self->abi . $self->rtype . $self->sig;
-  } 
-  if (!defined $self->abi and !defined $self->rtype) { # for clarity
-    $whole_sig = $self->sig; 
-  }
-  $retval = Ctypes::call( $self->func, $whole_sig, @args );
+  my @sig = split(//, $self->sig);
+  $sig[0] = $self->abi if defined $self->abi;
+  $sig[1] = $self->rtype if defined $self->rtype;
+  $self->sig( join( '', @sig) );
+  $retval = Ctypes::call( $self->func, $self->sig, @args );
   return $retval;
 }
 
@@ -181,7 +166,7 @@ so specifying the unversioned library name will find the most recent DLL.
 =item A L<Ctypes::Library> object.
 
 =item A library handle as returned by DynaLoader, or the C<_handle> 
-property of a CTypes::Library object, such as C<CDLL>.
+property of a Ctypes::Library object, such as C<CDLL>.
 $lib = CDLL->c; $lib->{_handle}.
 
 =back
@@ -208,10 +193,11 @@ want in there.
 =item sig
 
 A string of letters representing the function signature, in the
-same format as L<Ctypes::call>. In a Function object, it can represent the
-full signature (like Ctypes::call), or just the return value + arguments,
-or just the arguments, depending on whether C<abi> and/or C<rtype> have
-been defined. See the note L</"abi, rtype and sig"> below.
+same format as L<Ctypes::call>, i.e. first character denotes the abi,
+second character denotes return type, and the remaining characters
+denote argument types: <abi><rtype><argtypes>. If the C<abi> or
+C<rtype> attributes are defined separately, they are substituted
+in to the C<sig> at call time (and C<sig> is redefined accordingly.)
 
 =item abi
 
@@ -219,14 +205,12 @@ This is a single character representing the desired Application Binary
 Interface for the call, here used to mean the calling convention. It can
 be 'c' for C<cdecl> or 's' for C<stdcall>. Other values will fail.
 'f' for C<fastcall> is for now used implicitly with 'c' on WIN64 
-and UNIX64 architectures, not yet on 64bit libraries. 
-See note L</"abi, rtype and sig"> below.
+and UNIX64 architectures, not yet on 64bit libraries.
 
 =item rtype
 
 A single character representing the return type of the function, using
-the same notation as L<Ctypes::call>. See note L</"abi, rtype and sig">
-below.
+the same notation as L<Ctypes::call>.
 
 =item func
 
@@ -234,42 +218,6 @@ An opaque reference to the function which the object represents. Can be
 accessed after initialisation, but cannot be changed.
 
 =back
-
-=head3 C<abi>, C<rtype> and C<sig>
-
-For the short of time:
-
-=over
-
-=item If neither C<abi> nor C<rtype> are defined (as is the usual case),
-C<sig> will be taken to include everything: the ABI, the return type, and
-the parameter list, in that order.
-
-=item If only C<abi> is set, C<sig> will be taken to include the other
-two attributes, return type and parameter list, in that order.
-
-=item If only C<rtype> is set, C<abi> will be defined I<for you>, to the
-system default. C<sig> will be taken to include just the parameter
-list, just like if you had defined both C<rtype> and C<abi> yourself. It
-is B<not> possible for C<sig> to represent only the ABI and parameter
-list.
-
-=back
-
-The simplest way to use a Function is to specify the ABI, return type
-and parameters all in one string stored in C<$obj->sig>. However, there
-may be times when you want to change the set ABI or return type
-of your object after its creation. For these occasions, you can set
-those attributes separately with their eponymous mutator methods. The
-important thing to consider is that I<the definedness of> C<$obj->abi>
-I<and> C<$obj->rtype> I<change the way> C<$obj->sig> I<will be
-interpreted>.
-
-This is pretty much common sense: if you have taken the time to specify
-C<abi> and C<rtype> separately, then C<sig> must only represent the
-parameter list. Where there may be uncertainty however is when only
-one of C<abi> and C<rtype> is provided. The rules above describe the
-logic used in those instances.
 
 =cut
 

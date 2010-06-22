@@ -119,7 +119,8 @@ sub call {
   my $func = shift;
   my $sig = shift;
   my @args = @_;
-  my @argtypes = split( //, substr( $sig, 2 ) );
+  my @argtypes = ();
+  @argtypes = split( //, substr( $sig, 2 ) ) if length $sig > 2;
   for(my $i=0 ; $i<=$#args ; $i++) {
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
         not Scalar::Util::looks_like_number($args[$i]) ) {
