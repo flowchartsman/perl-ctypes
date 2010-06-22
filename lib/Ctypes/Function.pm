@@ -30,9 +30,9 @@ Version 0.002
     # or
     $toupper = Ctypes::Function->new({ lib    => 'c',
                                        name   => 'toupper',
-                                       atypes => 'i',
+                                       sig    => 'i',
                                        rtype  => 'i' } );
-    $result = chr($toupper->(ord("y")));
+    $result = $toupper->(ord("y"));
 
 =head1 DESCRIPTION
 
@@ -96,7 +96,7 @@ sub _call {
     }
   } elsif( $self->rtype ) {
     warn("Got rtype but no abi; using system default");
-    $self->abi = abi_default();
+    $self->{abi} = abi_default();
     $whole_sig = $self->abi . $self->rtype . $self->sig;
   } 
   if (!defined $self->abi and !defined $self->rtype) { # for clarity
@@ -167,32 +167,39 @@ be one of three things:
 
 =over
 
-=item A linker argument style string, e.g. '-lc' for libc. Bear in mind
-that on Win32 library name resolution may be a bit sketchy, so you might
-want to use another option.
+=item A linker argument style string, e.g. '-lc' for libc.
+ 
+For Win32, mingw and cygwin special rules are used:
+"c" resolves on Win32 to msvcrt<ver>.dll.
+-llib will probably find an import lib ending with F<.a> or F<.dll.a>), 
+so C<dllimport> is called to find the DLL behind. 
+DLL are usually versioned, import libs not, 
+so specifying the unversioned library name will find the most recent DLL.
 
-=item A path to a library file (B<unimplemented> as of v0.002).
+=item A path to a shared library.
 
-=item An opaque library reference as returned by DynaLoader.
+=item A library handle as returned by DynaLoader.
 
 =back
 
-B<N.B.> Although the L<DynaLoader> docs explicitly say that the references
-it returns are to be considered 'opaque', we sneak a little regex on them
-to make sure they look like a string of numbers - what a DL reference
-normally looks like. This means that yes, you could do yourself a mischief
-by passing any string of numbers as a library reference, even though that
-would be a Silly Thing To Do.
+B<N.B.> Although the L<DynaLoader> docs explicitly say that the
+handles ("references") it returns are to be considered 'opaque', we
+check with a regex to make sure they look like a string of
+numbers - what a DL handle normally looks like. This means that
+yes, you could do yourself a mischief by passing any string of numbers
+as a library reference, even though that would be a Silly Thing To Do.
+Thanksfully there are no dll's consisting only of numbers, but if so, 
+add the extension.
 
 =item name
 
-The name of the function your object represents. On initialising,
-it's used internally by L<DynaLoader> as the function symbol to look for
-in the library given by C<lib>. It can also be useful for remembering
-what an object does if you've assigned it to a non-intuitively named
-reference. In theory though it's never looked at after initialization
-(and not even then if you supply a C<func> reference) so you could
-store any information you want in there.
+The name of the function. On initialising, it's used internally by
+L<DynaLoader> as the function symbol to look for in the library given
+by C<lib>. It can also be useful for remembering what an object does
+if you've assigned it to a non-intuitively named reference. In theory
+though it's never looked at after initialization (and not even then if
+you supply a C<func> reference) so you could store any information you
+want in there.
 
 =item sig
 
@@ -214,7 +221,7 @@ See note L</"abi, rtype and sig"> below.
 =item rtype
 
 A single character representing the return type of the function, using
-the same notation as Ctypes::call. See note L</"abi, rtype and sig">
+the same notation as L<Ctypes::call>. See note L</"abi, rtype and sig">
 below.
 
 =item func
