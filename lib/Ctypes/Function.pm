@@ -30,13 +30,13 @@ Version 0.002
     # or
     $toupper = Ctypes::Function->new({ lib    => 'c',
                                        name   => 'toupper',
-                                       atypes => 'i',
+                                       sig    => 'i',
                                        rtype  => 'i' } );
-    $result = chr($toupper->(ord("y")));
+    $result = $toupper->(ord("y"));
 
 =head1 DESCRIPTION
 
-Ctypes::Function abstracts the raw Ctypes::call() API
+Ctypes::Function objects abstracts the raw Ctypes::call() API.
 
 =cut
 
@@ -96,7 +96,7 @@ sub _call {
     }
   } elsif( $self->rtype ) {
     warn("Got rtype but no abi; using system default");
-    $self->abi = abi_default();
+    $self->{abi} = abi_default();
     $whole_sig = $self->abi . $self->rtype . $self->sig;
   } 
   if (!defined $self->abi and !defined $self->rtype) { # for clarity
@@ -167,32 +167,43 @@ be one of three things:
 
 =over
 
-=item A linker argument style string, e.g. '-lc' for libc. Bear in mind
-that on Win32 library name resolution may be a bit sketchy, so you might
-want to use another option.
+=item A linker argument style string, e.g. '-lc' for libc.
+ 
+For Win32, mingw and cygwin special rules are used:
+"c" resolves on Win32 to msvcrt<ver>.dll.
+-llib will probably find an import lib ending with F<.a> or F<.dll.a>), 
+so C<dllimport> is called to find the DLL behind. 
+DLL are usually versioned, import libs not, 
+so specifying the unversioned library name will find the most recent DLL.
 
-=item A path to a library file (B<unimplemented> as of v0.002).
+=item A path to a shared library.
 
-=item An opaque library reference as returned by DynaLoader.
+=item A L<Ctypes::Library> object.
+
+=item A library handle as returned by DynaLoader, or the C<_handle> 
+property of a CTypes::Library object, such as C<CDLL>.
+$lib = CDLL->c; $lib->{_handle}.
 
 =back
 
-B<N.B.> Although the L<DynaLoader> docs explicitly say that the references
-it returns are to be considered 'opaque', we sneak a little regex on them
-to make sure they look like a string of numbers - what a DL reference
-normally looks like. This means that yes, you could do yourself a mischief
-by passing any string of numbers as a library reference, even though that
-would be a Silly Thing To Do.
+B<N.B.> Although the L<DynaLoader> docs explicitly say that the
+handles ("references") it returns are to be considered 'opaque', we
+check with a regex to make sure they look like a string of
+numbers - what a DL handle normally looks like. This means that
+yes, you could do yourself a mischief by passing any string of numbers
+as a library reference, even though that would be a Silly Thing To Do.
+Thanksfully there are no dll's consisting only of numbers, but if so, 
+add the extension.
 
 =item name
 
-The name of the function your object represents. On initialising,
-it's used internally by L<DynaLoader> as the function symbol to look for
-in the library given by C<lib>. It can also be useful for remembering
-what an object does if you've assigned it to a non-intuitively named
-reference. In theory though it's never looked at after initialization
-(and not even then if you supply a C<func> reference) so you could
-store any information you want in there.
+The name of the function. On initialising, it's used internally by
+L<DynaLoader> as the function symbol to look for in the library given
+by C<lib>. It can also be useful for remembering what an object does
+if you've assigned it to a non-intuitively named reference. In theory
+though it's never looked at after initialization (and not even then if
+you supply a C<func> reference) so you could store any information you
+want in there.
 
 =item sig
 
@@ -214,7 +225,7 @@ See note L</"abi, rtype and sig"> below.
 =item rtype
 
 A single character representing the return type of the function, using
-the same notation as Ctypes::call. See note L</"abi, rtype and sig">
+the same notation as L<Ctypes::call>. See note L</"abi, rtype and sig">
 below.
 
 =item func
@@ -264,7 +275,7 @@ logic used in those instances.
 
 sub new {
   my ($class, @args) = @_;
-  # default positional args are library, function name, function signature
+  # default positional args are library, function name, function signature.
   # will never make sense to pass func address or lib address positionally
   my @attrs = qw(lib name sig abi rtype func);
   our $ret  =  _get_args(@args, @attrs);
@@ -279,11 +290,18 @@ sub new {
     if (!$$lib) {
       die( "Can't find function without a library!" );
     } else {
-      do {
-        $$lib = Ctypes::load_library( $$lib );
-      } unless ($$lib =~ /^[0-9]$/); # looks like dl_load_file libref
+      if (ref $lib ne 'SCALAR' and $$lib->isa("Ctypes::Library")) {
+	$$lib = $$lib->{_handle};
+	$ret->{abi} = $$lib->{_abi} unless $ret->{abi};
+      }
+      die "No library $$lib found" unless $$lib;
+      if ($$lib and $$lib !~ /^[0-9]+$/) { # need a number, a dl_load_file handle
+        my $newlib = Ctypes::load_library( $$lib );
+	die "No library $$lib found" unless $newlib;
+	$$lib = $newlib;
+      }
+      $$func = Ctypes::find_function( $$lib, $$name );
     }
-    $$func = Ctypes::find_function( $$lib, $$name );
   }
   return bless $ret, $class;
 }
@@ -328,25 +346,11 @@ sub abi_default {
   if( !defined $arg ) {
     return $_default_abi;
   }
-  # What kind of argument did we get?
-  if(ref($arg) eq 'SCALAR') {
-    if( ($arg eq 's') or ($arg eq 'MSWin32') ) { 
-      $_default_abi = 's'; return 1; }
-    if( ($arg eq 'c') or ($arg eq 'linux') or ($arg eq 'cygwin') ) { 
-      $_default_abi = 'c'; return 1; }
-    die("abi_default: unrecognised ABI code or OS identifier");
-  } elsif(ref($arg) eq 'HASH') {
-    if( (defined $arg->{abi} and $arg->{abi} eq 's') or 
-        (defined $arg->{os} and $arg->{os} eq 'MSWin32') ) {
-      $_default_abi = 's'; return 1;
-    }
-    if( (defined $arg->{abi} and $arg->{abi} eq 'c') or
-        (defined $arg->{os} and $arg->{os} eq 'linux') or 
-        (defined $arg->{os} and $arg->{os} eq 'cygwin') ) {
-      $_default_abi = 'c'; return 1;
-    }
+  if( ($arg eq 's') or ($arg->{os} eq 'MSWin32') ) {
+    $_default_abi = 's'; return 's';
+  } else {
+    $_default_abi = 'c'; return 'c';
   }
-  die("abi_default: unrecognised ABI code or OS identifier");
 }
 
 =head2 validate_abi
