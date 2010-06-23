@@ -8,9 +8,8 @@ use overload '&{}' => \&_call_overload;
 # Public functions are defined in POD order
 sub new;
 sub update;
+sub sig;
 sub abi_default;
-sub validate_abi;
-sub validate_types;
 
 =head1 NAME
 
@@ -47,49 +46,17 @@ Ctypes::Function objects abstracts the raw Ctypes::call() API.
 #   PRIVATE FUNCTIONS & DATA   #
 ################################
 
+sub AUTOLOAD;
+sub _call;
+sub _call_overload;
+sub _canonize_types; # TODO
+sub _form_sig;
+sub _get_args;
+
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, rtype => 1, lib => 1 };
 # For abi_default():
 my $_default_abi = ($^O eq 'MSWin32' ? 's' : 'c' );
-
-sub _get_args (\@\@;$) {
-  my $args = shift;
-  my $want = shift;
-  my $ret = {};
-
-  if (ref($args->[0]) eq 'HASH') {
-    # Using named parameters.
-    for(@{$want}) {
-      $ret->{$_} = $args->[0]->{$_} }
-  } else {
-    # Using positional parameters.
-    for(my $i=0; $i <= $#{$args}; $i++ ) {
-      $ret->{$want->[$i]} = $args->[$i] }
-  }
-  return $ret;
-}
-
-sub _call_overload {
-  my $self = shift;
-  return sub { _call($self, @_) };
-}
-
-sub _call {
-  my $self = shift;
-  my @args = @_;
-  my $retval;
-  die "Function needs a signature (even '' must be defined)"
-    unless defined $self->sig;
-  #print Dumper( $self );
-  # Constructing / validating full sig to pass to Ctypes::call
-  validate_types($self->sig);
-  my @sig = split(//, $self->sig);
-  $sig[0] = $self->abi if defined $self->abi;
-  $sig[1] = $self->rtype if defined $self->rtype;
-  $self->sig( join( '', @sig) );
-  $retval = Ctypes::call( $self->func, $self->sig, @args );
-  return $retval;
-}
 
 sub AUTOLOAD {
   our $AUTOLOAD;
@@ -118,6 +85,65 @@ sub AUTOLOAD {
   }
 }
 
+sub _call {
+  my $self = shift;
+  my @args = @_;
+  my $retval;
+  my $sig = $self->_form_sig;
+  $retval = Ctypes::call( $self->func, $sig, @args );
+  return $retval;
+}
+
+sub _call_overload {
+  my $self = shift;
+  return sub { _call($self, @_) };
+}
+
+# Interpret Ctypes type objects to pack-style notation
+# Takes ARRAY ref, returns list
+sub _canonize_types ($) {
+  my $arg = shift;
+  if(!$arg->[0]->isa("Ctypes::Type")) { return @{$arg}; }
+  else { die("_canonize_types: C type objects unimplemented!") }; #TODO!
+}
+
+# Put Ctypes::_call style sig string together from $self's attributes
+# Takes Ctypes::Function ($self), returns string scalar
+sub _form_sig {
+  my $self = shift;
+  my @sig_parts;
+  $sig_parts[0] = $self->abi or abi_default();
+  $sig_parts[1] = $self->rtype or 
+    die("Return type not defined (even void must be defined with '_')");
+  if(defined $self->atypes) {
+    my @atypes = _canonize_types($self->atypes);
+    for(my $i = 0; $i<=$#atypes ; $i++) {
+      $sig_parts[$i+2] = $atypes[$i];
+    }
+  }
+  return join('',@sig_parts);
+}
+
+# Dealing with either named or positional parameters
+# Takes 1) arrayref of params received, 2) positional list of vals wanted
+# Returns hashref
+sub _get_args (\@\@) {
+  my $args = shift;
+  my $want = shift;
+  my $ret = {};
+
+  if (ref($args->[0]) eq 'HASH') {
+     # Using named parameters.
+    for(@{$want}) {
+      $ret->{$_} = $args->[0]->{$_} }
+  } else {
+    # Using positional parameters.
+    for(my $i=0; $i <= $#{$args}; $i++ ) {
+      $ret->{$want->[$i]} = $args->[$i] }
+  }
+  return $ret;
+}
+
 ################################
 #       PUBLIC FUNCTIONS       #
 ################################
@@ -126,7 +152,7 @@ sub AUTOLOAD {
 
 Ctypes::Function's methods are designed for flexibility.
 
-=head2 new ( lib, name, [ sig, [ abi, [ rtype, [ func ]]]] )
+=head2 new ( lib, name, [ sig, [ rtype, [ abi, [ atypes, [ func ]]]]] )
 
 or hash-style: new ( { param => value, ... } )
 
@@ -192,12 +218,40 @@ want in there.
 
 =item sig
 
-A string of letters representing the function signature, in the
-same format as L<Ctypes::call>, i.e. first character denotes the abi,
-second character denotes return type, and the remaining characters
-denote argument types: <abi><rtype><argtypes>. If the C<abi> or
-C<rtype> attributes are defined separately, they are substituted
-in to the C<sig> at call time (and C<sig> is redefined accordingly.)
+This can be one of two things: First, like with the L<FFI> module and
+L<P5NCI>, it can be a string of letters representing the function
+signature, in the same format as L<Ctypes::call>, i.e. first character
+denotes the abi, second character denotes return type, and the remaining
+characters denote argument types: <abi><rtype><argtypes>. B<Note> that a
+'void' return type should be indicated with an underscore '_'.
+
+Alternatively, more in the style of L<C::DynaLib> and Python's ctypes,
+it can be an (anonymous) list reference of the functions argument types.
+Types can be specified in Perl's L<pack> notation ('i', 'd', etc.) or
+with Ctypes's C type objects (c_uint, c_double, etc.).
+
+This is a convenience for positional parameter passing (as they're simply
+assigned to the C<atypes> attribute internally). These alternatives
+mean that you can use positional parameters to create a function like
+this:
+
+    $to_upper = Ctypes::Function->new( '-lc', 'toupper', 'cii' );
+
+or like this:
+
+    $to_upper = Ctypes::Function->new( '-lc', 'toupper', [ c_int ], 'i' );
+
+where C<[ c_int ]> is an anonymous array reference with one element, and
+with the return type given the fourth positional argument C<'i'>. For
+functions with many arguments, the latter syntax may be much more readable.
+In these cases the ABI can be given as the fifth positional argument, or
+omitted and the system default will be used (which will be what you want
+in the vast majority of cases).
+
+=item rtype
+
+A single character representing the return type of the function, using
+the same notation as L<Ctypes::call>.
 
 =item abi
 
@@ -207,10 +261,11 @@ be 'c' for C<cdecl> or 's' for C<stdcall>. Other values will fail.
 'f' for C<fastcall> is for now used implicitly with 'c' on WIN64 
 and UNIX64 architectures, not yet on 64bit libraries.
 
-=item rtype
+=item atypes
 
-A single character representing the return type of the function, using
-the same notation as L<Ctypes::call>.
+An (anonymous) list reference of the types of arguments the function
+takes. These can be specified in Perl's L<pack> notation ('i', 'd', etc.)
+or with L<Ctypes>'s C type objects (c_uint, c_double, etc.).
 
 =item func
 
@@ -225,14 +280,25 @@ sub new {
   my ($class, @args) = @_;
   # default positional args are library, function name, function signature.
   # will never make sense to pass func address or lib address positionally
-  my @attrs = qw(lib name sig abi rtype func);
+  my @attrs = qw(lib name sig rtype abi atypes func);
   our $ret  =  _get_args(@args, @attrs);
 
   # Just so we don't have to continually dereference $ret
-  my ($lib, $name, $sig, $abi, $rtype, $func)
+  my ($lib, $name, $sig, $abi, $rtype, $atypes, $func)
       = (map { \$ret->{$_}; } @attrs );
 
   if (!$$func && !$$name) { die( "Need function ref or name" ); }
+
+  if(defined $$sig) {
+    if(ref($$sig) eq 'ARRAY') {
+      $$atypes = [ _canonize_types($$sig) ] unless $$atypes;
+      $$sig = _form_sig($ret); # arrayref -> usual string
+    } else {
+      $$abi = substr($$sig, 0, 1) unless $$abi;
+      $$rtype = substr($$sig, 1, 1) unless $$rtype;
+      $$atypes = [ split(//, substr($$sig, 2)) ]  unless $$atypes;
+    }
+  }
 
   if (!$$func) {
     if (!$$lib) {
@@ -240,7 +306,7 @@ sub new {
     } else {
       if (ref $lib ne 'SCALAR' and $$lib->isa("Ctypes::Library")) {
 	$$lib = $$lib->{_handle};
-	$ret->{abi} = $$lib->{_abi} unless $ret->{abi};
+	$$abi = $$lib->{_abi} unless $$abi;
       }
       die "No library $$lib found" unless $$lib;
       if ($$lib and $$lib !~ /^[0-9]+$/) { # need a number, a dl_load_file handle
@@ -254,7 +320,7 @@ sub new {
   return bless $ret, $class;
 }
 
-=head2 update(name, sig, abi, args)
+=head2 update(name, sig, rtype, abi, atypes)
 
 Also hash-style: update({ param => value, [...] })
 
@@ -267,7 +333,7 @@ be updated (because that wouldn't make any sense).
 sub update {
   my $self = shift;
   my @args = @_;
-  my @want = qw(name sig abi rtype);
+  my @want = qw(name sig rtype abi atypes);
   my $update_self = _get_args(@args, @want);
   for(@want) {
     if(defined $update_self->{$_}) {
@@ -277,6 +343,30 @@ sub update {
   return $self;
 }
 
+=head2 sig([ 'cii' | $arrayref ]);
+
+A self-explanatory get/set method, only listed here to point out that
+it will also change the C<abi>, C<rtype> and C<atypes> attributes,
+depending on what you give it. See the C<sig> attribute of L</"new">.
+
+=cut
+
+sub sig {
+  my($self, $arg) = @_;
+  if(defined $arg) {
+    if(ref($arg) eq 'ARRAY') {
+      $self->atypes = [ _canonize_types($arg) ];
+      $self->{sig} = $self->_form_sig;
+    } else {
+      $self->abi = substr($arg, 0, 1);
+      $self->rtype = substr($arg, 1, 1);
+      $self->atypes = [ split(//, substr($arg, 2)) ];
+      $self->{sig} = $arg;
+    }
+  }
+  return $self->{sig};
+}
+
 =head2 abi_default( [ 'c' | $^O ] );
 
 Also hash-style: abi_default( [ { abi => <char> | os => $^O } ] )
@@ -284,8 +374,8 @@ Also hash-style: abi_default( [ { abi => <char> | os => $^O } ] )
 This class method is used to return the default ABI (calling convention)
 for the current system. It can also be used to change the 'default' for
 your script, either through passing a specific ABI code ( 'c' for C<cdecl>
-or 's' for C<stdcall> ) or by specifying an operating system type. The OS
-must be specified using a string returned by $^O on the target system.
+or 's' for C<stdcall> ) or by specifying an operating system type.
+Everything but 'MSWin32' yields the 'c' (cdecl) ABI type.
 
 =cut
 
@@ -300,10 +390,6 @@ sub abi_default {
     $_default_abi = 'c'; return 'c';
   }
 }
-
-=head2 validate_abi
-
-TODO
 
 =head2 validate_types
 
