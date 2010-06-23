@@ -391,10 +391,4 @@ sub abi_default {
   }
 }
 
-=head2 validate_types
-
-TODO
-
-=cut
-
 1;
