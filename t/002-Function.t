@@ -6,7 +6,7 @@ use Ctypes::Function;
 my $to_upper = Ctypes::Function->new
   ( { lib    => 'c',
       name   => 'toupper',
-      sig    => 'cii',
+      atypes => 'i',
       rtype  => 'i' } );
 $to_upper->abi('c');
 ok( defined $to_upper, '$to_upper created with hashref' );

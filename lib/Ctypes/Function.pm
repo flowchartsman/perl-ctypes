@@ -29,13 +29,19 @@ Version 0.002
     # or
     $toupper = Ctypes::Function->new({ lib    => 'c',
                                        name   => 'toupper',
-                                       sig    => 'i',
+                                       abi    => 'c',
+                                       atypes => 'i',
                                        rtype  => 'i' } );
     $result = $toupper->(ord("y"));
 
 =head1 DESCRIPTION
 
 Ctypes::Function objects abstracts the raw Ctypes::call() API.
+
+Functions are also created as methods of DLL objects, such as
+C<< CDLL->c->toupper({sig=>"cii"})->(ord "Y") >>, but with DLL's 
+the abi is not needed, as it is taken from the library definition.
+See L<Ctypes::DLL>.
 
 =cut
 
@@ -109,7 +115,14 @@ sub _form_sig {
   $sig_parts[1] = $self->rtype or 
     die("Return type not defined (even void must be defined with '_')");
   if(defined $self->atypes) {
-    my @atypes = _to_packstyle($self->atypes);
+    my @atypes;
+    my $atypes = $self->atypes;
+    if (!ref($atypes)) { # string
+      @atypes = split //, $atypes if length $atypes; 
+    }
+    else { # ARRAYREF or Ctypes::Type
+      @atypes = _to_packstyle($atypes);
+    }
     for(my $i = 0; $i<=$#atypes ; $i++) {
       $sig_parts[$i+2] = $atypes[$i];
     }
@@ -264,9 +277,10 @@ and UNIX64 architectures, not yet on 64bit libraries.
 
 =item atypes
 
-An (anonymous) list reference of the types of arguments the function
-takes. These can be specified in Perl's L<pack> notation ('i', 'd', etc.)
-or with L<Ctypes>'s C type objects (c_uint, c_double, etc.).
+A pack-style string of the argument types, or a list reference of the
+types of arguments the function takes. These can be specified in
+Perl's L<pack> notation ('i', 'd', etc.)  or with L<Ctypes>'s C type
+objects (c_uint, c_double, etc.).
 
 =item func
 
