@@ -86,6 +86,22 @@ L<DynaLoader::dl_find_symbol>.
 args are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
+Currently supported signature characters - pack-style:
+
+  'v': void
+  'c': schar
+  'C': uchar
+  's': sshort
+  'S': ushort
+  'i': sint
+  'I': uint
+  'l': slong
+  'L': ulong
+  'f': float
+  'd': double
+  'D': longdouble
+  'p': pointer
+
 Supported signature characters equivalent to python ctypes: (NOT YET)
 
   's': pointer to string
@@ -130,23 +146,42 @@ sub call {
   return _call( $func, $sig, @args );
 }
 
-=item load_library (lib, [dynaloader args])
+=item load_library (lib, [mode])
 
 Searches the dll/so loadpath for the given library, architecture dependently.
 
-The lib argument is either part of a filename (e.g. "kernel32"),
+The lib argument is either part of a filename (e.g. "kernel32") with 
+platform specific path and extension defaults,
 a full pathname to the shared library
 or the same as for L<DynaLoader::dl_findfile>:
 "-llib" or "-Lpath -llib", with -L for the optional path.
 
 Returns a libraryhandle, to be used for find_function.
 Uses L<Ctypes::Util::find_library> to find the path.
+See also the L<LoadLibrary> method for a DLL object, 
+which also returns a handle.
 
-TODO: On Windows loading a library should also define the ABI and signatures.
+With C<mode> optional dynaloader args can be specified:
 
-See also L<Ctypes::Library::LoadLibrary> which returns a Library object, 
-not a handle.
- 
+=over
+
+=item RTLD_GLOBAL 
+
+Flag to use as mode parameter. On platforms where this flag is not
+available, it is defined as the integer zero.
+
+=item RTLD_LOCAL
+
+Flag to use as mode parameter. On platforms where this is not
+available, it is the same as RTLD_GLOBAL.
+
+=item DEFAULT_MODE 
+
+The default mode which is used to load shared libraries. On OSX 10.3,
+ this is RTLD_GLOBAL, otherwise it is the same as RTLD_LOCAL.
+
+=back
+
 =cut
 
 sub load_library($;@) {
@@ -156,9 +191,11 @@ sub load_library($;@) {
 }
 
 
-=item CDLL (library)
+=item CDLL (library, [mode])
 
-Calls L<LoadLibrary> and returns a library object which defaults to the cdecl ABI.
+Searches the library search path for the given name, and 
+returns a library object which defaults to the C<cdecl> ABI, with 
+default restype C<i>.
 
 =cut
 
@@ -166,9 +203,11 @@ sub CDLL {
   return Ctypes::CDLL->new( @_ );
 }
 
-=item WinDLL (library)
+=item WinDLL (library, [mode])
 
-Calls L<LoadLibrary> and returns a library object which defaults to the stdcall ABI.
+Windows only: Searches the library search path for the given name, and 
+returns a library object which defaults to the C<stdcall> ABI, 
+with default restype C<i>.
 
 =cut
 
@@ -176,14 +215,14 @@ sub WinDLL {
   return Ctypes::WinDLL->new( @_ );
 }
 
-=item OleDLL (library)
+=item OleDLL (library, [mode])
 
 Windows only: Objects representing loaded shared libraries, functions
-in these libraries use the stdcall calling convention, and are assumed
-to return the windows specific HRESULT code. HRESULT values contain
+in these libraries use the C<stdcall> calling convention, and are assumed
+to return the windows specific C<HRESULT> code. HRESULT values contain
 information specifying whether the function call failed or succeeded,
 together with additional error code. If the return value signals a
-failure, a WindowsError is automatically raised.
+failure, a L<WindowsError> is automatically raised.
 
 =cut
 
@@ -225,7 +264,7 @@ sub callback($$) { # TODO ffi_prep_closure
 
 =item c_array (ARRAYREF)
 
-Alloc a perl array externally and copy the perl values over.
+TODO: Alloc a perl array externally and copy the perl values over.
 
 =cut
 
@@ -235,13 +274,17 @@ sub c_array {
 
 =item c_struct (HASHREF)
 
-Alloc a struct externally and copy the perl values over from a HASHREF.
+TODO: Alloc a struct externally and copy the perl values over from a HASHREF.
 
 =cut
 
 sub c_struct {
   return 0;
 }
+
+#sub HRESULT {
+#  return 'p';
+#}
 
 =back
 
@@ -250,7 +293,7 @@ sub c_struct {
 Define objects for shared libraries and its abi.
 
 Subclasses are CDLL, WinDLL, OleDLL and PerlDLL, returning objects
-defining the path, handle and abi of the found shared library.
+defining the path, handle, restype and abi of the found shared library.
 
 Submethods are LoadLibrary and the functions and variables inside the library. 
 
@@ -318,9 +361,13 @@ sub AUTOLOAD {
     } else { # name is a ->function
       my $props = { lib => $lib->{_handle},
 		    abi => $lib->{_abi}, 
+		    restype => $lib->{_restype}, 
 		    name => $name };
-      if (@_ and ref $_[0] eq 'HASH') { # declare the sig via HASHREF
-	$props->{sig} = shift->{sig};
+      if (@_ and ref $_[0] eq 'HASH') { # declare the sig or restype via HASHREF
+	my $arg = shift;
+	$props->{sig} = $arg->{sig} if $arg->{sig};
+	$props->{restype} = $arg->{restype} if $arg->{restype};
+	$props->{argtypes} = $arg->{argtypes} if $arg->{argtypes};
       }
       return Ctypes::Function->new($props, @_);
     }
@@ -399,7 +446,7 @@ use Carp;
 
 sub new {
   my $class = shift;
-  my $props = { _abi => 'c' };
+  my $props = { _abi => 'c', _restype => 'i' };
   if (@_) {
     $props->{_path} = Ctypes::Util::find_library(shift);
     $props->{_handle} = Ctypes::load_library($props->{_path});
@@ -422,7 +469,7 @@ our @ISA = qw(Ctypes::DLL);
 
 sub new {
   my $class = shift;
-  my $props = { _abi => 's' };
+  my $props = { _abi => 's', _restype => 'i' };
   if (@_) {
     $props->{_path} = Ctypes::Util::find_library(shift);
     $props->{_handle} = Ctypes::load_library($props->{_path});
@@ -431,11 +478,12 @@ sub new {
 }
 
 package Ctypes::OleDLL;
+use Ctypes;
 our @ISA = qw(Ctypes::DLL);
 
 sub new {
   my $class = shift;
-  my $props = { abi => 's' };
+  my $props = { abi => 's', _restype => 'p', _oledll => 1 };
   if (@_) {
     $props->{_path} = Ctypes::Util::find_library(shift);
     $props->{_handle} = Ctypes::load_library($props->{_path});
@@ -450,7 +498,7 @@ sub new {
   my $class = shift;
   my $name = shift;
   # TODO: name may be split into subpackages: PerlDLL->new("C::DynaLib")
-  my $props = { _abi => 'c', _name => $name };
+  my $props = { _abi => 'c', _restype => 'i', _name => $name, _perldll => 1 };
   die "TODO perl xs library search";
   $name =~ s/::/\//g;
   #$props->{_path} = $Config{...}.$name.$Config{soext};
@@ -486,6 +534,10 @@ Returns the path of the found library or undef.
 
 On cygwin or mingw C<find_library> might try to run the external program C<dllimport>
 to resolve the version specific dll from the found unversioned import library.
+
+With C<mode> optional dynaloader args can or even must be specified as with
+L<load_library>, because C<find_library> also tries to load every found
+library, and only returns libraries which could successfully be dynaloaded.
 
 =cut
 
@@ -581,11 +633,6 @@ sub find_function($$) {
 
 Returns the error description of the last L<load_library> call, 
 via L<DynaLoader::dl_error>.
-
-=item constant ()
-
-Internal function to access libffi constants.
-Should not be needed.
 
 =back
 

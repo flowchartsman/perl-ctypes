@@ -6,8 +6,8 @@ use Ctypes::Function;
 my $to_upper = Ctypes::Function->new
   ( { lib    => 'c',
       name   => 'toupper',
-      atypes => 'i',
-      rtype  => 'i' } );
+      argtypes => 'i',
+      restype  => 'i' } );
 $to_upper->abi('c');
 ok( defined $to_upper, '$to_upper created with hashref' );
 my $ret = $to_upper->( ord("y") );

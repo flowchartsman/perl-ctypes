@@ -30,8 +30,8 @@ Version 0.002
     $toupper = Ctypes::Function->new({ lib    => 'c',
                                        name   => 'toupper',
                                        abi    => 'c',
-                                       atypes => 'i',
-                                       rtype  => 'i' } );
+                                       argtypes => 'i',
+                                       restype  => 'i' } );
     $result = $toupper->(ord("y"));
 
 =head1 DESCRIPTION
@@ -61,7 +61,9 @@ sub _get_args;
 sub _to_packstyle; # TODO
 
 # For which members will AUTOLOAD provide mutators?
-my $_setable = { name => 1, sig => 1, abi => 1, rtype => 1, lib => 1 };
+my $_setable = { name => 1, sig => 1, abi => 1, 
+		 restype => 1, argtypes => 1, lib => 1,
+		 errcheck => 1, callable => 1, ArgumentError => 1};
 # For abi_default():
 my $_default_abi = ($^O eq 'MSWin32' ? 's' : 'c' );
 
@@ -112,19 +114,19 @@ sub _form_sig {
   my $self = shift;
   my @sig_parts;
   $sig_parts[0] = $self->abi or abi_default();
-  $sig_parts[1] = $self->rtype or 
+  $sig_parts[1] = $self->restype or 
     die("Return type not defined (even void must be defined with '_')");
-  if(defined $self->atypes) {
-    my @atypes;
-    my $atypes = $self->atypes;
-    if (!ref($atypes)) { # string
-      @atypes = split //, $atypes if length $atypes; 
+  if(defined $self->argtypes) {
+    my @argtypes;
+    my $argtypes = $self->argtypes;
+    if (!ref($argtypes)) { # string
+      @argtypes = split //, $argtypes if length $argtypes; 
     }
     else { # ARRAYREF or Ctypes::Type
-      @atypes = _to_packstyle($atypes);
+      @argtypes = _to_packstyle($argtypes);
     }
-    for(my $i = 0; $i<=$#atypes ; $i++) {
-      $sig_parts[$i+2] = $atypes[$i];
+    for(my $i = 0; $i<=$#argtypes ; $i++) {
+      $sig_parts[$i+2] = $argtypes[$i];
     }
   }
   return join('',@sig_parts);
@@ -166,7 +168,7 @@ sub _to_packstyle ($) {
 
 Ctypes::Function's methods are designed for flexibility.
 
-=head2 new ( lib, name, [ sig, [ rtype, [ abi, [ atypes, [ func ]]]]] )
+=head2 new ( lib, name, [ sig, [ restype, [ abi, [ argtypes, [ func ]]]]] )
 
 or hash-style: new ( { param => value, ... } )
 
@@ -207,7 +209,8 @@ so specifying the unversioned library name will find the most recent DLL.
 
 =item A library handle as returned by DynaLoader, or the C<_handle> 
 property of a Ctypes::Library object, such as C<CDLL>.
-$lib = CDLL->c; $lib->{_handle}.
+
+C<< $lib = CDLL->c; $lib->{_handle} >>
 
 =back
 
@@ -236,7 +239,7 @@ This can be one of two things: First, like with the L<FFI> module and
 L<P5NCI>, it can be a string of letters representing the function
 signature, in the same format as L<Ctypes::call>, i.e. first character
 denotes the abi, second character denotes return type, and the remaining
-characters denote argument types: <abi><rtype><argtypes>. B<Note> that a
+characters denote argument types: <abi><restype><argtypes>. B<Note> that a
 'void' return type should be indicated with an underscore '_'.
 
 Alternatively, more in the style of L<C::DynaLib> and Python's ctypes,
@@ -245,7 +248,7 @@ Types can be specified in Perl's L<pack> notation ('i', 'd', etc.) or
 with Ctypes's C type objects (c_uint, c_double, etc.).
 
 This is a convenience for positional parameter passing (as they're simply
-assigned to the C<atypes> attribute internally). These alternatives
+assigned to the C<argtypes> attribute internally). These alternatives
 mean that you can use positional parameters to create a function like
 this:
 
@@ -262,10 +265,21 @@ In these cases the ABI can be given as the fifth positional argument, or
 omitted and the system default will be used (which will be what you want
 in the vast majority of cases).
 
-=item rtype
+=item restype
 
-A single character representing the return type of the function, using
-the same notation as L<Ctypes::call>.
+The result type is often defined as default if the function 
+is defined as library method.
+The return type of the function can be represented as
+
+=over
+
+=item a single character (pack-style), using the same notation as L<Ctypes::call>,
+
+=item a Ctype::Type definition, or
+
+=item undef for void,
+
+=back
 
 =item abi
 
@@ -275,7 +289,7 @@ be 'c' for C<cdecl> or 's' for C<stdcall>. Other values will fail.
 'f' for C<fastcall> is for now used implicitly with 'c' on WIN64 
 and UNIX64 architectures, not yet on 64bit libraries.
 
-=item atypes
+=item argtypes
 
 A pack-style string of the argument types, or a list reference of the
 types of arguments the function takes. These can be specified in
@@ -287,6 +301,33 @@ objects (c_uint, c_double, etc.).
 An opaque reference to the function which the object represents. Can be
 accessed after initialisation, but cannot be changed.
 
+=item errcheck
+
+Assign a reference of a perl sub or another callable to this attribute. The
+callable will be called with three or more arguments.
+
+=item callable (result, func, arguments)
+
+result is what the foreign function returns, as specified by the
+restype attribute.
+
+func is the foreign function object itself, this allows to reuse the
+same callable object to check or postprocess the results of several
+functions.
+
+arguments is a tuple containing the parameters originally passed to
+the function call, this allows to specialize the behaviour on the
+arguments used.
+
+The object that this function returns will be returned from the
+foreign function call, but it can also check the result value and
+raise an exception if the foreign function call failed.
+
+=item ArgumentError
+
+This function is called when a foreign function call cannot convert
+one of the passed arguments.
+
 =back
 
 =cut
@@ -295,27 +336,27 @@ sub new {
   my ($class, @args) = @_;
   # default positional args are library, function name, function signature.
   # will never make sense to pass func address or lib address positionally
-  my @attrs = qw(lib name sig rtype abi atypes func);
+  my @attrs = qw(lib name sig restype abi argtypes func);
   our $ret  =  _get_args(@args, @attrs);
 
   # Just so we don't have to continually dereference $ret
-  my ($lib, $name, $sig, $rtype, $abi, $atypes, $func)
+  my ($lib, $name, $sig, $restype, $abi, $argtypes, $func)
       = (map { \$ret->{$_}; } @attrs );
 
   if (!$$func && !$$name) { die( "Need function ref or name" ); }
 
   if(defined $$sig) {
     if(ref($$sig) eq 'ARRAY') {
-      $$atypes = [ _to_packstyle($$sig) ] unless $$atypes;
-      if(defined $$rtype) { # _form_sig dies w/out rtype: not wanted here
+      $$argtypes = [ _to_packstyle($$sig) ] unless $$argtypes;
+      if(defined $$restype) { # _form_sig dies w/out restype: not wanted here
         $$sig = _form_sig($ret); } # arrayref -> usual string
     } else {
       $$abi = substr($$sig, 0, 1) unless $$abi;
-      $$rtype = substr($$sig, 1, 1) unless $$rtype;
-      $$atypes = [ split(//, substr($$sig, 2)) ]  unless $$atypes;
+      $$restype = substr($$sig, 1, 1) unless $$restype;
+      $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
     }
   }
-  $$rtype = 'i' unless $$rtype;
+  $$restype = 'i' unless $$restype;
 
   if (!$$func) {
     $$lib = '-lc' unless $$lib; #default libc
@@ -344,7 +385,7 @@ sub new {
   return bless $ret, $class;
 }
 
-=head2 update(name, sig, rtype, abi, atypes)
+=head2 update(name, sig, restype, abi, argtypes)
 
 Also hash-style: update({ param => value, [...] })
 
@@ -357,7 +398,7 @@ be updated (because that wouldn't make any sense).
 sub update {
   my $self = shift;
   my @args = @_;
-  my @want = qw(name sig rtype abi atypes);
+  my @want = qw(name sig restype abi argtypes);
   my $update_self = _get_args(@args, @want);
   for(@want) {
     if(defined $update_self->{$_}) {
@@ -370,7 +411,7 @@ sub update {
 =head2 sig([ 'cii' | $arrayref ]);
 
 A self-explanatory get/set method, only listed here to point out that
-it will also change the C<abi>, C<rtype> and C<atypes> attributes,
+it will also change the C<abi>, C<restype> and C<argtypes> attributes,
 depending on what you give it. See the C<sig> attribute of L</"new">.
 
 =cut
@@ -379,12 +420,12 @@ sub sig {
   my($self, $arg) = @_;
   if(defined $arg) {
     if(ref($arg) eq 'ARRAY') {
-      $self->atypes = [ _to_packstyle($arg) ];
+      $self->argtypes = [ _to_packstyle($arg) ];
       $self->{sig} = $self->_form_sig;
     } else {
       $self->abi = substr($arg, 0, 1);
-      $self->rtype = substr($arg, 1, 1);
-      $self->atypes = [ split(//, substr($arg, 2)) ];
+      $self->restype = substr($arg, 1, 1);
+      $self->argtypes = [ split(//, substr($arg, 2)) ];
       $self->{sig} = $arg;
     }
   }

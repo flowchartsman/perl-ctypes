@@ -16,7 +16,7 @@
 
 #include "ffi.h"
 
-#include "const-c.inc"
+//#include "const-c.inc"
 #ifdef CTYPES_DEBUG
 #define debug_warn( ... ) warn( __VA_ARGS__ )
 #else
@@ -67,7 +67,7 @@ ffi_type* get_ffi_type(char type)
 
 MODULE = Ctypes		PACKAGE = Ctypes
 
-INCLUDE: const-xs.inc
+# INCLUDE: const-xs.inc
 
 void
 _call( addr, sig, ... )
