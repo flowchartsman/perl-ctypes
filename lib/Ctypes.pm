@@ -306,9 +306,11 @@ but CDLL->libc should be used for cross-platform compat.
 
   $func = CDLL->c->toupper;
 
-returns the function for the libc function toupper, on Windows and Posix.
+returns the function for the libc function toupper, 
+on Windows and Posix.
 
-Functions within libraries can be called directly.
+Functions within libraries can be declared.
+or called directly.
 
   $ret = CDLL->libc->toupper({sig => "cii"})->ord("y");
 
@@ -378,7 +380,11 @@ sub AUTOLOAD {
   }
 }
 
-=head1 LoadLibrary (name)
+=head1 LoadLibrary (name [mode])
+
+A DLL method which loads the given shared library, 
+and on success sets the new object properties path and handle, 
+and returns the library handle.
 
 =cut
 
