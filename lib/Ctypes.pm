@@ -245,7 +245,7 @@ sub c_struct {
 
 =back
 
-=head1 CTypes::DLL
+=head1 Ctypes::DLL
 
 Define objects for shared libraries and its abi.
 

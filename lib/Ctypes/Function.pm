@@ -49,7 +49,7 @@ Ctypes::Function objects abstracts the raw Ctypes::call() API.
 sub AUTOLOAD;
 sub _call;
 sub _call_overload;
-sub _canonize_types; # TODO
+sub _to_packstyle; # TODO
 sub _form_sig;
 sub _get_args;
 
@@ -99,12 +99,12 @@ sub _call_overload {
   return sub { _call($self, @_) };
 }
 
-# Interpret Ctypes type objects to pack-style notation
+# Interpret Ctypes type objects to pack-style notation (unimplemented)
 # Takes ARRAY ref, returns list
-sub _canonize_types ($) {
+sub _to_packstyle ($) {
   my $arg = shift;
   if(!$arg->[0]->isa("Ctypes::Type")) { return @{$arg}; }
-  else { die("_canonize_types: C type objects unimplemented!") }; #TODO!
+  else { die("_to_packstyle: C type objects unimplemented!") }; #TODO!
 }
 
 # Put Ctypes::_call style sig string together from $self's attributes
@@ -116,7 +116,7 @@ sub _form_sig {
   $sig_parts[1] = $self->rtype or 
     die("Return type not defined (even void must be defined with '_')");
   if(defined $self->atypes) {
-    my @atypes = _canonize_types($self->atypes);
+    my @atypes = _to_packstyle($self->atypes);
     for(my $i = 0; $i<=$#atypes ; $i++) {
       $sig_parts[$i+2] = $atypes[$i];
     }
@@ -284,38 +284,47 @@ sub new {
   our $ret  =  _get_args(@args, @attrs);
 
   # Just so we don't have to continually dereference $ret
-  my ($lib, $name, $sig, $abi, $rtype, $atypes, $func)
+  my ($lib, $name, $sig, $rtype, $abi, $atypes, $func)
       = (map { \$ret->{$_}; } @attrs );
 
   if (!$$func && !$$name) { die( "Need function ref or name" ); }
 
   if(defined $$sig) {
     if(ref($$sig) eq 'ARRAY') {
-      $$atypes = [ _canonize_types($$sig) ] unless $$atypes;
-      $$sig = _form_sig($ret); # arrayref -> usual string
+      $$atypes = [ _to_packstyle($$sig) ] unless $$atypes;
+      if(defined $$rtype) { # _form_sig dies w/out rtype: not wanted here
+        $$sig = _form_sig($ret); } # arrayref -> usual string
     } else {
       $$abi = substr($$sig, 0, 1) unless $$abi;
       $$rtype = substr($$sig, 1, 1) unless $$rtype;
       $$atypes = [ split(//, substr($$sig, 2)) ]  unless $$atypes;
     }
   }
+  $$rtype = 'i' unless $$rtype;
 
   if (!$$func) {
-    if (!$$lib) {
-      die( "Can't find function without a library!" );
-    } else {
-      if (ref $lib ne 'SCALAR' and $$lib->isa("Ctypes::Library")) {
-	$$lib = $$lib->{_handle};
-	$$abi = $$lib->{_abi} unless $$abi;
-      }
-      die "No library $$lib found" unless $$lib;
-      if ($$lib and $$lib !~ /^[0-9]+$/) { # need a number, a dl_load_file handle
-        my $newlib = Ctypes::load_library( $$lib );
-	die "No library $$lib found" unless $newlib;
-	$$lib = $newlib;
-      }
-      $$func = Ctypes::find_function( $$lib, $$name );
+    $$lib = '-lc' unless $$lib; #default libc
+    if (ref $lib ne 'SCALAR' and $$lib->isa("Ctypes::Library")) {
+      $$lib = $$lib->{_handle};
+      $$abi = $$lib->{_abi} unless $$abi;
     }
+    if ($$lib and $$lib !~ /^[0-9]+$/) { # need a number, a dl_load_file handle
+      my $newlib = Ctypes::load_library( $$lib );
+      die "No library $$lib found" unless $newlib;
+      $$lib = $newlib;
+    }
+    $$func = Ctypes::find_function( $$lib, $$name );
+    die "No function $$name found" unless $$func;
+  }
+  if (!$$abi) { # hash-style: depends on the lib, default: 'c'
+    $$abi = 'c';
+    $$abi = 's' if $^O eq 'MSWin32' and $$name =~ /(user32|kernel32|gdi)/;
+  } else {
+    $$abi =~ /^(cdecl|stdcall|fastcall|c|s|f)$/
+      or die "invalid abi $$abi";
+    $$abi = 'c' if $$abi eq 'cdecl';
+    $$abi = 's' if $$abi eq 'stdcall';
+    $$abi = 'f' if $$abi eq 'fastcall';
   }
   return bless $ret, $class;
 }
@@ -355,7 +364,7 @@ sub sig {
   my($self, $arg) = @_;
   if(defined $arg) {
     if(ref($arg) eq 'ARRAY') {
-      $self->atypes = [ _canonize_types($arg) ];
+      $self->atypes = [ _to_packstyle($arg) ];
       $self->{sig} = $self->_form_sig;
     } else {
       $self->abi = substr($arg, 0, 1);
