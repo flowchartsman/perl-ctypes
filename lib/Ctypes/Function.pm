@@ -5,7 +5,7 @@ use warnings;
 use Ctypes;
 use overload '&{}' => \&_call_overload;
 
-# Public functions are defined in POD order
+# Public functions defined in POD order
 sub new;
 sub update;
 sub sig;
@@ -46,12 +46,13 @@ Ctypes::Function objects abstracts the raw Ctypes::call() API.
 #   PRIVATE FUNCTIONS & DATA   #
 ################################
 
+# Public functions defined alphabetically
 sub AUTOLOAD;
 sub _call;
 sub _call_overload;
-sub _to_packstyle; # TODO
 sub _form_sig;
 sub _get_args;
+sub _to_packstyle; # TODO
 
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, rtype => 1, lib => 1 };
@@ -99,14 +100,6 @@ sub _call_overload {
   return sub { _call($self, @_) };
 }
 
-# Interpret Ctypes type objects to pack-style notation (unimplemented)
-# Takes ARRAY ref, returns list
-sub _to_packstyle ($) {
-  my $arg = shift;
-  if(!$arg->[0]->isa("Ctypes::Type")) { return @{$arg}; }
-  else { die("_to_packstyle: C type objects unimplemented!") }; #TODO!
-}
-
 # Put Ctypes::_call style sig string together from $self's attributes
 # Takes Ctypes::Function ($self), returns string scalar
 sub _form_sig {
@@ -142,6 +135,14 @@ sub _get_args (\@\@) {
       $ret->{$want->[$i]} = $args->[$i] }
   }
   return $ret;
+}
+
+# Interpret Ctypes type objects to pack-style notation (unimplemented)
+# Takes ARRAY ref, returns list
+sub _to_packstyle ($) {
+  my $arg = shift;
+  if(!$arg->[0]->isa("Ctypes::Type")) { return @{$arg}; }
+  else { die("_to_packstyle: C type objects unimplemented!") }; #TODO!
 }
 
 ################################
