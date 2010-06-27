@@ -28,6 +28,7 @@ static int validate_signature (char *sig)
 {
     STRLEN i;
     STRLEN len = strlen(sig);
+    int args_in_sig;
 
     if (len < 2)
         croak("Invalid function signature: %s (too short)", sig);
@@ -39,10 +40,11 @@ static int validate_signature (char *sig)
         croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdDpv\")", sig[1]);
 
     i = strspn(sig+2, "cCsSiIlLfdDp");
-    if (i != len-2)
+    args_in_sig = len - 2;
+    if (i != args_in_sig)
         croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdDp\")",
               i+1, sig[i+2]);
-    return (len - 2);
+    return args_in_sig;
 }
 
 ffi_type* get_ffi_type(char type)
@@ -69,33 +71,36 @@ MODULE = Ctypes		PACKAGE = Ctypes
 
 # INCLUDE: const-xs.inc
 
+#define strictchar char
+
 void
 _call( addr, sig, ... )
     void* addr;
-    char* sig;
-  PROTOTYPE: $$;@
+    strictchar* sig;
+  # PROTOTYPE: $$;@
   PPCODE:
-    int num_args = items - 2;
     ffi_cif cif;
     ffi_status status;
     unsigned int nargs;
-    ffi_type *argtypes[num_args];
-    void *argvalues[num_args];
     ffi_type *rtype;
     char *rvalue;
     STRLEN len;
     int args_in_sig, rsize;
+    int num_args = items - 2;
+    ffi_type *argtypes[num_args];
+    void *argvalues[num_args];
  
     debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
-
+#ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
     if( num_args < 0 ) {
-      croak( "Ctypes::call error: Not enough arguments" );
+      croak( "Ctypes::_call error: Not enough arguments" );
     }
+#endif
 
     args_in_sig = validate_signature(sig);
     if( args_in_sig != num_args ) {
-      croak( "Ctypes::call error: specified %i arguments but supplied %i", 
+      croak( "Ctypes::_call error: specified %i arguments but supplied %i", 
 	     __LINE__, args_in_sig, num_args );
     } else {
        debug_warn( "#[Ctypes.xs: %i ] Sig validated, %i args supplied", 
@@ -116,7 +121,7 @@ _call( addr, sig, ... )
         char type = sig[i+2];
         debug_warn( "#  type %i: %c", i+1, type);
         if (type == 0)
-	  croak("Ctypes::call error: too many args (%d expected)", i - 2); /* should never happen here */
+	  croak("Ctypes::_call error: too many args (%d expected)", i - 2); /* should never happen here */
 
         argtypes[i] = get_ffi_type(type);
         /* Could pop ST(0) & ST(1) (func pointer & sig) off beforehand to make this neater? */
@@ -171,7 +176,7 @@ _call( addr, sig, ... )
           argvalues[i] = SvPV(ST(i+2), len);
           break;
         /* should never happen here */
-        default: croak( "Ctypes::call error: Unrecognised type '%c'", type );
+        default: croak( "Ctypes::_call error: Unrecognised type '%c'", type );
         }        
       }
     } else {
@@ -182,7 +187,7 @@ _call( addr, sig, ... )
 	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
           sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
-      croak( "Ctypes::call error: ffi_prep_cif error %d", status );
+      croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
     }
 
     debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
@@ -217,3 +222,24 @@ _call( addr, sig, ... )
       debug_warn( "#[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
     }
     debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...\n\n", __LINE__ );
+
+int 
+sizeof(type)
+    char type;
+CODE:
+  switch (type) {
+  case 'v': RETVAL = 0;           break;
+  case 'c':
+  case 'C': RETVAL = 1;           break;
+  case 's':
+  case 'S': RETVAL = 2;           break;
+  case 'i': 
+  case 'I': RETVAL = sizeof(int); break;
+  case 'l': 
+  case 'L': RETVAL = sizeof(long);  break;
+  case 'f': RETVAL = sizeof(float); break;
+  case 'd': RETVAL = sizeof(double);     break;
+  case 'D': RETVAL = sizeof(long double);break;
+  case 'p': RETVAL = sizeof(void*);      break;
+  default: croak( "Unrecognised type: %c", type );
+  }

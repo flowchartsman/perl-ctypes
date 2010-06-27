@@ -1,6 +1,14 @@
+strictchar*     T_PV_STRICT
 ffi_type	T_FFI_TYPE
 
 INPUT
+T_PV_STRICT
+	if (!SvPOK($arg)) {
+	    Perl_croak(aTHX_ \"%s: %s is not a string\", 
+			${$ALIAS?\q[GvNAME(CvGV(cv))]:\qq[\"$pname\"]},
+			$var);
+	}        
+	$var = ($type)SvPV_nolen($arg)
 T_FFI_TYPE
 	IV tmp = SvIV((SV*)$arg);
 	$var = INT2PTR($type,tmp);
