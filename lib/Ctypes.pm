@@ -18,12 +18,16 @@ Version 0.002
 
 =cut
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 
+use Ctypes::Type;
 require Exporter;
 use AutoLoader;
 our @ISA = qw(Exporter);
-our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL libc libm) );
+our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL 
+                   WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
+                   POINTER WinError
+                  ), @Ctypes::Type::_allnames );
 
 require XSLoader;
 XSLoader::load('Ctypes', $VERSION);
@@ -51,9 +55,14 @@ XSLoader::load('Ctypes', $VERSION);
 
 =head1 DESCRIPTION
 
+Ctypes is the Perl equivalent to the python ctypes ffi library, using libffi.
+
+It provides C compatible data types, and allows to call functions in 
+dlls/shared libraries. It can be used to wrap these libraries in pure Perl.
+
 Ctypes is designed to let you, the Perl module author, who doesn't
 want to have to mess about with XS or C, to wrap native C libraries in
-a Perly way. You benefit by writing only Perl. Your users benefit from
+a pure Perly way. You benefit by writing only Perl. Your users benefit from
 not having to have a compiler properly installed and configured.
 
 The module should also be as useful for the admin, scientist or general
@@ -61,48 +70,44 @@ datamangler who wants to quickly script together a couple of functions
 from different native libraries as for the Perl module author who wants
 to expose the full functionality of a large C/C++ project.
 
-=head1 SUBROUTINES/METHODS
-
-Ctypes will offer both a procedural and OO interface (to accommodate
-both types of authors described above). At the moment only the
-procedural interface is working.
+=head1 SUBROUTINES
 
 =over
 
-=item call (sig, addr, args)
+=item call (sig, addr, args...)
 
 Call an external function, specified by the signature and the address,
 with the given arguments.
-Return a value as specified by the seconf character in sig.
+Return a value as specified by the second character in sig.
 
-sig is the signature string. The first character specifies the
+B<sig> is the signature string. The first character specifies the
 calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
 The second character specifies the pack-style return type, 
 the subsequent characters specify the pack-style argument types.
 
-addr is the function address, the return value of find_function or
+B<addr> is the function address, the return value of L<find_function> or
 L<DynaLoader::dl_find_symbol>.
 
-args are the optional arguments for the external function. The types
+B<args> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Currently supported signature characters - pack-style:
+Currently supported signature characters - Perl L<pack|perlfunc/pack>-style:
 
   'v': void
-  'c': schar
-  'C': uchar
-  's': sshort
-  'S': ushort
-  'i': sint
-  'I': uint
-  'l': slong
-  'L': ulong
+  'c': signed char
+  'C': unsigned char
+  's': signed short
+  'S': unsigned short
+  'i': signed int
+  'I': unsigned int
+  'l': signed long
+  'L': unsigned long
   'f': float
   'd': double
-  'D': longdouble
+  'D': long double
   'p': pointer
 
-Supported signature characters equivalent to python ctypes: (NOT YET)
+Signature characters equivalent to python-style ctypes: (NOT YET)
 
   's': pointer to string
   'c': signed char as char
@@ -197,6 +202,8 @@ Searches the library search path for the given name, and
 returns a library object which defaults to the C<cdecl> ABI, with 
 default restype C<i>.
 
+For B<mode> see L<load_library>.
+
 =cut
 
 sub CDLL {
@@ -208,6 +215,8 @@ sub CDLL {
 Windows only: Searches the library search path for the given name, and 
 returns a library object which defaults to the C<stdcall> ABI, 
 with default restype C<i>.
+
+For B<mode> see L<load_library>.
 
 =cut
 
@@ -223,6 +232,8 @@ to return the windows specific C<HRESULT> code. HRESULT values contain
 information specifying whether the function call failed or succeeded,
 together with additional error code. If the return value signals a
 failure, a L<WindowsError> is automatically raised.
+
+For B<mode> see L<load_library>.
 
 =cut
 
@@ -244,47 +255,67 @@ sub PerlDLL() {
   return Ctypes::PerlDLL->new( @_ );
 }
 
-=item callback (sig, perlfunc)
+=item CFUNCTYPE (restype, argtypes...)
 
-Creates an external function which calls back into perl, 
+The returned L<C function prototype|Ctypes::FuncProto::C> creates a
+function that use the standard C calling convention. The function will
+release the library during the call.
+
+restype and argtypes are L<Ctype::Type> objects, such as c_int, 
+c_void_p, c_char_p etc..
+
+=item WINFUNCTYPE (restype, argtypes...)
+
+Windows only: The returned L<Windows function prototype|Ctypes::FuncProto::Win> 
+creates a function that use the C<stdcall> calling convention. 
+The function will release the library during the call.
+
+B<SYNOPSIS>
+
+  my $prototype  = WINFUNCTYPE(c_int, HWND, LPCSTR, LPCSTR, UINT);
+  my $paramflags = [[1, "hwnd", 0], [1, "text", "Hi"], 
+	           [1, "caption", undef], [1, "flags", 0]];
+  my $MessageBox = $prototype->(("MessageBoxA", WinDLL->user32), $paramflags);
+  $MessageBox->({text=>"Spam, spam, spam")});
+
+=item PERLFUNCTYPE (restype, argtypes...)
+
+The returned function prototype creates functions that use the Perl XS
+calling convention. The function will not release the library during
+the call.
+
+=cut
+
+sub WINFUNCTYPE {
+  use Ctypes::FuncProto;
+  return Ctypes::FuncProto::Win->new( @_ );
+}
+sub CFUNCTYPE {
+  use Ctypes::FuncProto;
+  return Ctypes::FuncProto::C->new( @_ );
+}
+sub PERLFUNCTYPE {
+  use Ctypes::FuncProto;
+  return Ctypes::FuncProto::Perl->new( @_ );
+}
+
+=item callback (sig, perlfunc) (NYI)
+
+Creates a callable, an external function which calls back into perl,
 specified by the signature and a reference to a perl sub.
 
-sig is the signature string. The first character specifies the
-calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
+B<sig> is the signature string. The first character specifies the
+calling-convention, B<s> for C<stdcall>, B<c> for C<cdecl> (or 64-bit fastcall). 
 The second character specifies the pack-style return type, 
 the subsequent characters specify the pack-style argument types.
 
-perlfunc is a subref
+B<perlfunc> is a Perl subref.
 
 =cut
 
 sub callback($$) { # TODO ffi_prep_closure
   return Ctypes::Callback->new( @_ );
 }
-
-=item c_array (ARRAYREF)
-
-TODO: Alloc a perl array externally and copy the perl values over.
-
-=cut
-
-sub c_array {
-  return 0;
-}
-
-=item c_struct (HASHREF)
-
-TODO: Alloc a struct externally and copy the perl values over from a HASHREF.
-
-=cut
-
-sub c_struct {
-  return 0;
-}
-
-#sub HRESULT {
-#  return 'p';
-#}
 
 =back
 
@@ -514,6 +545,8 @@ sub new {
 
 package Ctypes::Util;
 
+=head1 Utility Functions
+
 =over
 
 =item Ctypes::Util::find_library (lib, [dynaloader args])
@@ -640,18 +673,187 @@ sub find_function($$) {
 Returns the error description of the last L<load_library> call, 
 via L<DynaLoader::dl_error>.
 
-=back
-
 =cut
 
 sub load_error() {
   return DynaLoader::dl_error();
 }
 
+=item addressof (obj)
+
+Returns the address of the memory buffer as integer. obj must be an
+instance of a ctypes type.
+
+=cut
+
+sub addressof($) {
+  my $obj = shift;
+  $obj->isa("Ctypes::Type")
+    or die "addressof(".ref $obj.") not a Ctypes::Type";
+  return $obj->{address};
+}
+
+=item alignment(obj_or_type)
+
+Returns the alignment requirements of a Ctypes type. 
+obj_or_type must be a Ctypes type or instance.
+
+=cut
+
+sub alignment($) {
+  my $obj = shift;
+  $obj->isa("Ctypes::Type")
+    or die "alignment(".ref $obj.") not a Ctypes::Type or instance";
+  return $obj->{alignment};
+}
+
+=item byref(obj)
+
+Returns a light-weight pointer to obj, which must be an instance of a
+ctypes type. The returned object can only be used as a foreign
+function call parameter. It behaves similar to pointer(obj), but the
+construction is a lot faster.
+
+=item cast(obj, type)
+
+This function is similar to the cast operator in C. It returns a new
+instance of type which points to the same memory block as obj. type
+must be a pointer type, and obj must be an object that can be
+interpreted as a pointer.  create_string_buffer(init_or_size[, size])
+This function creates a mutable character buffer. The returned object
+is a ctypes array of c_char.
+
+init_or_size must be an integer which specifies the size of the array,
+or a string which will be used to initialize the array items.
+
+If a string is specified as first argument, the buffer is made one
+item larger than the length of the string so that the last element in
+the array is a NUL termination character. An integer can be passed as
+second argument which allows to specify the size of the array if the
+length of the string should not be used.
+
+If the first parameter is a unicode string, it is converted into an
+8-bit string according to ctypes conversion rules.
+
+=item create_unicode_buffer(init_or_size[, size])
+
+This function creates a mutable unicode character buffer. The returned
+object is a ctypes array of C<c_wchar>.
+
+init_or_size must be an integer which specifies the size of the array,
+or a unicode string which will be used to initialize the array items.
+
+If a unicode string is specified as first argument, the buffer is made
+one item larger than the length of the string so that the last element
+in the array is a NUL termination character. An integer can be passed
+as second argument which allows to specify the size of the array if
+the length of the string should not be used.
+
+If the first parameter is a 8-bit string, it is converted into an
+unicode string according to ctypes conversion rules.
+
+=item DllCanUnloadNow()
+
+Windows only: This function is a hook which allows to implement
+inprocess COM servers with ctypes. It is called from the
+DllCanUnloadNow function that the Ctypes XS extension dll exports.
+
+=item DllGetClassObject()
+
+Windows only: This function is a hook which allows to implement
+inprocess COM servers with ctypes. It is called from the
+DllGetClassObject function that the Ctypes XS extension dll exports.
+
+=item FormatError([code])
+
+Windows only: Returns a textual description of the error code. If no
+error code is specified, the last error code is used by calling the
+Windows API function C<GetLastError>.
+
+=item GetLastError()
+
+Windows only: Returns the last error code set by Windows in the calling thread.
+
+=item memmove(dst, src, count)
+
+Same as the standard C memmove library function: copies count bytes
+from src to dst. dst and src must be integers or ctypes instances that
+can be converted to pointers.
+
+=item memset(dst, c, count)
+
+Same as the standard C memset library function: fills the memory block
+at address dst with count bytes of value c. dst must be an integer
+specifying an address, or a ctypes instance.
+
+=item POINTER(type)
+
+This factory function creates and returns a new ctypes pointer
+type. Pointer types are cached an reused internally, so calling this
+function repeatedly is cheap. type must be a ctypes type.
+
+=item pointer(obj)
+
+This function creates a new pointer instance, pointing to obj. The
+returned object is of the type POINTER(type(obj)).
+
+Note: If you just want to pass a pointer to an object to a foreign
+function call, you should use byref(obj) which is much faster.
+
+=item resize(obj, size)
+
+This function resizes the internal memory buffer of obj, which must be
+an instance of a ctypes type. It is not possible to make the buffer
+smaller than the native size of the objects type, as given by
+sizeof(type(obj)), but it is possible to enlarge the buffer.
+
+=item set_conversion_mode(encoding, errors)
+
+This function sets the rules that ctypes objects use when converting
+between 8-bit strings and unicode strings. encoding must be a string
+specifying an encoding, like 'utf-8' or 'mbcs', errors must be a
+string specifying the error handling on encoding/decoding
+errors. Examples of possible values are "strict", "replace", or
+"ignore".
+
+set_conversion_mode returns a 2-tuple containing the previous
+conversion rules. On windows, the initial conversion rules are
+('mbcs', 'ignore'), on other systems ('ascii', 'strict').
+
+=item sizeof(obj_or_type)
+
+Returns the size in bytes of a ctypes type or instance memory
+buffer. Does the same as the C sizeof() function.
+
+=item string_at(address[, size])
+
+This function returns the string starting at memory address
+address. If size is specified, it is used as size, otherwise the
+string is assumed to be zero-terminated.
+
+=item WinError( { code=>undef, descr=>undef } )
+
+Windows only: this function is probably the worst-named thing in
+Ctypes. It creates an instance of WindowsError. 
+
+If B<code> is not specified, GetLastError is called to determine the
+error code. If B<descr> is not spcified, FormatError is called to get
+a textual description of the error.
+
+=item wstring_at(address)
+
+This function returns the wide character string starting at memory
+address address as unicode string. If size is specified, it is used as
+the number of characters of the string, otherwise the string is
+assumed to be zero-terminated.
+
+=back
+
 =head1 AUTHOR
 
-Ryan Jendoubi, C<< <ryan.jendoubi at gmail.com> >>
-Reini Urban, C<< <rurban at x-ray.at> >>
+Ryan Jendoubi C<< <ryan.jendoubi at gmail.com> >>
+
+Reini Urban C<< <rurban at x-ray.at> >>
 
 =head1 BUGS
 
@@ -697,10 +899,10 @@ L<http://search.cpan.org/dist/Ctypes/>
 
 =head1 SEE ALSO
 
-Mention other useful documentation such as the documentation of
-related modules or operating system documentation (such as man pages
-in UNIX), or any relevant external documentation such as RFCs or
-standards.
+There are 4 other Perl ffi libraries:
+L<Win32::API>, L<C::DynaLib>, L<FFI> and L<P5NCI>.
+
+You'll need the headers and/or description of the foreign library.
 
 =head1 ACKNOWLEDGEMENTS
 
@@ -717,8 +919,7 @@ under the terms of the Artistic License.
 
 See http://dev.perl.org/licenses/ for more information.
 
-
 =cut
 
-1; # End of Ctypes
+1;
 __END__
