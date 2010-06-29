@@ -81,12 +81,11 @@ _call( addr, sig, ... )
   PPCODE:
     ffi_cif cif;
     ffi_status status;
-    unsigned int nargs;
     ffi_type *rtype;
     char *rvalue;
     STRLEN len;
-    int args_in_sig, rsize;
-    int num_args = items - 2;
+    unsigned int args_in_sig, rsize;
+    unsigned int num_args = items - 2;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
  
