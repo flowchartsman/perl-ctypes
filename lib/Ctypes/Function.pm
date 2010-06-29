@@ -269,6 +269,7 @@ in the vast majority of cases).
 
 The result type is often defined as default if the function 
 is defined as library method.
+
 The return type of the function can be represented as
 
 =over
@@ -294,7 +295,7 @@ and UNIX64 architectures, not yet on 64bit libraries.
 A pack-style string of the argument types, or a list reference of the
 types of arguments the function takes. These can be specified in
 Perl's L<pack> notation ('i', 'd', etc.)  or with L<Ctypes>'s C type
-objects (c_uint, c_double, etc.).
+objects (c_int, c_double, etc.).
 
 =item func
 
