@@ -3,6 +3,7 @@ package Ctypes::Callback;
 use strict;
 use warnings;
 use Ctypes;
+use Ctypes::Function;
 
 # Public functions defined in POD order
 sub new;
@@ -52,21 +53,22 @@ sub new {
   # Default positional args are coderef, sig. 
   # Will never make sense to pass restype or argtypes positionally
   my @attrs = qw(coderef restype argtypes);
-  our $self  =  _get_args(@args, @attrs);
+  our $self  =  Ctypes::Function::_get_args(@args, @attrs);
 
   # Just so we don't have to continually dereference $self
   my ($coderef, $restype, $argtypes)
       = (map { \$self->{$_}; } @attrs );
 
-  $self->{sig} = $$restype . $$argtypes # both specified packstyle strings
+  $self->{sig} = $$restype . $$argtypes; # both specified packstyle strings
 
   # Call out to XS to return two pointers
   # $self->{_executable} will be the 'useful' one returned by $obj->ptr();
   # $self->{_writable} is needed for ffi_closure_free in DESTROY
-  ( \$self->{_executable}, \$self->{_writable} ) = _make_callback( $$coderef, $self->{sig} );
+  ( $self->{_writable}, $self->{_executable}, $self->{_cb_data} ) = _make_callback( $$coderef, $self->{sig} );
 
-  if(!$self->{_executable}) { die( "Oh no! No executable address!"); }
   if(!$self->{_writable}) { die( "Oh no! No callback address!"); }
+  if(!$self->{_executable}) { die( "Oh no! No executable address!"); }
+  if(!$self->{_cb_data}) { die( "No callback data! Memoryleak-tastic!" ); }
 
   return bless $self, $class;
 }

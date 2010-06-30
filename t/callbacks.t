@@ -17,10 +17,14 @@ my $qsort = Ctypes::Function->new
       argtypes => 'piip',
       restype  => '' } );
 $qsort->abi('c');
+ok( defined $qsort, 'created function $qsort' );
 
-my $cb = Ctypes::Callback->new( \&cb_func, 'iii' );
+my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
+ok( defined $cb, 'created callback $cb' );
 
-ok( defined $to_upper, '$to_upper created with hashref' );
-my $ret = $to_upper->( ord("y") );
-is($ret, ord("Y"));
+my @array = (2, 4, 5, 1, 3);
+
+@array = $qsort->(@array, $#array, Ctypes::sizeof($array[0]), $cb->ptr);
+
+is(@array, (1,2,3,4,5));
 

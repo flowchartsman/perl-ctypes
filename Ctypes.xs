@@ -70,42 +70,54 @@ ffi_type* get_ffi_type(char type)
 typedef struct _perl_cb_data {
   char* sig;
   SV* coderef;
-  void* writable;
-} perl_cb_data
+} perl_cb_data;
 
-void* _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
+void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
     dSP;
 
-    unsigned int i;
-    perl_cb_data* data = (perl_call_data*)udata;
+    ENTER;
+    SAVETMPS;
+
+    unsigned int i, flags, count;
+    perl_cb_data* data = (perl_cb_data*)udata;
     char* sig = data->sig;
 
+    PUSHMARK(SP);
     for( i = 0; i < cif->nargs; i++ ) {
-        switch( sig[i+1] ) {
-          case *pee:        break;
-          case (const intptr_t)&ffi_type_uchar:        break;
-          case &ffi_type_sshort:       break;
-          case '&ffi_type_ushort':       break;
-          case '&ffi_type_sint': debug_warn("_perl_call: int!");   break;
-          case '&ffi_type_uint':         break;
-          case '&ffi_type_slong':        break;
-          case '&ffi_type_ulong':        break;
-          case '&ffi_type_float':        break;
-          case '&ffi_type_double':       break;
-          case '&ffi_type_longdouble':   break;
-          case '&ffi_type_pointer':      break;
-        }
+      switch (sig[1])
+      {
+        case 'v': break;
+        case 'c': 
+        case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+        case 's': 
+        case 'S': XPUSHs(sv_2mortal(newSVpv((char*)args[i], 0)));   break;
+        case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+        case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)args[i])));   break;
+        case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)args[i])));   break;
+        case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)args[i])));   break;
+        case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)args[i])));    break;
+        case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)args[i])));    break;
+        case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)args[i])));    break;
+        case 'p': XPUSHs(sv_2mortal(newSVpv((void*)args[i], 0))); break;
+      }
+      SPAGAIN;
     }
+    PUTBACK;
 
-    for(nargs) {
-        convert args[$_] c->perl
-        push args[$_] to stack
-    }
-    sv_call();
-    retval = stack.pop;
-    return 0;
+    count = call_sv(data->coderef, flags);
 
+    if( count == 0 && sig[0] != '_' ) {
+        croak( "_perl_cb_call: Received no retval from Perl callback; \
+                expected %c", sig[0] );
+      }
+   if( count > 1 && sig[0] != 'p' ) {
+       croak( "_perl_cb_call: Received multiple retvals from Perl \
+              callback; expected %c", sig[0] );
+      }
+
+
+/*
     ENTER;
     SAVETMPS;
 
@@ -117,7 +129,7 @@ void* _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     call_pv("LeftString", G_DISCARD);
 
     FREETMPS;
-    LEAVE;
+    LEAVE; */
 }
     
   /* ffi_cif structure:
@@ -241,6 +253,7 @@ _call( addr, sig, ... )
           break;
         case 'p':
           Newx(argvalues[i], 1, void);
+          /* TODO: len is not set; where should it be? */
           argvalues[i] = SvPV(ST(i+2), len);
           break;
         /* should never happen here */
@@ -271,7 +284,7 @@ _call( addr, sig, ... )
       case 'c': 
       case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
       case 's': 
-      case 'S': XPUSHs(sv_2mortal(newSVpv(*(char *)rvalue, 0)));   break;
+      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)rvalue, 0)));   break;
       case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
       case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)rvalue)));   break;
       case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)rvalue)));   break;
@@ -331,8 +344,9 @@ void* _make_callback( coderef, sig, ... )
     void *argvalues[num_args];
     SV* ret;
     HV* stash;
-
     perl_cb_data* pcb_data;
+
+    debug_warn( "[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
     Newx( pcb_data, 1, perl_cb_data );
 
     pcb_data->sig = sig;
@@ -352,24 +366,32 @@ void* _make_callback( coderef, sig, ... )
      }
 
     if((status = ffi_prep_closure_loc
-        ( closure, cif, &_perl_call, data, code )) != FFI_OK ) {
+        ( closure, &perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
              status );
         }
 
-    ST(0) = sv_2mortal(newSVpv(closure, 0)); /* pointer type ffi_closure */
-    ST(1) = sv_2mortal(newSVpv(code, 0));    /* pointer type void */
-    XSRETURN(2);
+    XPUSHs(sv_2mortal(newSVpv((void*)closure, 0))); 
+    XPUSHs(sv_2mortal(newSVpv(code, 0)));    /* pointer type void */
+    XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, 0))); 
 
 void
 DESTROY(self)
-    SV *self;
+    SV* self;
 PREINIT:
-    IV cb;
-    perl_cb_data *data;
+    ffi_closure* closure;
+    void* code;
+    perl_cb_data* data;
+    HV* selfhash;
 PPCODE:
-    cb = SvIV(SvRV(self));
-    data = (perl_cb_data*)perl_cb_data((void*)cb);
-    /* SvREFCNT_dec(data->code); */
+    if( !sv_isa(self, "Ctypes::Callback") ) {
+      croak( "Callback::DESTROY called on non-Callback object" );
+    }
+
+    selfhash = (HV*)SvRV(self);
+    closure = (ffi_closure*)SvPV_nolen(*(hv_fetch(selfhash, "_writable", 9, 0 )));
+    code = (void*)SvPV_nolen(*(hv_fetch(selfhash, "_executable", 11, 0 )));
+    data = (perl_cb_data*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
+
+    ffi_closure_free(closure);
     Safefree(data);
-    ffi_closure_free((void*)cb);
