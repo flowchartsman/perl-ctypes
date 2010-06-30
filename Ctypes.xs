@@ -67,6 +67,69 @@ ffi_type* get_ffi_type(char type)
   }
 }
 
+void* _perl_call( ffi_cif* cif, void* retval, void** args, void* udata )
+{
+    dSP;
+    unsigned int i;
+
+    unsigned short void_type_addr = (short)&ffi_type_void;
+
+    for( i = 0; i < cif->nargs; i++ ) {
+        switch( (int)cif->arg_types[i] ) {
+          case FFI_TYPE_VOID:         break;
+          case (int)ffi_type_schar:        break;
+          case &ffi_type_uchar:        break;
+          case &ffi_type_sshort:       break;
+          case '&ffi_type_ushort':       break;
+          case '&ffi_type_sint': debug_warn("_perl_call: int!");   break;
+          case '&ffi_type_uint':         break;
+          case '&ffi_type_slong':        break;
+          case '&ffi_type_ulong':        break;
+          case '&ffi_type_float':        break;
+          case '&ffi_type_double':       break;
+          case '&ffi_type_longdouble':   break;
+          case '&ffi_type_pointer':      break;
+        }
+    }
+
+    for(nargs) {
+        convert args[$_] c->perl
+        push args[$_] to stack
+    }
+    sv_call();
+    retval = stack.pop;
+    return 0;
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_2mortal(newSVpv(a, 0)));
+    XPUSHs(sv_2mortal(newSViv(b)));
+    PUTBACK;
+
+    call_pv("LeftString", G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
+}
+    
+  /* ffi_cif structure:
+typedef struct {
+  ffi_abi abi;
+  unsigned nargs;
+  ffi_type **arg_types;
+  ffi_type *rtype;
+  unsigned bytes;
+  unsigned flags;
+#ifdef FFI_EXTRA_CIF_FIELDS
+  FFI_EXTRA_CIF_FIELDS;
+#endif
+} ffi_cif;
+
+Forget about varargs perl funcs for now
+  */
+ 
 MODULE = Ctypes		PACKAGE = Ctypes
 
 # INCLUDE: const-xs.inc
@@ -242,3 +305,45 @@ CODE:
   case 'p': RETVAL = sizeof(void*);      break;
   default: croak( "Unrecognised type: %c", type );
   }
+
+
+MODULE=Ctypes	PACKAGE=Ctypes::Callback
+
+void* new( coderef, sig, ... )
+    SV* coderef;
+    char* sig;
+  PPCODE:
+    ffi_cif perlcall_cif;
+    ffi_cif call_cif;
+    ffi_status status;
+    ffi_type *rtype;
+    char *rvalue;
+    STRLEN len;
+    unsigned int args_in_sig, rsize;
+    unsigned int num_args = items - 2;
+    ffi_type *argtypes[num_args];
+    void *argvalues[num_args];
+
+    void* code;
+    ffi_closure* closure;
+    
+    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
+
+    if((status = ffi_prep_cif
+        (&perlcall_cif,
+         /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
+         sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
+         num_args, rtype, argtypes)) != FFI_OK ) {
+       croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
+     }
+
+    if((status = ffi_prep_closure_loc
+        ( closure, cif, &_perl_call, data, codeloc);
+
+    return codeloc;
+
+
+    ffi_call( &cif, FFI_FN(codeloc), rvalue, argvalues );
+
+void DESTROY( closure )
+
