@@ -328,7 +328,7 @@ CODE:
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
-void* _make_callback( coderef, sig, ... )
+void _make_callback( coderef, sig, ... )
     SV* coderef;
     char* sig;
   PPCODE:
@@ -345,34 +345,41 @@ void* _make_callback( coderef, sig, ... )
     SV* ret;
     HV* stash;
     perl_cb_data* pcb_data;
-
-    debug_warn( "[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
-    Newx( pcb_data, 1, perl_cb_data );
-
-    pcb_data->sig = sig;
-    pcb_data->coderef = coderef;
-
     void* code;
     ffi_closure* closure;
-    
-    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
 
-    if((status = ffi_prep_cif
+    debug_warn( "[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
+    debug_warn( "[%s:%i] Allocating for pcb_data...", __FILE__, __LINE__ );
+    Newx( pcb_data, 1, perl_cb_data );
+    debug_warn( "[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
+    pcb_data->sig = sig;
+    pcb_data->coderef = coderef;
+    debug_warn( "[%s:%i] Populated. Allocating closure...", __FILE__, __LINE__ );
+    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
+    debug_warn( "[%s:%i] Allocated. Prep'ing cif...", __FILE__, __LINE__ ); 
+    if((status = ffi_prep_cif       // TODO!! THIS IS WHAT'S SEGFAULTING
         (&perlcall_cif,
          /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
          sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
          num_args, rtype, argtypes)) != FFI_OK ) {
        croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
      }
-
+    debug_warn( "[%s:%i] Prep'ed. Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
         ( closure, &perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
              status );
         }
+    debug_warn( "[%s:%i] Prep'ed.", __FILE__, __LINE__ );
 
+    debug_warn( "[%s:%i] closure: %p", __FILE__, __LINE__, (void*)closure );
+    debug_warn( "    Pushing closure to stack...");
     XPUSHs(sv_2mortal(newSVpv((void*)closure, 0))); 
+    debug_warn( "[%s:%i] code: %p", __FILE__, __LINE__, code );
+    debug_warn( "    Pushing code to stack...");
     XPUSHs(sv_2mortal(newSVpv(code, 0)));    /* pointer type void */
+    debug_warn( "[%s:%i] pcb_data: %p", __FILE__, __LINE__, (void*)pcb_data );
+    debug_warn( "    Pushing pcb_data to stack...");
     XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, 0))); 
 
 void

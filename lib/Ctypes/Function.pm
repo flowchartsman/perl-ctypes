@@ -430,6 +430,9 @@ sub sig {
       $self->{sig} = $arg;
     }
   }
+#  if(!$self->{sig}) {
+#    $self->{sig} = $self->{abi} . $self->{restype} . $self->{argtypes};
+#  }
   return $self->{sig};
 }
 
