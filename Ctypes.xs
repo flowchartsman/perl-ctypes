@@ -315,7 +315,7 @@ CODE:
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
-void* new( coderef, sig, ... )
+void* _make_callback( coderef, sig, ... )
     SV* coderef;
     char* sig;
   PPCODE:
@@ -357,10 +357,9 @@ void* new( coderef, sig, ... )
              status );
         }
 
-    ret = newSViv((IV)(cb));
-    stash = gv_stashpv("Ctypes::Callback", 0);
-    ST(0) = sv_2mortal(sv_bless(newRV_noinc(ret), stash));
-    XSRETURN(1);
+    ST(0) = sv_2mortal(newSVpv(closure, 0)); /* pointer type ffi_closure */
+    ST(1) = sv_2mortal(newSVpv(code, 0));    /* pointer type void */
+    XSRETURN(2);
 
 void
 DESTROY(self)
