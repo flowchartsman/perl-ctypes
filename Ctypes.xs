@@ -67,18 +67,24 @@ ffi_type* get_ffi_type(char type)
   }
 }
 
-void* _perl_call( ffi_cif* cif, void* retval, void** args, void* udata )
+typedef struct _perl_cb_data {
+  char* sig;
+  SV* coderef;
+  void* writable;
+} perl_cb_data
+
+void* _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
     dSP;
-    unsigned int i;
 
-    unsigned short void_type_addr = (short)&ffi_type_void;
+    unsigned int i;
+    perl_cb_data* data = (perl_call_data*)udata;
+    char* sig = data->sig;
 
     for( i = 0; i < cif->nargs; i++ ) {
-        switch( (int)cif->arg_types[i] ) {
-          case FFI_TYPE_VOID:         break;
-          case (int)ffi_type_schar:        break;
-          case &ffi_type_uchar:        break;
+        switch( sig[i+1] ) {
+          case *pee:        break;
+          case (const intptr_t)&ffi_type_uchar:        break;
           case &ffi_type_sshort:       break;
           case '&ffi_type_ushort':       break;
           case '&ffi_type_sint': debug_warn("_perl_call: int!");   break;
@@ -323,6 +329,14 @@ void* new( coderef, sig, ... )
     unsigned int num_args = items - 2;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
+    SV* ret;
+    HV* stash;
+
+    perl_cb_data* pcb_data;
+    Newx( pcb_data, 1, perl_cb_data );
+
+    pcb_data->sig = sig;
+    pcb_data->coderef = coderef;
 
     void* code;
     ffi_closure* closure;
@@ -338,12 +352,25 @@ void* new( coderef, sig, ... )
      }
 
     if((status = ffi_prep_closure_loc
-        ( closure, cif, &_perl_call, data, codeloc);
+        ( closure, cif, &_perl_call, data, code )) != FFI_OK ) {
+      croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
+             status );
+        }
 
-    return codeloc;
+    ret = newSViv((IV)(cb));
+    stash = gv_stashpv("Ctypes::Callback", 0);
+    ST(0) = sv_2mortal(sv_bless(newRV_noinc(ret), stash));
+    XSRETURN(1);
 
-
-    ffi_call( &cif, FFI_FN(codeloc), rvalue, argvalues );
-
-void DESTROY( closure )
-
+void
+DESTROY(self)
+    SV *self;
+PREINIT:
+    IV cb;
+    perl_cb_data *data;
+PPCODE:
+    cb = SvIV(SvRV(self));
+    data = (perl_cb_data*)perl_cb_data((void*)cb);
+    /* SvREFCNT_dec(data->code); */
+    Safefree(data);
+    ffi_closure_free((void*)cb);
