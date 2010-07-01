@@ -4,8 +4,6 @@ use strict;
 use warnings;
 use Ctypes;
 use Ctypes::Function;
-use Data::Dumper;
-use Devel::Peek;
 
 # Public functions defined in POD order
 sub new;
@@ -66,11 +64,7 @@ sub new {
   # Call out to XS to return two pointers
   # $self->{_executable} will be the 'useful' one returned by $obj->ptr();
   # $self->{_writable} is needed for ffi_closure_free in DESTROY
-#  ( $self->{_writable}, $self->{_executable}, $self->{_cb_data} ) = _make_callback( $$coderef, $self->{sig} );
-  my @returns = _make_callback( $$coderef, $self->{sig} );
-  print Dump( $returns[0] );
-  print Dump( $returns[1] );
-  print Dump( $returns[2] );
+  ( $self->{_writable}, $self->{_executable}, $self->{_cb_data} ) = _make_callback( $$coderef, $self->{sig} );
 
   if(!$self->{_writable}) { die( "Oh no! No callback address!"); }
   if(!$self->{_executable}) { die( "Oh no! No executable address!"); }

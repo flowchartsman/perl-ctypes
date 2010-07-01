@@ -328,18 +328,22 @@ CODE:
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
-void _make_callback( coderef, sig, ... )
-    SV* coderef;
-    char* sig;
+void
+_make_callback( coderef, sig, ... )
+    STRLEN siglen = 0;
+    SV* coderef = newSVsv(ST(0));
+    char* sig = (char*)SvPV(ST(1), siglen);
   PPCODE:
+    /* It should be remembered that unlike Ctypes::_call above,
+       sig here won't include an abi (since it refers to a Perl
+       function), so offsets for arg types will always be +1, not +2 */
     ffi_cif perlcall_cif;
     ffi_cif call_cif;
     ffi_status status;
     ffi_type *rtype;
     char *rvalue;
-    STRLEN len;
     unsigned int args_in_sig, rsize;
-    unsigned int num_args = items - 2;
+    unsigned int num_args = siglen - 1;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
     SV* ret;
@@ -348,23 +352,36 @@ void _make_callback( coderef, sig, ... )
     void* code;
     ffi_closure* closure;
 
-    debug_warn( "[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
+    debug_warn( "\n[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
     debug_warn( "[%s:%i] Allocating for pcb_data...", __FILE__, __LINE__ );
     Newx( pcb_data, 1, perl_cb_data );
     debug_warn( "[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
     pcb_data->sig = sig;
     pcb_data->coderef = coderef;
-    debug_warn( "[%s:%i] Populated. Allocating closure...", __FILE__, __LINE__ );
-    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
-    debug_warn( "[%s:%i] Allocated. Prep'ing cif...", __FILE__, __LINE__ ); 
-    if((status = ffi_prep_cif       // TODO!! THIS IS WHAT'S SEGFAULTING
+    debug_warn( "[%s:%i] Populated. Setting rtype...", __FILE__, __LINE__ );
+    rtype = get_ffi_type( sig[0] );
+    debug_warn( "[%s:%i] rtype set.", __FILE__, __LINE__ );
+
+    if( num_args > 0 ) {
+      int i;
+      debug_warn( "[%s:%i] Getting argtypes...", __FILE__, __LINE__ );
+      for( i = 0; i < num_args; i++ ) {
+        argtypes[i] = get_ffi_type(sig[i+1]); 
+        debug_warn( "    Got argtype '%c'", sig[i+1] );
+      }
+    }
+
+    debug_warn( "[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
+    if((status = ffi_prep_cif
         (&perlcall_cif,
-         /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
-         sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
+         /* Might PerlXS modules use stdcall on win32? How to check? */
+         FFI_DEFAULT_ABI,
          num_args, rtype, argtypes)) != FFI_OK ) {
        croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
      }
-    debug_warn( "[%s:%i] Prep'ed. Prep'ing closure...", __FILE__, __LINE__ ); 
+    debug_warn( "[%s:%i] Allocating closure...", __FILE__, __LINE__ );
+    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
+    debug_warn( "[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
         ( closure, &perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
@@ -372,15 +389,18 @@ void _make_callback( coderef, sig, ... )
         }
     debug_warn( "[%s:%i] Prep'ed.", __FILE__, __LINE__ );
 
+    // EXTEND(SP, 1);
+    unsigned int len = sizeof(intptr_t);
     debug_warn( "[%s:%i] closure: %p", __FILE__, __LINE__, (void*)closure );
     debug_warn( "    Pushing closure to stack...");
-    XPUSHs(sv_2mortal(newSVpv((void*)closure, 0))); 
+    XPUSHs(sv_2mortal(newSVpv((void*)closure, len))); 
     debug_warn( "[%s:%i] code: %p", __FILE__, __LINE__, code );
     debug_warn( "    Pushing code to stack...");
-    XPUSHs(sv_2mortal(newSVpv(code, 0)));    /* pointer type void */
+    XPUSHs(sv_2mortal(newSVpv(code, len)));    /* pointer type void */
     debug_warn( "[%s:%i] pcb_data: %p", __FILE__, __LINE__, (void*)pcb_data );
     debug_warn( "    Pushing pcb_data to stack...");
-    XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, 0))); 
+    XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, len))); 
+    // XSRETURN(3);
 
 void
 DESTROY(self)

@@ -28,7 +28,7 @@ diag( Dumper( $qsort ) );
 
 my @array = (2, 4, 5, 1, 3);
 diag( $qsort->sig );
-@array = $qsort->(@array, $#array, Ctypes::sizeof($array[0]), $cb->ptr);
+@array = $qsort->(@array, $#array, Ctypes::sizeof('i'), $cb->ptr);
 
 is(@array, (1,2,3,4,5));
 
