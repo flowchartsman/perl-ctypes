@@ -431,7 +431,8 @@ sub sig {
     }
   }
   if(!$self->{sig}) {
-    $self->{sig} = $self->{abi} . $self->{restype} . $self->{argtypes};
+    $self->{sig} = $self->{abi} . $self->{restype} .
+                   (defined $self->{argtypes} ? $self->{argtypes} : '');
   }
   return $self->{sig};
 }
