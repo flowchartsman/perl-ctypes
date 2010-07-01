@@ -7,6 +7,7 @@ use DynaLoader;
 use Scalar::Util;
 use File::Spec;
 use Config;
+use Data::Dumper;
 
 =head1 NAME
 
@@ -137,6 +138,9 @@ Signature characters equivalent to python-style ctypes: (NOT YET)
 =cut
 
 sub call {
+
+  print Dumper( @_ );
+
   my $func = shift;
   my $sig = shift;
   my @args = @_;

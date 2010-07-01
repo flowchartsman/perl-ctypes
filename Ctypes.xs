@@ -67,6 +67,15 @@ ffi_type* get_ffi_type(char type)
   }
 }
 
+int cmp ( const void* one, const void* two ) {
+  int a,b;
+  a = *(int*)one;
+  b = *(int*)two;
+  if( a < b ) return -1;
+  if( a == b ) return 0;
+  if( a > b ) return 1;
+}
+
 typedef struct _perl_cb_data {
   char* sig;
   SV* coderef;
@@ -79,37 +88,47 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     ENTER;
     SAVETMPS;
 
+    debug_warn( "#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
+
     unsigned int i, flags, count;
+    debug_warn( "#[%s:%i] Accessing *UDATA...", __FILE__, __LINE__ );
     perl_cb_data* data = (perl_cb_data*)udata;
     char* sig = data->sig;
+    debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
-    PUSHMARK(SP);
-    for( i = 0; i < cif->nargs; i++ ) {
-      switch (sig[1])
-      {
-        case 'v': break;
-        case 'c': 
-        case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
-        case 's': 
-        case 'S': XPUSHs(sv_2mortal(newSVpv((char*)args[i], 0)));   break;
-        case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
-        case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)args[i])));   break;
-        case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)args[i])));   break;
-        case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)args[i])));   break;
-        case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)args[i])));    break;
-        case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)args[i])));    break;
-        case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)args[i])));    break;
-        case 'p': XPUSHs(sv_2mortal(newSVpv((void*)args[i], 0))); break;
+    if( cif->nargs > 0 ) {
+    debug_warn( "#[%s:%i] Have %i args so pushing to stack...",
+                __FILE__, __LINE__, cif->nargs );
+      PUSHMARK(SP);
+      for( i = 0; i < cif->nargs; i++ ) {
+        switch (sig[1])
+        {
+          case 'v': break;
+          case 'c': 
+          case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+          case 's': 
+          case 'S': XPUSHs(sv_2mortal(newSVpv((char*)args[i], 0)));   break;
+          case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+          case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)args[i])));   break;
+          case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)args[i])));   break;
+          case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)args[i])));   break;
+          case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)args[i])));    break;
+          case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)args[i])));    break;
+          case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)args[i])));    break;
+          case 'p': XPUSHs(sv_2mortal(newSVpv((void*)args[i], 0))); break;
+        }
+        SPAGAIN;
       }
-      SPAGAIN;
+      PUTBACK;
     }
-    PUTBACK;
 
+    debug_warn( "#[%s:%i] Ready to go! Calling Perl sub...", __FILE__, __LINE__, sig );
     count = call_sv(data->coderef, flags);
+    debug_warn( "#[%s:%i] We Have Returned, with %i values", __FILE__, __LINE__, count );
 
     if( count == 0 && sig[0] != '_' ) {
         croak( "_perl_cb_call: Received no retval from Perl callback; \
-                expected %c", sig[0] );
+expected %c", sig[0] );
       }
    if( count > 1 && sig[0] != 'p' ) {
        croak( "_perl_cb_call: Received multiple retvals from Perl \
@@ -226,6 +245,7 @@ _call( addr, sig, ... )
         case 'i':
           Newxc(argvalues[i], 1, int, int);
           *(int*)argvalues[i] = SvIV(ST(i+2));
+          debug_warn( "#[%s:%i] argvalues[%i]: %i", __FILE__, __LINE__, i, *(int*)argvalues[i] );
           break;
         case 'I':
           Newxc(argvalues[i], 1, unsigned int, unsigned int);
@@ -252,9 +272,21 @@ _call( addr, sig, ... )
           *(long double*)argvalues[i] = SvNV(ST(i+2));
           break;
         case 'p':
-          Newx(argvalues[i], 1, void);
           /* TODO: len is not set; where should it be? */
-          argvalues[i] = SvPV(ST(i+2), len);
+          len = sv_len(ST(i+2));
+          debug_warn( "#[%s:%i] sizeof packed array / len: %i", __FILE__, __LINE__, (int)len );
+          debug_warn( "#[%s:%i] %i items in array:", __FILE__, __LINE__, ((int)len/sizeof(int)) );
+          debug_warn( "#[%s:%i] Value of arg: %p", __FILE__, __LINE__, (char*)SvPV(ST(i+2), len) );
+          if(SvIOK(ST(i+2))) {
+            Newx(argvalues[i], 1, void);
+            *(intptr_t*)argvalues[i] = INT2PTR(void*, SvIV(ST(i+2)));
+          } else {
+            argvalues[i] = (void*)SvPV(ST(i+2), len);
+          }
+          int j;
+          for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
+              debug_warn( "#    argvalues[%i][%i]: %i", i, j, ((int*)argvalues[i])[j] );
+          }
           break;
         /* should never happen here */
         default: croak( "Ctypes::_call error: Unrecognised type '%c'", type );
@@ -271,10 +303,12 @@ _call( addr, sig, ... )
       croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
     }
 
-    debug_warn( "#[Ctypes.xs: %i ] cif OK. Calling ffi_call...", __LINE__ );
+    debug_warn( "#[%s:%i] cif OK.", __FILE__, __LINE__ );
     debug_warn( "#  addr is: 0x%x ", (unsigned int)addr );
-    debug_warn( "#  argvalues is: %f", *(double*)argvalues[0] );
+    debug_warn( "#  argvalues[3] is: %p", *(intptr_t*)argvalues[3] );
+    debug_warn( "#  num_args: %i", num_args );
 
+    debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
     debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)rvalue );
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
@@ -299,10 +333,12 @@ _call( addr, sig, ... )
     free(rvalue);
     int i = 0;
     for( i = 0; i < num_args; i++ ) {
-      Safefree(argvalues[i]);
-      debug_warn( "#[Ctypes.xs: %i ] Successfully free'd argvalues[%i]", __LINE__, i );
+      if(argtypes[i] != &ffi_type_pointer) {
+        Safefree(argvalues[i]);
+        debug_warn( "#[%s:%i] Successfully free'd argvalues[%i]", __FILE__, __LINE__, i );
+      }
     }
-    debug_warn( "#[Ctypes.xs: %i ] Leaving XS_Ctypes_call...\n\n", __LINE__ );
+    debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
 
 int 
 sizeof(type)
@@ -324,6 +360,8 @@ CODE:
   case 'p': RETVAL = sizeof(void*);      break;
   default: croak( "Unrecognised type: %c", type );
   }
+OUTPUT:
+  RETVAL
 
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
@@ -352,26 +390,26 @@ _make_callback( coderef, sig, ... )
     void* code;
     ffi_closure* closure;
 
-    debug_warn( "\n[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
-    debug_warn( "[%s:%i] Allocating for pcb_data...", __FILE__, __LINE__ );
+    debug_warn( "\n#[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Allocating for pcb_data...", __FILE__, __LINE__ );
     Newx( pcb_data, 1, perl_cb_data );
-    debug_warn( "[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
     pcb_data->sig = sig;
     pcb_data->coderef = coderef;
-    debug_warn( "[%s:%i] Populated. Setting rtype...", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Populated. Setting rtype...", __FILE__, __LINE__ );
     rtype = get_ffi_type( sig[0] );
-    debug_warn( "[%s:%i] rtype set.", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
 
     if( num_args > 0 ) {
       int i;
-      debug_warn( "[%s:%i] Getting argtypes...", __FILE__, __LINE__ );
+      debug_warn( "#[%s:%i] Getting argtypes...", __FILE__, __LINE__ );
       for( i = 0; i < num_args; i++ ) {
         argtypes[i] = get_ffi_type(sig[i+1]); 
-        debug_warn( "    Got argtype '%c'", sig[i+1] );
+        debug_warn( "#    Got argtype '%c'", sig[i+1] );
       }
     }
 
-    debug_warn( "[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
+    debug_warn( "#[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_cif
         (&perlcall_cif,
          /* Might PerlXS modules use stdcall on win32? How to check? */
@@ -379,26 +417,26 @@ _make_callback( coderef, sig, ... )
          num_args, rtype, argtypes)) != FFI_OK ) {
        croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
      }
-    debug_warn( "[%s:%i] Allocating closure...", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Allocating closure...", __FILE__, __LINE__ );
     closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
-    debug_warn( "[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
+    debug_warn( "#[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
         ( closure, &perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
              status );
         }
-    debug_warn( "[%s:%i] Prep'ed.", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Prep'ed.", __FILE__, __LINE__ );
 
     // EXTEND(SP, 1);
     unsigned int len = sizeof(intptr_t);
-    debug_warn( "[%s:%i] closure: %p", __FILE__, __LINE__, (void*)closure );
+    debug_warn( "#[%s:%i] closure: %p", __FILE__, __LINE__, (void*)closure );
     debug_warn( "    Pushing closure to stack...");
     XPUSHs(sv_2mortal(newSVpv((void*)closure, len))); 
-    debug_warn( "[%s:%i] code: %p", __FILE__, __LINE__, code );
+    debug_warn( "#[%s:%i] code: %p", __FILE__, __LINE__, code );
     debug_warn( "    Pushing code to stack...");
-    XPUSHs(sv_2mortal(newSVpv(code, len)));    /* pointer type void */
-    debug_warn( "[%s:%i] pcb_data: %p", __FILE__, __LINE__, (void*)pcb_data );
-    debug_warn( "    Pushing pcb_data to stack...");
+    XPUSHs(sv_2mortal(newSViv(PTR2IV(code))));    /* pointer type void */
+    debug_warn( "#[%s:%i] pcb_data: %p", __FILE__, __LINE__, (void*)pcb_data );
+    debug_warn( "#    Pushing pcb_data to stack...");
     XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, len))); 
     // XSRETURN(3);
 

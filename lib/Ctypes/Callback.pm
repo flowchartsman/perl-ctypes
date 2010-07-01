@@ -79,6 +79,6 @@ TODO: ptr documentation
 
 =cut
 
-sub ptr { return shift->_executable };
+sub ptr { return shift->{_executable} };
 
 1;
