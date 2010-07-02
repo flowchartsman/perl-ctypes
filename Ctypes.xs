@@ -79,6 +79,7 @@ int cmp ( const void* one, const void* two ) {
 typedef struct _perl_cb_data {
   char* sig;
   SV* coderef;
+  ffi_cif* cif;
 } perl_cb_data;
 
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
@@ -126,7 +127,7 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     count = call_sv(data->coderef, flags);
     debug_warn( "#[%s:%i] We Have Returned, with %i values", __FILE__, __LINE__, count );
 
-    if( count == 0 && sig[0] != '_' ) {
+    if( count == 0 && sig[0] != 'v' ) {
         croak( "_perl_cb_call: Received no retval from Perl callback; \
 expected %c", sig[0] );
       }
@@ -377,8 +378,7 @@ _make_callback( coderef, sig, ... )
     /* It should be remembered that unlike Ctypes::_call above,
        sig here won't include an abi (since it refers to a Perl
        function), so offsets for arg types will always be +1, not +2 */
-    ffi_cif perlcall_cif;
-    ffi_cif call_cif;
+    ffi_cif* perlcall_cif;
     ffi_status status;
     ffi_type *rtype;
     char *rvalue;
@@ -411,9 +411,12 @@ _make_callback( coderef, sig, ... )
       }
     }
 
+    Newx(perlcall_cif, 1, ffi_cif);
+    pcb_data->cif = perlcall_cif;
+
     debug_warn( "#[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_cif
-        (&perlcall_cif,
+        (perlcall_cif,
          /* Might PerlXS modules use stdcall on win32? How to check? */
          FFI_DEFAULT_ABI,
          num_args, rtype, argtypes)) != FFI_OK ) {
@@ -423,7 +426,7 @@ _make_callback( coderef, sig, ... )
     closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
     debug_warn( "#[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
-        ( closure, &perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
+        ( closure, perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
              status );
         }
@@ -461,4 +464,5 @@ PPCODE:
     data = (perl_cb_data*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
 
     ffi_closure_free(closure);
+    Safefree(data->cif);
     Safefree(data);
