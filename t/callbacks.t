@@ -8,7 +8,6 @@ use Devel::Peek;
 
 sub cb_func {
 print "Perl cb_func called, zomg!\n";
-print Dumper( @_ );
 
 my( $ay, $bee ) = @_;
 if( ($ay+0) < ($bee+0) ) { return -1; }
@@ -28,8 +27,6 @@ my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
 ok( defined $cb, 'created callback $cb' );
 
 diag( $qsort->sig );
-diag( Dumper( $qsort ) );
-diag( Dumper( $cb ) );
 
 my @array = (2, 4, 5, 1, 3);
 @array = $qsort->(pack('i*',@array), $#array+1, Ctypes::sizeof('i'), $cb->ptr);

@@ -76,11 +76,11 @@ int cmp ( const void* one, const void* two ) {
   if( a > b ) return 1;
 }
 
-typedef struct _perl_cb_data {
+typedef struct _cb_data_t {
   char* sig;
   SV* coderef;
   ffi_cif* cif;
-} perl_cb_data;
+} cb_data_t;
 
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
@@ -93,7 +93,7 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 
     unsigned int i, flags, count;
     debug_warn( "#[%s:%i] Accessing *UDATA...", __FILE__, __LINE__ );
-    perl_cb_data* data = (perl_cb_data*)udata;
+    cb_data_t* data = (cb_data_t*)udata;
     char* sig = data->sig;
     debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
@@ -378,27 +378,20 @@ _make_callback( coderef, sig, ... )
     /* It should be remembered that unlike Ctypes::_call above,
        sig here won't include an abi (since it refers to a Perl
        function), so offsets for arg types will always be +1, not +2 */
-    ffi_cif* perlcall_cif;
-    ffi_status status;
+    ffi_cif* cb_cif;
+    ffi_status status = FFI_BAD_TYPEDEF;
     ffi_type *rtype;
     char *rvalue;
     unsigned int args_in_sig, rsize;
     unsigned int num_args = siglen - 1;
     ffi_type *argtypes[num_args];
-    void *argvalues[num_args];
-    SV* ret;
-    HV* stash;
-    perl_cb_data* pcb_data;
+    cb_data_t* cb_data;
     void* code;
     ffi_closure* closure;
 
     debug_warn( "\n#[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
-    debug_warn( "#[%s:%i] Allocating for pcb_data...", __FILE__, __LINE__ );
-    Newx( pcb_data, 1, perl_cb_data );
-    debug_warn( "#[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
-    pcb_data->sig = sig;
-    pcb_data->coderef = coderef;
-    debug_warn( "#[%s:%i] Populated. Setting rtype...", __FILE__, __LINE__ );
+    
+    debug_warn( "#[%s:%i] Setting rtype...", __FILE__, __LINE__ );
     rtype = get_ffi_type( sig[0] );
     debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
 
@@ -411,12 +404,19 @@ _make_callback( coderef, sig, ... )
       }
     }
 
-    Newx(perlcall_cif, 1, ffi_cif);
-    pcb_data->cif = perlcall_cif;
+    Newx(cb_cif, 1, ffi_cif);
+
+    debug_warn( "#[%s:%i] Allocating for cb_data...", __FILE__, __LINE__ );
+    Newx( cb_data, 1, cb_data_t );
+    debug_warn( "#[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
+    cb_data->sig = sig;
+    cb_data->coderef = coderef;
+    cb_data->cif = cb_cif;
+    debug_warn( "#[%s:%i] ...done.", __FILE__, __LINE__ );
 
     debug_warn( "#[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_cif
-        (perlcall_cif,
+        (cb_cif,
          /* Might PerlXS modules use stdcall on win32? How to check? */
          FFI_DEFAULT_ABI,
          num_args, rtype, argtypes)) != FFI_OK ) {
@@ -426,7 +426,7 @@ _make_callback( coderef, sig, ... )
     closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
     debug_warn( "#[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
-        ( closure, perlcall_cif, &_perl_cb_call, pcb_data, code )) != FFI_OK ) {
+        ( closure, cb_cif, &_perl_cb_call, cb_data, code )) != FFI_OK ) {
       croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
              status );
         }
@@ -440,9 +440,9 @@ _make_callback( coderef, sig, ... )
     debug_warn( "#[%s:%i] code: %p", __FILE__, __LINE__, code );
     debug_warn( "    Pushing code to stack...");
     XPUSHs(sv_2mortal(newSViv(PTR2IV(code))));    /* pointer type void */
-    debug_warn( "#[%s:%i] pcb_data: %p", __FILE__, __LINE__, (void*)pcb_data );
-    debug_warn( "#    Pushing pcb_data to stack...");
-    XPUSHs(sv_2mortal(newSVpv((void*)pcb_data, len))); 
+    debug_warn( "#[%s:%i] cb_data: %p", __FILE__, __LINE__, (void*)cb_data );
+    debug_warn( "#    Pushing cb_data to stack...");
+    XPUSHs(sv_2mortal(newSVpv((void*)cb_data, len))); 
     // XSRETURN(3);
 
 void
@@ -451,7 +451,7 @@ DESTROY(self)
 PREINIT:
     ffi_closure* closure;
     void* code;
-    perl_cb_data* data;
+    cb_data_t* data;
     HV* selfhash;
 PPCODE:
     if( !sv_isa(self, "Ctypes::Callback") ) {
@@ -461,7 +461,7 @@ PPCODE:
     selfhash = (HV*)SvRV(self);
     closure = (ffi_closure*)SvPV_nolen(*(hv_fetch(selfhash, "_writable", 9, 0 )));
     code = (void*)SvPV_nolen(*(hv_fetch(selfhash, "_executable", 11, 0 )));
-    data = (perl_cb_data*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
+    data = (cb_data_t*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
 
     ffi_closure_free(closure);
     Safefree(data->cif);
