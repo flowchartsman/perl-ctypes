@@ -243,9 +243,15 @@ _call( addr, sig, ... )
           *(unsigned short*)argvalues[i] = SvIV(ST(i+2));
           break;
         case 'i':
+          debug_warn( "#[%s:%i] This one's an integer...", __FILE__, __LINE__ );
+          debug_warn( "#[%i]    addr of argvalues[%i]: %p",  __LINE__, i, argvalues[i] );
+          // debug_warn( "#[%i]    value argvalues[%i]: %i",  __LINE__, i, *(int*)argvalues[i] );
           Newxc(argvalues[i], 1, int, int);
+          debug_warn( "#[%i]    addr of argvalues[%i] after allocation: %p",  __LINE__, i, argvalues[i] );
+          debug_warn( "#[%i]    value argvalues[%i] after allocation: %c",  __LINE__, i, *(char*)argvalues[i] );
           *(int*)argvalues[i] = SvIV(ST(i+2));
-          debug_warn( "#[%s:%i] argvalues[%i]: %i", __FILE__, __LINE__, i, *(int*)argvalues[i] );
+          debug_warn( "#[%i]  ADDR of argvalues[%i] after assignment %p",  __LINE__, i, argvalues[i] );
+          debug_warn( "#[%i]  ARGVALUES[%i]: %i",  __LINE__, i, *(int*)argvalues[i] );
           break;
         case 'I':
           Newxc(argvalues[i], 1, unsigned int, unsigned int);
@@ -274,18 +280,28 @@ _call( addr, sig, ... )
         case 'p':
           /* TODO: len is not set; where should it be? */
           len = sv_len(ST(i+2));
-          debug_warn( "#[%s:%i] sizeof packed array / len: %i", __FILE__, __LINE__, (int)len );
-          debug_warn( "#[%s:%i] %i items in array:", __FILE__, __LINE__, ((int)len/sizeof(int)) );
-          debug_warn( "#[%s:%i] Value of arg: %p", __FILE__, __LINE__, (char*)SvPV(ST(i+2), len) );
+          debug_warn( "#[%s:%i] This one's a pointer...", __FILE__, __LINE__ );
+          debug_warn( "#[%i]    sizeof packed array / len: %i",  __LINE__, (int)len );
+          debug_warn( "#[%i]    %i items in array:",  __LINE__, ((int)len/sizeof(int)) );
+          debug_warn( "#[%i]    Value of arg: %p",  __LINE__, SvPV(ST(i+2), len) );
+          debug_warn( "#[%i]    addr of argvalues[%i]: %p",  __LINE__, i, argvalues[i] );
+          debug_warn( "#[%i]    value argvalues[%i]: %c",  __LINE__, i, *(char*)argvalues[i] );
           if(SvIOK(ST(i+2))) {
             Newx(argvalues[i], 1, void);
+            debug_warn( "#[%i]    addr of argvalues[%i] after allocation: %p",  __LINE__, i, argvalues[i] );
+            debug_warn( "#[%i]    value argvalues[%i] after allocation: %c",  __LINE__, i, *(char*)argvalues[i] );
             *(intptr_t*)argvalues[i] = INT2PTR(void*, SvIV(ST(i+2)));
+            debug_warn( "#[%i]  ADDR of argvalues[%i] after assignment %p",  __LINE__, i, argvalues[i] );
+            debug_warn( "#[%i]  VALUE argvalues[%i] after assignment: %p",  __LINE__, i, *(char*)argvalues[i] );
           } else {
-            argvalues[i] = (void*)SvPV(ST(i+2), len);
-          }
-          int j;
-          for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
-              debug_warn( "#    argvalues[%i][%i]: %i", i, j, ((int*)argvalues[i])[j] );
+            Newx(argvalues[i], 1, void);
+            *(intptr_t*)argvalues[i] = SvPVbyte(ST(i+2), len);
+            debug_warn( "#[%i]  ADDR of argvalues[%i] after assignment %p",  __LINE__, i, argvalues[i] );
+            debug_warn( "#[%i]  VALUE argvalues[%i] after assignment: %p",  __LINE__, i, *(char*)argvalues[i] );
+            int j;
+            for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
+                debug_warn( "#    argvalues[%i][%i]: %i", i, j, ((int*)*(intptr_t*)argvalues[i])[j] );
+            }
           }
           break;
         /* should never happen here */
