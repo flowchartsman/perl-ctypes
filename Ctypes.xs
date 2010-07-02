@@ -189,7 +189,7 @@ _call( addr, sig, ... )
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
  
-    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)addr, sig );
+    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)(intptr_t)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 #ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
     if( num_args < 0 ) {
@@ -276,12 +276,12 @@ _call( addr, sig, ... )
           Newx(argvalues[i], 1, void);
           if(SvIOK(ST(i+2))) {
             debug_warn( "#    [%i] SvIOK: assuming 'PTR2IV' value",  __LINE__ );
-            *(intptr_t*)argvalues[i] = INT2PTR(void*, SvIV(ST(i+2)));
+            *(intptr_t*)argvalues[i] = (intptr_t)INT2PTR(void*, SvIV(ST(i+2)));
           } else {
             debug_warn( "#    [%i] Not SvIOK: assuming 'pack' value",  __LINE__ );
             debug_warn( "#    [%i] sizeof packed array (sv_len): %i",  __LINE__, (int)len );
-            debug_warn( "#    [%i] %i items in array (assumed int)",  __LINE__, ((int)len/sizeof(int)) );
-            *(intptr_t*)argvalues[i] = SvPVbyte(ST(i+2), len);
+            debug_warn( "#    [%i] %i items in array (assumed int)",  __LINE__, (int)((int)len/sizeof(int)) );
+            *(intptr_t*)argvalues[i] = (intptr_t)SvPVbyte(ST(i+2), len);
 #ifdef CTYPES_DEBUG
             int j;
             for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
@@ -306,13 +306,13 @@ _call( addr, sig, ... )
     }
 
     debug_warn( "#[%s:%i] cif OK.", __FILE__, __LINE__ );
-    debug_warn( "#  addr is: 0x%x ", (unsigned int)addr );
-    debug_warn( "#  argvalues[3] is: %p", *(intptr_t*)argvalues[3] );
+    debug_warn( "#  addr is: 0x%x ", (unsigned int)(intptr_t)addr );
+    debug_warn( "#  argvalues[3] is: %p", (void*)*(intptr_t*)argvalues[3] );
     debug_warn( "#  num_args: %i", num_args );
 
     debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
-    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)rvalue );
+    debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)(intptr_t)rvalue );
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {
