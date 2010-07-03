@@ -91,32 +91,42 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 
     debug_warn( "#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
 
-    unsigned int i, flags, count;
+    unsigned int i, flags;
+    unsigned int count = 0;
+    char type;
+    STRLEN len;
     debug_warn( "#[%s:%i] Accessing *UDATA...", __FILE__, __LINE__ );
     cb_data_t* data = (cb_data_t*)udata;
     char* sig = data->sig;
     debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
     if( cif->nargs > 0 ) {
-    debug_warn( "#[%s:%i] Have %i args so pushing to stack...",
+      debug_warn( "#[%s:%i] Have %i args so pushing to stack...",
                 __FILE__, __LINE__, cif->nargs );
       PUSHMARK(SP);
       for( i = 0; i < cif->nargs; i++ ) {
-        switch (sig[1])
+        type = sig[i+1]; /* sig[0] = return type */
+        switch (type)
         {
           case 'v': break;
           case 'c': 
-          case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+          case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)*(void**)args[i])));   break;
           case 's': 
           case 'S': XPUSHs(sv_2mortal(newSVpv((char*)args[i], 0)));   break;
-          case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)args[i])));   break;
+          case 'i':
+              debug_warn( "#    Have type %c, pushing %i to stack...",
+                          type, *(int*)*(void**)args[i] );
+              XPUSHs(sv_2mortal(newSViv(*(int*)*(void**)args[i])));   break;
           case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)args[i])));   break;
           case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)args[i])));   break;
           case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)args[i])));   break;
           case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)args[i])));    break;
           case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)args[i])));    break;
           case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)args[i])));    break;
-          case 'p': XPUSHs(sv_2mortal(newSVpv((void*)args[i], 0))); break;
+          case 'p':
+              debug_warn( "#    Have type %c, pushing %p to stack...",
+                          type, (void*)*(void**)args[i] );
+              XPUSHs(sv_2mortal(newSVpv((void*)*(void**)args[i], 0))); break;
         }
         SPAGAIN;
       }
@@ -124,32 +134,84 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     }
 
     debug_warn( "#[%s:%i] Ready to go! Calling Perl sub...", __FILE__, __LINE__, sig );
-    count = call_sv(data->coderef, flags);
+    count = call_sv(data->coderef, G_SCALAR);
     debug_warn( "#[%s:%i] We Have Returned, with %i values", __FILE__, __LINE__, count );
 
-    if( count == 0 && sig[0] != 'v' ) {
-        croak( "_perl_cb_call: Received no retval from Perl callback; \
-expected %c", sig[0] );
+    if( sig[0] != 'v' ) {
+      if( count != 1 ) {
+      /* TODO: (How) can we take multiple return values? */
+        croak( "_perl_cb_call: Expected single %c from Perl callback",
+               sig[0] );
       }
-   if( count > 1 && sig[0] != 'p' ) {
+      type = sig[0];
+      switch(type)
+      {
+      case 'c':
+        *(char*)retval = POPi;
+        break;
+      case 'C':
+          *(unsigned char*)retval = POPi;
+          break;
+        case 's':
+          *(short*)retval = POPi;
+          break;
+        case 'S':
+          *(unsigned short*)retval = POPi;
+          break;
+        case 'i':
+          *(int*)retval = POPi;
+          debug_warn( "#[%s:%i] retval is %i!", __FILE__, __LINE__, *(int*)retval );
+          break;
+        case 'I':
+          *(int*)retval = POPi;
+          break;
+        case 'l':
+          *(long*)retval = POPl;
+          break;
+        case 'L':
+          *(unsigned long*)retval = POPl;
+         break;
+        case 'f':
+          *(float*)retval = POPn;
+          break;
+        case 'd':
+          *(double*)retval  = POPn;
+          break;
+        case 'D':
+          *(long double*)retval = POPn;
+          break;
+        case 'p':
+          croak( "_perl_cb_call: Returning pointers from Perl subs not implemented!" );
+        /*  len = sv_len(SP[0]);
+          debug_warn( "#_perl_cb_call: Got a pointer..." );
+          if(SvIOK(SP[0])) {
+            debug_warn( "#    [%i] SvIOK: assuming 'PTR2IV' value",  __LINE__ );
+            char* thing = POPpx;
+            *(intptr_t*)retval = (intptr_t)INT2PTR(void*, SvIV(ST(i+2)));
+          } else {
+            debug_warn( "#    [%i] Not SvIOK: assuming 'pack' value",  __LINE__ );
+            debug_warn( "#    [%i] sizeof packed array (sv_len): %i",  __LINE__, (int)len );
+            debug_warn( "#    [%i] %i items in array (assumed int)",  __LINE__, (int)((int)len/sizeof(int)) );
+            *(intptr_t*)retval = (intptr_t)SvPVbyte(ST(i+2), len);
+#ifdef CTYPES_DEBUG
+            int j;
+            for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
+                debug_warn( "#    argvalues[%i][%i]: %i", i, j, ((int*)*(intptr_t*)retval)[j] );
+            }
+#endif
+          } */
+          break;
+        /* should never happen here */
+        default: croak( "_perl_cb_call error: Unrecognised type '%c'", type );
+        }        
+    }
+    if( count > 1 && sig[0] != 'p' ) {
        croak( "_perl_cb_call: Received multiple retvals from Perl \
-              callback; expected %c", sig[0] );
+callback; expected %c", sig[0] );
       }
-
-
-/*
-    ENTER;
-    SAVETMPS;
-
-    PUSHMARK(SP);
-    XPUSHs(sv_2mortal(newSVpv(a, 0)));
-    XPUSHs(sv_2mortal(newSViv(b)));
-    PUTBACK;
-
-    call_pv("LeftString", G_DISCARD);
 
     FREETMPS;
-    LEAVE; */
+    LEAVE;
 }
     
   /* ffi_cif structure:
@@ -216,9 +278,10 @@ _call( addr, sig, ... )
 
     if( num_args > 0 ) {
       int i;
+      char type;
       debug_warn( "#[Ctypes.xs: %i ] Getting types & values of args...", __LINE__ );
       for (i = 0; i < num_args; ++i){
-        char type = sig[i+2];
+        type = sig[i+2];
         debug_warn( "#  type %i: %c", i+1, type);
         if (type == 0)
 	  croak("Ctypes::_call error: too many args (%d expected)", i - 2); /* should never happen here */
@@ -384,7 +447,7 @@ _make_callback( coderef, sig, ... )
     char *rvalue;
     unsigned int args_in_sig, rsize;
     unsigned int num_args = siglen - 1;
-    ffi_type *argtypes[num_args];
+    ffi_type **argtypes;
     cb_data_t* cb_data;
     void* code;
     ffi_closure* closure;
@@ -394,6 +457,8 @@ _make_callback( coderef, sig, ... )
     debug_warn( "#[%s:%i] Setting rtype...", __FILE__, __LINE__ );
     rtype = get_ffi_type( sig[0] );
     debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
+
+    Newx(argtypes, num_args, ffi_type);
 
     if( num_args > 0 ) {
       int i;
@@ -464,5 +529,6 @@ PPCODE:
     data = (cb_data_t*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
 
     ffi_closure_free(closure);
+    Safefree(data->cif->arg_types);
     Safefree(data->cif);
     Safefree(data);

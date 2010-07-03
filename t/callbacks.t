@@ -8,7 +8,8 @@ use Devel::Peek;
 
 sub cb_func {
 print "Perl cb_func called, zomg!\n";
-
+print Dumper( @_ );
+print "Dump printed...?\n";
 my( $ay, $bee ) = @_;
 if( ($ay+0) < ($bee+0) ) { return -1; }
 if( ($ay+0) == ($bee+0) ) { return 0; }
