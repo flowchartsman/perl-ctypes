@@ -30,7 +30,10 @@ ok( defined $cb, 'created callback $cb' );
 diag( $qsort->sig );
 
 my @array = (2, 4, 5, 1, 3);
+
+print Dumper( @array );
 @array = $qsort->(pack('i*',@array), $#array+1, Ctypes::sizeof('i'), $cb->ptr);
+print Dumper( @array );
 
 is(@array, (1,2,3,4,5));
 

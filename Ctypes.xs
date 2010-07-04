@@ -403,10 +403,8 @@ _call( addr, sig, ... )
     free(rvalue);
     int i = 0;
     for( i = 0; i < num_args; i++ ) {
-      if(argtypes[i] != &ffi_type_pointer) {
-        Safefree(argvalues[i]);
-        debug_warn( "#[%s:%i] Successfully free'd argvalues[%i]", __FILE__, __LINE__, i );
-      }
+      Safefree(argvalues[i]);
+      debug_warn( "#[%s:%i] Successfully free'd argvalues[%i]", __FILE__, __LINE__, i );
     }
     debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
 
