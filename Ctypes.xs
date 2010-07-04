@@ -85,13 +85,10 @@ typedef struct _cb_data_t {
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
     dSP;
-
-    ENTER;
-    SAVETMPS;
-
     debug_warn( "#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
 
-    unsigned int i, flags;
+    unsigned int i;
+    int flags = G_SCALAR;
     unsigned int count = 0;
     char type;
     STRLEN len;
@@ -100,9 +97,14 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     char* sig = data->sig;
     debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
+    if( sig[0] = 'v' ) { flags = G_VOID; }
+
     if( cif->nargs > 0 ) {
       debug_warn( "#[%s:%i] Have %i args so pushing to stack...",
                 __FILE__, __LINE__, cif->nargs );
+      ENTER;
+      SAVETMPS;
+
       PUSHMARK(SP);
       for( i = 0; i < cif->nargs; i++ ) {
         type = sig[i+1]; /* sig[0] = return type */
@@ -128,20 +130,25 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
                           type, (void*)*(void**)args[i] );
               XPUSHs(sv_2mortal(newSVpv((void*)*(void**)args[i], 0))); break;
         }
-        SPAGAIN;
       }
-      PUTBACK;
+    PUTBACK;
     }
 
     debug_warn( "#[%s:%i] Ready to go! Calling Perl sub...", __FILE__, __LINE__, sig );
     count = call_sv(data->coderef, G_SCALAR);
     debug_warn( "#[%s:%i] We Have Returned, with %i values", __FILE__, __LINE__, count );
 
+    SPAGAIN;
+
     if( sig[0] != 'v' ) {
       if( count != 1 ) {
       /* TODO: (How) can we take multiple return values? */
-        croak( "_perl_cb_call: Expected single %c from Perl callback",
-               sig[0] );
+        croak( "_perl_cb_call:%i: Expected single %c from Perl callback",
+               __LINE__, sig[0] );
+      }
+      if( count > 1 && sig[0] != 'p' ) {
+       croak( "_perl_cb_call:%i: Received multiple values from Perl \
+callback; expected %c", __LINE__, sig[0] );
       }
       type = sig[0];
       switch(type)
@@ -205,11 +212,8 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
         default: croak( "_perl_cb_call error: Unrecognised type '%c'", type );
         }        
     }
-    if( count > 1 && sig[0] != 'p' ) {
-       croak( "_perl_cb_call: Received multiple retvals from Perl \
-callback; expected %c", sig[0] );
-      }
 
+    PUTBACK;
     FREETMPS;
     LEAVE;
 }
@@ -458,7 +462,7 @@ _make_callback( coderef, sig, ... )
     rtype = get_ffi_type( sig[0] );
     debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
 
-    Newx(argtypes, num_args, ffi_type);
+    Newx(argtypes, num_args, ffi_type*);
 
     if( num_args > 0 ) {
       int i;
