@@ -8,12 +8,11 @@ use Devel::Peek;
 
 sub cb_func {
 print "Perl cb_func called, zomg!\n";
-print Dumper( @_ );
-print "Dump printed...?\n";
 my( $ay, $bee ) = @_;
-if( ($ay+0) < ($bee+0) ) { return -1; }
-if( ($ay+0) == ($bee+0) ) { return 0; }
-if( ($ay+0) > ($bee+0) ) { return 1; }
+print "    \$ay is $ay, \$bee is $bee...\n";
+if( ($ay+0) < ($bee+0) ) { print "    returning -1!\n"; return -1; }
+if( ($ay+0) == ($bee+0) ) { print "    returning 0!\n"; return 0; }
+if( ($ay+0) > ($bee+0) ) { print "    returning 1!\n"; return 1; }
 }
 
 my $qsort = Ctypes::Function->new
@@ -32,8 +31,9 @@ diag( $qsort->sig );
 my @array = (2, 4, 5, 1, 3);
 
 print Dumper( @array );
-@array = $qsort->(pack('i*',@array), $#array+1, Ctypes::sizeof('i'), $cb->ptr);
-print Dumper( @array );
-
-is(@array, (1,2,3,4,5));
+my $arg = pack('i*', @array);
+$qsort->($arg, $#array+1, Ctypes::sizeof('i'), $cb->ptr);
+my @res = unpack( 'i*', $arg  );
+print Dumper( @res );
+is(@res, (1,2,3,4,5) );
 

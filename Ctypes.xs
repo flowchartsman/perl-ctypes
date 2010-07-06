@@ -80,6 +80,7 @@ typedef struct _cb_data_t {
   char* sig;
   SV* coderef;
   ffi_cif* cif;
+  ffi_closure* closure; 
 } cb_data_t;
 
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
@@ -97,7 +98,7 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     char* sig = data->sig;
     debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
-    if( sig[0] = 'v' ) { flags = G_VOID; }
+    if( sig[0] == 'v' ) { flags = G_VOID; }
 
     if( cif->nargs > 0 ) {
       debug_warn( "#[%s:%i] Have %i args so pushing to stack...",
@@ -349,7 +350,11 @@ _call( addr, sig, ... )
             debug_warn( "#    [%i] Not SvIOK: assuming 'pack' value",  __LINE__ );
             debug_warn( "#    [%i] sizeof packed array (sv_len): %i",  __LINE__, (int)len );
             debug_warn( "#    [%i] %i items in array (assumed int)",  __LINE__, (int)((int)len/sizeof(int)) );
-            *(intptr_t*)argvalues[i] = (intptr_t)SvPVbyte(ST(i+2), len);
+            debug_warn( "#    SvPV_nolen(ST(%i+2)) addr: %p", i, SvPV_nolen(ST(i+2)) );
+            debug_warn( "#    SvPVX(ST(%i+2)) addr: %p", i, SvPVX(ST(i+2)) );
+            debug_warn( "#    argvalues[%i] addr Before assignment: %p", i, argvalues[i]  );
+            *(intptr_t*)argvalues[i] = SvPVX(ST(i+2));
+            debug_warn( "#    argvalues[%i] addr After assignment: %p", i, argvalues[i]  );
 #ifdef CTYPES_DEBUG
             int j;
             for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
@@ -359,7 +364,8 @@ _call( addr, sig, ... )
           }
           break;
         /* should never happen here */
-        default: croak( "Ctypes::_call error: Unrecognised type '%c'", type );
+        default: croak( "Ctypes::_call error: Unrecognised type '%c' (line %i)",
+                         type, __LINE__ );
         }        
       }
     } else {
@@ -381,6 +387,10 @@ _call( addr, sig, ... )
     debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
     debug_warn( "#ffi_call returned normally with rvalue at 0x%x", (unsigned int)(intptr_t)rvalue );
+            int j;
+            for( j = 0; j < 5; j++ ) {
+                debug_warn( "#    argvalues[0][%i]: %i", j, ((int*)*(intptr_t*)argvalues[0])[j] );
+            }
     debug_warn( "#[Ctypes.xs: %i ] Pushing retvals to Perl stack...", __LINE__ );
     switch (sig[1])
     {
@@ -456,11 +466,20 @@ _make_callback( coderef, sig, ... )
 
     debug_warn( "\n#[%s:%i] Entered _make_callback", __FILE__, __LINE__ );
     
-    debug_warn( "#[%s:%i] Setting rtype...", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Allocating memory for  closure...", __FILE__, __LINE__ );
+    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
+    Newx(argtypes, num_args, ffi_type*);
+    Newx(cb_cif, 1, ffi_cif);
+    Newx( cb_data, 1, cb_data_t );
+
+    cb_data->sig = sig;
+    cb_data->coderef = coderef;
+    cb_data->cif = cb_cif;
+    cb_data->closure = closure;
+
+    debug_warn( "#[%s:%i] Setting rtype '%c'", __FILE__, __LINE__, sig[0] );
     rtype = get_ffi_type( sig[0] );
     debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
-
-    Newx(argtypes, num_args, ffi_type*);
 
     if( num_args > 0 ) {
       int i;
@@ -471,16 +490,6 @@ _make_callback( coderef, sig, ... )
       }
     }
 
-    Newx(cb_cif, 1, ffi_cif);
-
-    debug_warn( "#[%s:%i] Allocating for cb_data...", __FILE__, __LINE__ );
-    Newx( cb_data, 1, cb_data_t );
-    debug_warn( "#[%s:%i] Allocated. Populating...", __FILE__, __LINE__ );
-    cb_data->sig = sig;
-    cb_data->coderef = coderef;
-    cb_data->cif = cb_cif;
-    debug_warn( "#[%s:%i] ...done.", __FILE__, __LINE__ );
-
     debug_warn( "#[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_cif
         (cb_cif,
@@ -489,35 +498,27 @@ _make_callback( coderef, sig, ... )
          num_args, rtype, argtypes)) != FFI_OK ) {
        croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
      }
-    debug_warn( "#[%s:%i] Allocating closure...", __FILE__, __LINE__ );
-    closure = ffi_closure_alloc( sizeof(ffi_closure), &code );
-    debug_warn( "#[%s:%i] Allocated. Prep'ing closure...", __FILE__, __LINE__ ); 
+
+    debug_warn( "#[%s:%i] Prep'ing closure...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_closure_loc
         ( closure, cb_cif, &_perl_cb_call, cb_data, code )) != FFI_OK ) {
-      croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
-             status );
+        croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
+            status );
         }
-    debug_warn( "#[%s:%i] Prep'ed.", __FILE__, __LINE__ );
+    debug_warn( "#[%s:%i] Closure prep'ed.", __FILE__, __LINE__ );
 
-    // EXTEND(SP, 1);
     unsigned int len = sizeof(intptr_t);
-    debug_warn( "#[%s:%i] closure: %p", __FILE__, __LINE__, (void*)closure );
-    debug_warn( "    Pushing closure to stack...");
-    XPUSHs(sv_2mortal(newSVpv((void*)closure, len))); 
     debug_warn( "#[%s:%i] code: %p", __FILE__, __LINE__, code );
     debug_warn( "    Pushing code to stack...");
     XPUSHs(sv_2mortal(newSViv(PTR2IV(code))));    /* pointer type void */
     debug_warn( "#[%s:%i] cb_data: %p", __FILE__, __LINE__, (void*)cb_data );
     debug_warn( "#    Pushing cb_data to stack...");
     XPUSHs(sv_2mortal(newSVpv((void*)cb_data, len))); 
-    // XSRETURN(3);
 
 void
 DESTROY(self)
     SV* self;
 PREINIT:
-    ffi_closure* closure;
-    void* code;
     cb_data_t* data;
     HV* selfhash;
 PPCODE:
@@ -525,12 +526,9 @@ PPCODE:
       croak( "Callback::DESTROY called on non-Callback object" );
     }
 
-    selfhash = (HV*)SvRV(self);
-    closure = (ffi_closure*)SvPV_nolen(*(hv_fetch(selfhash, "_writable", 9, 0 )));
-    code = (void*)SvPV_nolen(*(hv_fetch(selfhash, "_executable", 11, 0 )));
-    data = (cb_data_t*)SvPV_nolen(*(hv_fetch(selfhash, "_cb_data", 8, 0 )));
+    data = (cb_data_t*)SvPV_nolen(*(hv_fetch((HV*)SvRV(self), "_cb_data", 8, 0 )));
 
-    ffi_closure_free(closure);
+    ffi_closure_free(data->closure);
     Safefree(data->cif->arg_types);
     Safefree(data->cif);
     Safefree(data);

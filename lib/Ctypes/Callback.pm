@@ -64,9 +64,8 @@ sub new {
   # Call out to XS to return two pointers
   # $self->{_executable} will be the 'useful' one returned by $obj->ptr();
   # $self->{_writable} is needed for ffi_closure_free in DESTROY
-  ( $self->{_writable}, $self->{_executable}, $self->{_cb_data} ) = _make_callback( $$coderef, $self->{sig} );
+  ( $self->{_executable}, $self->{_cb_data} ) = _make_callback( $$coderef, $self->{sig} );
 
-  if(!$self->{_writable}) { die( "Oh no! No callback address!"); }
   if(!$self->{_executable}) { die( "Oh no! No executable address!"); }
   if(!$self->{_cb_data}) { die( "No callback data! Memoryleak-tastic!" ); }
 
