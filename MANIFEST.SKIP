@@ -1,6 +1,7 @@
 Build
 Build.bat
 cover_db
+const-c.inc
 Ctypes-
 Ctypes.c
 Ctypes.o
@@ -19,7 +20,10 @@ pod2htm.*.tmp
 .*\.bs
 .*\.stackdump
 \.git
+*.base
+*.def
+*.exp
 _build
 blib
 libffi
-
+win32/
