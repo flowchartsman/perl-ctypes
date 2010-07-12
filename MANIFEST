@@ -17,9 +17,14 @@ lib/Ctypes.pm
 lib/Ctypes/Callback.pm
 lib/Ctypes/FuncProto.pm
 lib/Ctypes/Function.pm
+lib/Ctypes/Type.pm
 t/000-load.t
 t/001-_call.t
 t/002-Function.t
+t/callbacks.t
+t/func-access.t
+t/library.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
+t/win-proto.t

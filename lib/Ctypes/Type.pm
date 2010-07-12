@@ -49,7 +49,11 @@ our $_pytypes =
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 
-=head1 new Ctypes::Type (pack-char, c_type-name) 
+=head1 METHODS
+
+=over
+
+=item new Ctypes::Type (pack-char, c_type-name) 
 
 Create a simple Ctypes::Type instance. This is almost always 
 called by the global c_X<lt>typeX<gt> functions.
@@ -92,9 +96,17 @@ for my $k (keys %$_types) {
 }
 our @_allnames = keys %_defined;
 
+=item sizeof()
+
+B<Method> of a Ctypes::Type object, returning its size. This size is
+that of the represented C type, calculated at instantiation.
+
+=cut
+
 sub sizeof {
   return shift->{size};
 }
+
 #sub addressof {
 #  return shift->{address};
 #}
@@ -135,5 +147,6 @@ sub new {
   return bless { fields => $fields, size => $size, address => 0 }, $class;
 }
 
-
+=back
+=cut
 1;
