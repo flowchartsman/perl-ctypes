@@ -20,9 +20,9 @@ pod2htm.*.tmp
 .*\.bs
 .*\.stackdump
 \.git
-*.base
-*.def
-*.exp
+.*\.base
+.*\.def
+.*\.exp
 _build
 blib
 libffi
