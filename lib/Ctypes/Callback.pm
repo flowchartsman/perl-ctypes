@@ -69,8 +69,6 @@ sub new {
   if(!$self->{_executable}) { die( "Oh no! No executable address!"); }
   if(!$self->{_cb_data}) { die( "No callback data! Memoryleak-tastic!" ); }
 
-  print "CBDATA!!! " . $self->{_cb_data} . "\n\n";
-
   return bless $self, $class;
 }
 

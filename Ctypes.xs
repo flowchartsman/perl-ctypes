@@ -86,17 +86,15 @@ typedef struct _cb_data_t {
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
     dSP;
-    debug_warn( "#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
+    debug_warn( "\n#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
 
     unsigned int i;
     int flags = G_SCALAR;
     unsigned int count = 0;
     char type;
     STRLEN len;
-    debug_warn( "#[%s:%i] Accessing *UDATA...", __FILE__, __LINE__ );
     cb_data_t* data = (cb_data_t*)udata;
     char* sig = data->sig;
-    debug_warn( "#[%s:%i] Got sig: %s", __FILE__, __LINE__, sig );
 
     if( sig[0] == 'v' ) { flags = G_VOID; }
 
@@ -135,9 +133,9 @@ void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
     PUTBACK;
     }
 
-    debug_warn( "#[%s:%i] Ready to go! Calling Perl sub...", __FILE__, __LINE__, sig );
+    debug_warn( "#[%s:%i] Calling Perl sub...", __FILE__, __LINE__, sig );
     count = call_sv(data->coderef, G_SCALAR);
-    debug_warn( "#[%s:%i] We Have Returned, with %i values", __FILE__, __LINE__, count );
+    debug_warn( "#[%s:%i] Returned from Perl sub with %i values", __FILE__, __LINE__, count );
 
     SPAGAIN;
 
@@ -442,11 +440,9 @@ _make_callback( coderef, sig, ... )
 
     debug_warn( "#[%s:%i] Setting rtype '%c'", __FILE__, __LINE__, sig[0] );
     rtype = get_ffi_type( sig[0] );
-    debug_warn( "#[%s:%i] rtype set.", __FILE__, __LINE__ );
 
     if( num_args > 0 ) {
       int i;
-      debug_warn( "#[%s:%i] Getting argtypes...", __FILE__, __LINE__ );
       for( i = 0; i < num_args; i++ ) {
         argtypes[i] = get_ffi_type(sig[i+1]); 
         debug_warn( "#    Got argtype '%c'", sig[i+1] );
@@ -456,7 +452,7 @@ _make_callback( coderef, sig, ... )
     debug_warn( "#[%s:%i] Prep'ing cif for _perl_cb_call...", __FILE__, __LINE__ ); 
     if((status = ffi_prep_cif
         (cb_data->cif,
-         /* Might PerlXS modules use stdcall on win32? How to check? */
+         /* Might Perl XS libs use stdcall on win32? How to check? */
          FFI_DEFAULT_ABI,
          num_args, rtype, argtypes)) != FFI_OK ) {
        croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
@@ -468,18 +464,13 @@ _make_callback( coderef, sig, ... )
         croak( "Ctypes::Callback::new error: ffi_prep_closure_loc error %d",
             status );
         }
-    debug_warn( "#[%s:%i] Closure prep'ed.", __FILE__, __LINE__ );
 
     cb_data->sig = sig;
     cb_data->coderef = coderef;
     cb_data->closure = closure;
 
     unsigned int len = sizeof(intptr_t);
-    debug_warn( "#[%s:%i] code: %p", __FILE__, __LINE__, code );
-    debug_warn( "    Pushing code to stack...");
     XPUSHs(sv_2mortal(newSViv(PTR2IV(code))));    /* pointer type void */
-    debug_warn( "#[%s:%i] cb_data: %p", __FILE__, __LINE__, (void*)cb_data );
-    debug_warn( "#    Pushing cb_data to stack...");
     XPUSHs(sv_2mortal(newSViv(PTR2IV(cb_data)))); 
 
 void
@@ -498,7 +489,6 @@ PPCODE:
     svValue = hv_fetch((HV*)SvRV(self), "_cb_data", 8, 0 );
     if(!svValue) { croak("No _cb_data ptr from Perl"); }
     intFromPerl = SvIV(*svValue);
-    debug_warn( "#[%s:%i] intFromPerl: %i", __FILE__, __LINE__, intFromPerl);
     data = INT2PTR(cb_data_t*, intFromPerl);
 
     ffi_closure_free(data->closure);

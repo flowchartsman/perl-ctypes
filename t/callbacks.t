@@ -24,11 +24,14 @@ my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
 ok( defined $cb, 'created callback $cb' );
 
 my @array = (2, 4, 5, 1, 3);
+note( "Initial array: ", join(", ", @array) );
+
 my $arg = pack('i*', @array);
 
 $qsort->(\$arg, $#array+1, Ctypes::sizeof('i'), $cb->ptr);
 
 my @res = unpack( 'i*', $arg  );
+note( "Result array: ", join(", ", @res) );
 
 my $same = 1;
 for(my $i = 0; $i<5; $i++) {
