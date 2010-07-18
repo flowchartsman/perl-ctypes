@@ -8,18 +8,11 @@ use Devel::Peek;
 
 my $number_seven = c_int(7);
 ok( defined $number_seven, 'c_int returned object');
-
-diag( "[" . __FILE__ . ":" . __LINE__ . "] " . ref($number_seven) );
-
 # don't know if c_int will default to different type on 
 # this system so do inspecific check:
-like( ref($number_seven), qr/Ctypes::Type/, 'c_int created type object' );
+like( ref($number_seven), qr/Ctypes::Type/, 'c_int created Type object' );
 
-diag( Dumper($number_seven->{val}) );
-my $num = $number_seven->{val};
-diag( Dumper($number_seven->{val}) );
-is( $num, 7, "Initialised c_int with number: $num" );
-diag( Dumper($number_seven->{val}) );
+is( $number_seven, 7, "Initialised c_int with number: $number_seven" );
 
 diag( "Value: ", $number_seven->{val} );
 

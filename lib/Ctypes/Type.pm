@@ -60,64 +60,50 @@ use Carp;
 use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
-use fields qw(alignment name packcode size val);
+use fields qw(alignment name packcode size val data);
+use overload q("") => \&ovl,
+             '0+'  => \&ovl,
+             bool  => \&ovl;
+             
+sub ovl { return shift->{val}; }
 
 sub new {
-  print "I'm in c_int::new...\n";
-  for(@_) { print "\t$_\n"; }
   my $class = shift;
   my $arg = shift;
   croak("Usage: new $class($arg)") if @_;
-  my $ret = { val => 0, packcode => 'i', obj => '' };
+  my $ret = { val => 0, packcode => 'i', obj => '',
+              data => '', size => Ctypes::sizeof('i') };
   $ret->{obj} = tie $ret->{val}, "Ctypes::Type::c_int", $ret;
   $ret->{val} = $arg;
   return  bless $ret, $class; 
 }
 
 sub TIESCALAR {
-  print "I'm in TIESCALAR...\n";
-  for(@_) { print "\t$_\n"; }
   my $class = shift;
   my $self = shift;
   bless $self, $class;
 }
 
 sub STORE {
-  print "I'm in STORE...\n";
-  for(@_) { print "\t$_\n"; }
   my $self = shift;
   my $arg = shift;
-  print "\tref(\$self): " . ref($self) . "\n";
   croak("c_int can only be assigned a single value") if @_;
   croak("c_int can only be assigned an integer")
     unless Ctypes::realtype($arg,$self->{packcode});
   $self->{obj}->{data} = pack( $self->{packcode}, $arg );
-#  print "\t" . Dumper( $blarg );
-#  print "\t" . Dump( $blarg );
-  print "\tdata: " . Dumper( $self->{obj}->{data} ) . "\n";
   return $self->{obj}->{data};
 }
 
 sub FETCH {
-  print "I'm in FETCH...\n";
-  print "caller: " . caller() . "\n";
-  for(@_) { print "\t$_\n"; }
   my $self = shift;
-  print Dumper( $self );
-  print "\tref(\$self): " . ref($self) . "\n";
-#  my $val = unpack( $self->{packcode}, $self->{obj}->{val} );
   my $valnow = $self->{obj}->{data};
   my $blarg = unpack( 'i', $valnow );
-  print "\tvalnow: " . Dumper( $valnow );
-  print "\tblarg: " . Dumper( $blarg ) . "\n\n\n";
   return $blarg;
 }
 
 package Ctypes::Type;
 
 sub c_int {
-  print "I'm in Ctypes::Type::c_int...\n";
-  for(@_) { print "\t$_\n"; }
   return Ctypes::Type::c_int->new(@_);
 }
 
