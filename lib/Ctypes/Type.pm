@@ -91,14 +91,11 @@ sub STORE {
   croak("c_int can only be assigned a single value") if @_;
   croak("c_int can only be assigned an integer")
     unless Ctypes::realtype($arg,$self->{packcode});
-  $self->{obj}->{val} = pack( $self->{packcode}, $arg );
-  my $blarg = pack( 'i', 7 ), "\n";
+  $self->{obj}->{data} = pack( $self->{packcode}, $arg );
 #  print "\t" . Dumper( $blarg );
 #  print "\t" . Dump( $blarg );
-  print "\tval: " . Dumper( $self->{obj}->{val} ) . "\n";
-  print "\tval: " . Dump( $self->{obj}->{val} ) . "\n";
-  print "\tref \$self->{obj}->{val}: " . $self->{obj}->{val} . "\n";
-  return $self->{obj}->{val};
+  print "\tdata: " . Dumper( $self->{obj}->{data} ) . "\n";
+  return $self->{obj}->{data};
 }
 
 sub FETCH {
@@ -109,10 +106,10 @@ sub FETCH {
   print Dumper( $self );
   print "\tref(\$self): " . ref($self) . "\n";
 #  my $val = unpack( $self->{packcode}, $self->{obj}->{val} );
-  my $valnow = $self->{obj}->{val};
+  my $valnow = $self->{obj}->{data};
   my $blarg = unpack( 'i', $valnow );
-  print "\tblarg: " . Dumper( $blarg );
-  print "\tblarg: " . Dump( $blarg ) . "\n\n\n";
+  print "\tvalnow: " . Dumper( $valnow );
+  print "\tblarg: " . Dumper( $blarg ) . "\n\n\n";
   return $blarg;
 }
 

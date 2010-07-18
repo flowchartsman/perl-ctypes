@@ -15,11 +15,11 @@ diag( "[" . __FILE__ . ":" . __LINE__ . "] " . ref($number_seven) );
 # this system so do inspecific check:
 like( ref($number_seven), qr/Ctypes::Type/, 'c_int created type object' );
 
-diag( Dump($number_seven->{val}) );
+diag( Dumper($number_seven->{val}) );
 my $num = $number_seven->{val};
-diag( Dump($number_seven->{val}) );
+diag( Dumper($number_seven->{val}) );
 is( $num, 7, "Initialised c_int with number: $num" );
-diag( Dump($number_seven->{val}) );
+diag( Dumper($number_seven->{val}) );
 
 diag( "Value: ", $number_seven->{val} );
 
