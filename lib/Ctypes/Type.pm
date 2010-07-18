@@ -1,8 +1,14 @@
 package Ctypes::Type;
 # always loaded and all c types are exported.
 
+
+use Carp;
+use Ctypes;
+require Exporter;
+our @ISA = ("Exporter");
 use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
+our @EXPORT_OK = qw(&c_int);
 
 our $_perltypes = 
 { 
@@ -49,6 +55,75 @@ our $_pytypes =
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 
+package Ctypes::Type::c_int;
+use Carp;
+use Data::Dumper;
+use Devel::Peek;
+our @ISA = ("Ctypes::Type");
+use fields qw(alignment name packcode size val);
+
+sub new {
+  print "I'm in c_int::new...\n";
+  for(@_) { print "\t$_\n"; }
+  my $class = shift;
+  my $arg = shift;
+  croak("Usage: new $class($arg)") if @_;
+  my $ret = { val => 0, packcode => 'i', obj => '' };
+  $ret->{obj} = tie $ret->{val}, "Ctypes::Type::c_int", $ret;
+  $ret->{val} = $arg;
+  return  bless $ret, $class; 
+}
+
+sub TIESCALAR {
+  print "I'm in TIESCALAR...\n";
+  for(@_) { print "\t$_\n"; }
+  my $class = shift;
+  my $self = shift;
+  bless $self, $class;
+}
+
+sub STORE {
+  print "I'm in STORE...\n";
+  for(@_) { print "\t$_\n"; }
+  my $self = shift;
+  my $arg = shift;
+  print "\tref(\$self): " . ref($self) . "\n";
+  croak("c_int can only be assigned a single value") if @_;
+  croak("c_int can only be assigned an integer")
+    unless Ctypes::realtype($arg,$self->{packcode});
+  $self->{obj}->{val} = pack( $self->{packcode}, $arg );
+  my $blarg = pack( 'i', 7 ), "\n";
+#  print "\t" . Dumper( $blarg );
+#  print "\t" . Dump( $blarg );
+  print "\tval: " . Dumper( $self->{obj}->{val} ) . "\n";
+  print "\tval: " . Dump( $self->{obj}->{val} ) . "\n";
+  print "\tref \$self->{obj}->{val}: " . $self->{obj}->{val} . "\n";
+  return $self->{obj}->{val};
+}
+
+sub FETCH {
+  print "I'm in FETCH...\n";
+  print "caller: " . caller() . "\n";
+  for(@_) { print "\t$_\n"; }
+  my $self = shift;
+  print Dumper( $self );
+  print "\tref(\$self): " . ref($self) . "\n";
+#  my $val = unpack( $self->{packcode}, $self->{obj}->{val} );
+  my $valnow = $self->{obj}->{val};
+  my $blarg = unpack( 'i', $valnow );
+  print "\tblarg: " . Dumper( $blarg );
+  print "\tblarg: " . Dump( $blarg ) . "\n\n\n";
+  return $blarg;
+}
+
+package Ctypes::Type;
+
+sub c_int {
+  print "I'm in Ctypes::Type::c_int...\n";
+  for(@_) { print "\t$_\n"; }
+  return Ctypes::Type::c_int->new(@_);
+}
+
 =head1 METHODS
 
 =over
@@ -84,17 +159,17 @@ sub new {
 package Ctypes::Type;
 
 # define the simple c_types
-my %_defined;
-for my $k (keys %$_types) {
-  my $name = $_types->{$k};
-  unless ($_defined{$name}) {
-    no strict 'refs';
-    eval "sub $name { Ctypes::Types::Simple->new(\"$k\", \"$name\"); }";
-    # *&{"Ctypes::$name"} = *&name;
-    $_defined{$name} = 1;
-  }
-}
-our @_allnames = keys %_defined;
+#my %_defined;
+#for my $k (keys %$_types) {
+#  my $name = $_types->{$k};
+#  unless ($_defined{$name}) {
+#    no strict 'refs';
+#    eval "sub $name { Ctypes::Types::Simple->new(\"$k\", \"$name\"); }";
+#    # *&{"Ctypes::$name"} = *&name;
+#    $_defined{$name} = 1;
+#  }
+#}
+#our @_allnames = keys %_defined;
 
 =item sizeof()
 

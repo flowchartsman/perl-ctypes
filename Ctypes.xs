@@ -406,6 +406,69 @@ CODE:
 OUTPUT:
   RETVAL
 
+int
+realtype(arg,type)
+  SV* arg;
+  char type;
+CODE:
+  long double max;
+  if( !SvOK(arg) ) { XSRETURN_UNDEF; }
+  switch (type) {
+    case 'c':
+    case 'C':
+      if( !SvPOK(arg) ) { RETVAL = 0; break; }
+      if( sv_len(arg) != 1 ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 's':
+    case 'S':
+      if( !SvPOK(arg) ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'i': 
+      if( SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(signed int) * 8 - 1);
+      if( (signed int)SvIV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'I':
+      if( SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(unsigned int) * 8); 
+      if( (unsigned int)SvIV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'l':
+      if( SvNOK(arg) ) { RETVAL = 0; }
+      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(signed long) * 8 - 1);
+      if( (signed long)SvIV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'L':
+      if( SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(unsigned long) * 8 - 1);
+      if( (unsigned long)SvIV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'f':
+      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(float) * 8 - 1);
+      if( (float)SvNV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'd':
+      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(double) * 8 - 1);
+      if( (double)SvNV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'D':
+      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      max = 2 ^ (sizeof(long double) * 8 - 1);
+      if( (long double)SvNV(arg) > max ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    case 'p':
+      if( !SvPOK(arg) ) { RETVAL = 0; break; }
+      RETVAL = 1; break;
+    default: croak( "Invalid type: %c", type );
+  }
+OUTPUT:
+  RETVAL
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
