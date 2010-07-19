@@ -12,9 +12,21 @@ ok( defined $number_seven, 'c_int returned object');
 # this system so do inspecific check:
 like( ref($number_seven), qr/Ctypes::Type/, 'c_int created Type object' );
 
-is( $number_seven, 7, "Initialised c_int with number: $number_seven" );
+is( $number_seven, 7, "Obj numeric representation: $number_seven" );
+is( $number_seven->{val}, 7, "\$obj->{val}: " . $number_seven->{val} );
+is( $number_seven->{obj}->{val}, 7, "\$obj->{obj}->{val}: " . $number_seven->{obj}->{val} );
 
-diag( "Value: ", $number_seven->{val} );
+$number_twelve = $number_seven;
+
+is( $number_twelve, 7, "Obj numeric representation: $number_twelve" );
+is( $number_twelve->{val}, 7, "\$obj->{val}: " . $number_twelve->{val} );
+is( $number_twelve->{obj}->{val}, 7, "\$obj->{obj}->{val}: " . $number_twelve->{obj}->{val} );
+
+$number_seven->(12);
+
+is( $number_seven, 12, "Obj numeric representation: $number_seven" );
+is( $number_seven->{val}, 12, "\$obj->{val}: " . $number_seven->{val} );
+is( $number_seven->{obj}->{val}, 12, "\$obj->{obj}->{val}: " . $number_seven->{obj}->{val} );
 
 my $letter_y = c_int('y');
 is( $letter_y->{value}, 121, 'Initialised c_int with letter' );
