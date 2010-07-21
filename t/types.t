@@ -18,15 +18,16 @@ is( $number_seven->{obj}->{val}, 7, "\$obj->{obj}->{val}: " . $number_seven->{ob
 
 $number_twelve = $number_seven;
 
-is( $number_twelve, 7, "Obj numeric representation: $number_twelve" );
-is( $number_twelve->{val}, 7, "\$obj->{val}: " . $number_twelve->{val} );
-is( $number_twelve->{obj}->{val}, 7, "\$obj->{obj}->{val}: " . $number_twelve->{obj}->{val} );
+is_deeply( $number_twelve, $number_seven, "Assignment copies object by value" );
 
 $number_seven->(12);
 
-is( $number_seven, 12, "Obj numeric representation: $number_seven" );
-is( $number_seven->{val}, 12, "\$obj->{val}: " . $number_seven->{val} );
-is( $number_seven->{obj}->{val}, 12, "\$obj->{obj}->{val}: " . $number_seven->{obj}->{val} );
+subtest 'Set new value' => sub {
+  plan tests => 3;
+  is( $number_seven, 12, "Numeric: $number_seven" );
+  is( $number_seven->{val}, 12, "\$obj->{val}: " . $number_seven->{val} );
+  is( $number_seven->{obj}->{val}, 12, "\$obj->{obj}->{val}: " . $number_seven->{obj}->{val} );
+};
 
 my $letter_y = c_int('y');
 is( $letter_y->{value}, 121, 'Initialised c_int with letter' );
