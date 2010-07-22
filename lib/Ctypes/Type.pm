@@ -54,6 +54,7 @@ our $_pytypes =
   O =>  "c_void_p",
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
+our $allow_overflow_all = 0;
 
 package Ctypes::Type::c_int;
 use Carp;
@@ -63,18 +64,19 @@ our @ISA = ("Ctypes::Type");
 use fields qw(alignment name packcode size val data);
 use overload q("") => \&stringOvl,
              '0+'  => \&numOvl,
-             '&{}' => \&ovlSTORE,
+             '&{}' => \&ovlVal,
              fallback => TRUE;
 our $DEBUG = 0;
+our $allow_overflow = 1;
  
 sub stringOvl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
-                   print "    stringOvl returning: " . ${$_[0]->{obj}->{val}} . "\n" if $DEBUG == 1;
-                   return shift->{obj}->{val};
+                   print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
+                   return shift->{val};
 }
 
 sub numOvl : lvalue { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
-                   print "    numOvl returning: " . $_[0]->{obj}->{val} if $DEBUG == 1;
-                   return shift->{obj}->{val};
+                   print "    numOvl returning: " . $_[0]->{val} if $DEBUG == 1;
+                   return shift->{val};
 }
 
 
@@ -83,51 +85,35 @@ sub new {
   my $class = shift;
   my $arg = shift;
   croak("Usage: new $class($arg)") if @_;
-  my $ret = { val => 0, packcode => 'i', obj => '',
+  my $self = { val => 0, packcode => 'i',
               data => '', size => Ctypes::sizeof('i') };
-  bless $ret, $class;
-  $ret->{obj} = tie $ret->{val}, "Ctypes::Type::c_int", $ret;
-  $ret->STORE($arg);
-  print "    c_int::new ret: " . $ret . "\n" if $DEBUG == 1;
-  return $ret; 
-}
-
-sub TIESCALAR {
-  print "In TIESCALAR...\n" if $DEBUG == 1;
-  my $class = shift;
-  my $self = shift;
   bless $self, $class;
+  $self->val($arg); # val does checks, will die if invalid arg
+  print "    c_int::new ret: " . $self. "\n" if $DEBUG == 1;
+  return $self;
 }
 
-sub ovlSTORE { 
-  print "In ovlSTORE...\n" if $DEBUG == 1;
+sub ovlVal { 
+  print "In ovlVal...\n" if $DEBUG == 1;
   if( $DEBUG == 1 ) {
     for(@_) { print "\targref: " . ref($_)  .  "\n"; }
   }
   my $self = shift;
-  return sub { STORE($self, @_) };
+  return sub { val($self, @_) };
 }
 
 
-sub STORE {
-  print "In STORE...\n" if $DEBUG == 1;
+sub val {
+  print "In val()...\n" if $DEBUG == 1;
   my $self = shift;
   my $arg = shift;
   croak("c_int can only be assigned a single value") if @_;
   croak("c_int can only be assigned an integer")
     unless Ctypes::realtype($arg,$self->{packcode});
-  $self->{obj}->{data} = pack( $self->{packcode}, $arg );
-  print "    STORE ret: " . $self->{obj}->{data} . "\n" if $DEBUG == 1;
-  return $self->{obj}->{data};
-}
-
-sub FETCH {
-  print "In FETCH called by " . caller() . "\n" if $DEBUG == 1;
-  my $self = shift;
-  my $valnow = $self->{obj}->{data};
-  my $ret = unpack( 'i', $valnow );
-  print "    FETCH ret: " . $ret . "\n" if $DEBUG == 1;
-  return $ret;
+  $self->{data} = pack( $self->{packcode}, $arg );
+  $self->{val} = $arg;
+  print "    val() ret: " . $self->{data} . "\n" if $DEBUG == 1;
+  return $self->{val};
 }
 
 package Ctypes::Type;
