@@ -62,19 +62,19 @@ use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
 use fields qw(alignment name packcode size val data);
-use overload q("") => \&stringOvl,
-             '0+'  => \&numOvl,
-             '&{}' => \&ovlVal,
+use overload q("") => \&string_ovl,
+             '0+'  => \&num_ovl,
+             '&{}' => \&code_ovl,
              fallback => TRUE;
 our $DEBUG = 0;
-our $allow_overflow = 1;
+our $allow_overflow_cint = 1;
  
-sub stringOvl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
+sub string_ovl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
                    print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
                    return shift->{val};
 }
 
-sub numOvl : lvalue { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
+sub num_ovl : lvalue { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
                    print "    numOvl returning: " . $_[0]->{val} if $DEBUG == 1;
                    return shift->{val};
 }
@@ -85,7 +85,7 @@ sub new {
   my $class = shift;
   my $arg = shift;
   croak("Usage: new $class($arg)") if @_;
-  my $self = { val => 0, packcode => 'i',
+  my $self = { val => 0, packcode => 'i', overflow => 0,
               data => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
   $self->val($arg); # val does checks, will die if invalid arg
@@ -93,7 +93,7 @@ sub new {
   return $self;
 }
 
-sub ovlVal { 
+sub code_ovl { 
   print "In ovlVal...\n" if $DEBUG == 1;
   if( $DEBUG == 1 ) {
     for(@_) { print "\targref: " . ref($_)  .  "\n"; }
@@ -108,8 +108,17 @@ sub val {
   my $self = shift;
   my $arg = shift;
   croak("c_int can only be assigned a single value") if @_;
-  croak("c_int can only be assigned an integer")
-    unless Ctypes::realtype($arg,$self->{packcode});
+  if( !Ctypes::valid_type_value($arg,$self->{packcode}) ) {
+    unless( $self->{overflow} || $allow_overflow_cint
+         || $allow_overflow_all ) {
+      croak("Invalid value for c_int type: $arg");
+    } else {
+      # This is not a true C cast; basically just makes sure the
+      # value is an acceptable size.
+      my $temp = Ctypes::_cast_value($arg,$self->{packcode});
+      $arg = $temp;
+    }
+  }
   $self->{data} = pack( $self->{packcode}, $arg );
   $self->{val} = $arg;
   print "    val() ret: " . $self->{data} . "\n" if $DEBUG == 1;

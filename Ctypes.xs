@@ -407,7 +407,7 @@ OUTPUT:
   RETVAL
 
 int
-realtype(arg,type)
+valid_type_value(arg,type)
   SV* arg;
   char type;
 CODE:
@@ -465,6 +465,77 @@ CODE:
     case 'p':
       if( !SvPOK(arg) ) { RETVAL = 0; break; }
       RETVAL = 1; break;
+    default: croak( "Invalid type: %c", type );
+  }
+OUTPUT:
+  RETVAL
+
+SV*
+_cast_value(arg,type)
+  SV* arg;
+  char type;
+CODE:
+  void* rvalue;
+  double arg_number;
+  char* arg_ptr;
+  if(SvIOK(arg) || SvNOK(arg)) {
+    arg_number = (double)SvNV(arg);
+  } else if(SvPOK(arg)) {
+    arg_ptr = SvPV_nolen(arg);
+  } else {
+    croak("Neither number nor pointer in cast");
+  }
+  RETVAL = 0;
+  switch (type) {
+    case 'c':
+    case 'C':
+      Newxc(rvalue, 1, char, char);
+      rvalue = arg_ptr;
+      RETVAL = newSViv((char)*(int*)rvalue);
+      break;
+    case 's':
+    case 'S':
+      RETVAL = newSVpv((char*)arg_ptr, 0);
+      break;
+    case 'i':
+      Newxc(rvalue, 1, int, int); 
+      *(int*)rvalue = (int)arg_number;
+      RETVAL = newSViv(*(int*)rvalue);
+      break;
+    case 'I':
+      Newxc(rvalue, 1, unsigned int, unsigned int);
+      *(unsigned int*)rvalue = (unsigned int)arg_number;
+      RETVAL = newSViv(*(unsigned int*)rvalue);
+      break;
+    case 'l':
+      Newxc(rvalue, 1, long, long);
+      *(long*)rvalue = (long)arg_number;
+      RETVAL = newSViv(*(long*)rvalue);
+      break;
+    case 'L':
+      Newxc(rvalue, 1, unsigned long, unsigned long);
+      *(unsigned long*)rvalue = (unsigned long)arg_number;
+      RETVAL = newSViv(*(unsigned long*)rvalue);
+      break;
+    case 'f':
+      Newxc(rvalue, 1, float, float);
+      *(float*)rvalue = (float)arg_number;
+      RETVAL = newSVnv(*(float*)rvalue);
+      break;
+    case 'd':
+      Newxc(rvalue, 1, double, double);
+      *(double*)rvalue = (double)arg_number;
+      RETVAL = newSVnv(*(double*)rvalue);
+      break;
+    case 'D':
+      Newxc(rvalue, 1, long double, long double);
+      *(long double*)rvalue = (long double)arg_number;
+      RETVAL = newSVnv(*(long double*)rvalue);
+      break;
+    case 'p':
+      rvalue = arg;
+      RETVAL = newSVpv((void*)rvalue, 0);
+      break;
     default: croak( "Invalid type: %c", type );
   }
 OUTPUT:
