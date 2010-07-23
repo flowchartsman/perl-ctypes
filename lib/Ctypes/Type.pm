@@ -68,7 +68,9 @@ use overload q("") => \&string_ovl,
              fallback => TRUE;
 our $DEBUG = 0;
 our $allow_overflow_cint = 1;
- 
+
+# XXX do need to tie self->{val} to get lvalue behaviour?
+# is such behaviour even wanted? 
 sub string_ovl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
                    print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
                    return shift->{val};
@@ -77,20 +79,6 @@ sub string_ovl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if
 sub num_ovl : lvalue { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
                    print "    numOvl returning: " . $_[0]->{val} if $DEBUG == 1;
                    return shift->{val};
-}
-
-
-sub new {
-  print "In c_int::new...\n" if $DEBUG == 1;
-  my $class = shift;
-  my $arg = shift;
-  croak("Usage: new $class($arg)") if @_;
-  my $self = { val => 0, packcode => 'i', overflow => 0,
-              data => '', size => Ctypes::sizeof('i') };
-  bless $self, $class;
-  $self->val($arg); # val does checks, will die if invalid arg
-  print "    c_int::new ret: " . $self. "\n" if $DEBUG == 1;
-  return $self;
 }
 
 sub code_ovl { 
@@ -102,21 +90,39 @@ sub code_ovl {
   return sub { val($self, @_) };
 }
 
+sub new {
+  print "In c_int::new...\n" if $DEBUG == 1;
+  my $class = shift;
+  my $arg = shift;
+  my $self = { val => 0, packcode => 'i', overflow => 0,
+              data => '', size => Ctypes::sizeof('i') };
+  bless $self, $class;
+  $self->val($arg) if $arg;
+  if( $DEBUG == 1 ) {
+    if( $arg ) { print "    c_int::new ret: " . $self. "\n"; }
+    else { print "    c_int::new returning...\n"; }
+  }
+  return $self;
+}
 
 sub val {
   print "In val()...\n" if $DEBUG == 1;
   my $self = shift;
   my $arg = shift;
   croak("c_int can only be assigned a single value") if @_;
-  if( !Ctypes::valid_type_value($arg,$self->{packcode}) ) {
-    unless( $self->{overflow} || $allow_overflow_cint
-         || $allow_overflow_all ) {
-      croak("Invalid value for c_int type: $arg");
+  # return 1 on success, 0 on fail, -1 if numeric but out of range
+  my $is_valid = Ctypes::valid_type_value($arg,$self->{packcode});
+  if( $is_valid < 1 ) {
+    print "\t$arg wasn't valid type\n" if $DEBUG == 1;
+    if( ($is_valid == -1) and not ( $self->{overflow}
+      || $allow_overflow_cint || $allow_overflow_all ) ) {
+      croak( "Value out of range for c_int: $arg");
     } else {
-      # This is not a true C cast; basically just makes sure the
-      # value is an acceptable size.
-      my $temp = Ctypes::_cast_value($arg,$self->{packcode});
-      $arg = $temp;
+    # This is not a true C cast. It will always return
+    # _something_ if it recognises the packcode
+    my $temp = Ctypes::_cast_value($arg,$self->{packcode});
+    # XXX check $temp here again in case packcode was invalid?
+    $arg = $temp;
     }
   }
   $self->{data} = pack( $self->{packcode}, $arg );

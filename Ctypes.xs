@@ -15,6 +15,7 @@
 #include "ppport.h"
 
 #include "ffi.h"
+#include "limits.h"
 
 //#include "const-c.inc"
 #ifdef CTYPES_DEBUG
@@ -411,7 +412,8 @@ valid_type_value(arg,type)
   SV* arg;
   char type;
 CODE:
-  long double max;
+  double max;
+  short i;
   if( !SvOK(arg) ) { XSRETURN_UNDEF; }
   switch (type) {
     case 'c':
@@ -423,43 +425,49 @@ CODE:
     case 'S':
       if( !SvPOK(arg) ) { RETVAL = 0; break; }
       RETVAL = 1; break;
-    case 'i': 
-      if( SvNOK(arg) ) { RETVAL = 0; break; }
+    case 'i':
+      if( SvPOK(arg) ) { RETVAL = 0; break; }
       if( !SvIOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(signed int) * 8 - 1);
-      if( (signed int)SvIV(arg) > max ) { RETVAL = 0; break; }
+   /*   signed int max = 1;
+      for(i=1;i<(sizeof(signed int) * 8 - 1);i++) {
+        max = max << 1; max | 1;
+      }  */
+      /* max = 1 << (sizeof(signed int) * 8 - 1); */
+      double thearg = SvNV(arg);
+      if( thearg < INT_MIN || thearg > INT_MAX ) { RETVAL = -1; break; }
+      /* if( thearg > max ) { RETVAL = 0; break; } */
       RETVAL = 1; break;
     case 'I':
       if( SvNOK(arg) ) { RETVAL = 0; break; }
       if( !SvIOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(unsigned int) * 8); 
+      max = 1 << (sizeof(unsigned int) * 8); 
       if( (unsigned int)SvIV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'l':
       if( SvNOK(arg) ) { RETVAL = 0; }
       if( !SvIOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(signed long) * 8 - 1);
+      max = 1 << (sizeof(signed long) * 8 - 1);
       if( (signed long)SvIV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'L':
       if( SvNOK(arg) ) { RETVAL = 0; break; }
       if( !SvIOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(unsigned long) * 8 - 1);
+      max = 1 << (sizeof(unsigned long) * 8 - 1);
       if( (unsigned long)SvIV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'f':
       if( !SvNOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(float) * 8 - 1);
+      max = 1 << (sizeof(float) * 8 - 1);
       if( (float)SvNV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'd':
       if( !SvNOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(double) * 8 - 1);
+      max = 1 << (sizeof(double) * 8 - 1);
       if( (double)SvNV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'D':
       if( !SvNOK(arg) ) { RETVAL = 0; break; }
-      max = 2 ^ (sizeof(long double) * 8 - 1);
+      max = 1 << (sizeof(long double) * 8 - 1);
       if( (long double)SvNV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'p':
@@ -471,72 +479,51 @@ OUTPUT:
   RETVAL
 
 SV*
-_cast_value(arg,type)
-  SV* arg;
+_cast_value(arg_sv,type)
+  SV* arg_sv;
   char type;
 CODE:
-  void* rvalue;
-  double arg_number;
-  char* arg_ptr;
-  if(SvIOK(arg) || SvNOK(arg)) {
-    arg_number = (double)SvNV(arg);
-  } else if(SvPOK(arg)) {
-    arg_ptr = SvPV_nolen(arg);
+  /* XXX almost wholly unimplemented! Only 'i' works */
+  void *rvalue, *argvalue;
+  NV num_arg;
+  } else if(SvPOK(arg_sv)) {
+    argvalue = SvPV_nolen(arg_sv);
   } else {
-    croak("Neither number nor pointer in cast");
+    croak("[%s:%i] _cast_value: Neither number nor string in cast", __FILE__, __LINE__ );
   }
   RETVAL = 0;
   switch (type) {
     case 'c':
     case 'C':
-      Newxc(rvalue, 1, char, char);
-      rvalue = arg_ptr;
-      RETVAL = newSViv((char)*(int*)rvalue);
+      RETVAL = newSViv((char)*(int*)argvalue);
       break;
     case 's':
     case 'S':
-      RETVAL = newSVpv((char*)arg_ptr, 0);
+      RETVAL = newSVpv((char*)argvalue, 0);
       break;
     case 'i':
-      Newxc(rvalue, 1, int, int); 
-      *(int*)rvalue = (int)arg_number;
-      RETVAL = newSViv(*(int*)rvalue);
+      if(SvIOK(arg_sv) || SvNOK(arg_sv)) {
+        signed int retval;
+        num_arg = SvNV(arg_sv);
+        retval = (int)num_arg;
+        RETVAL = newSViv(retval);
+        break;
+      } else if(SvPOK(arg_sv)) {
+        RETVAL = newSViv((int)(SvPV_nolen(arg_sv))[0]);
+        break;
+      }
+      RETVAL = -1;
       break;
     case 'I':
-      Newxc(rvalue, 1, unsigned int, unsigned int);
-      *(unsigned int*)rvalue = (unsigned int)arg_number;
-      RETVAL = newSViv(*(unsigned int*)rvalue);
-      break;
     case 'l':
-      Newxc(rvalue, 1, long, long);
-      *(long*)rvalue = (long)arg_number;
-      RETVAL = newSViv(*(long*)rvalue);
-      break;
     case 'L':
-      Newxc(rvalue, 1, unsigned long, unsigned long);
-      *(unsigned long*)rvalue = (unsigned long)arg_number;
-      RETVAL = newSViv(*(unsigned long*)rvalue);
-      break;
     case 'f':
-      Newxc(rvalue, 1, float, float);
-      *(float*)rvalue = (float)arg_number;
-      RETVAL = newSVnv(*(float*)rvalue);
-      break;
     case 'd':
-      Newxc(rvalue, 1, double, double);
-      *(double*)rvalue = (double)arg_number;
-      RETVAL = newSVnv(*(double*)rvalue);
-      break;
+#ifdef HAS_LONG_DOUBLE
     case 'D':
-      Newxc(rvalue, 1, long double, long double);
-      *(long double*)rvalue = (long double)arg_number;
-      RETVAL = newSVnv(*(long double*)rvalue);
-      break;
+#endif
     case 'p':
-      rvalue = arg;
-      RETVAL = newSVpv((void*)rvalue, 0);
-      break;
-    default: croak( "Invalid type: %c", type );
+    default: croak( "Unimplemented / Invalid type: %c", type );
   }
 OUTPUT:
   RETVAL

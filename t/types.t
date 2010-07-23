@@ -28,13 +28,19 @@ subtest 'Set new value' => sub {
 };
 
 my $letter_y = c_int('y');
-is( $letter_y->{value}, 121, 'Initialised c_int with letter' );
+is( $letter_y, 121, 'Initialised c_int with letter' );
+
+# XXX: Exceeding range on signed variables undefined?
+my $overflower = c_int(2147483648);
+isnt( $overflower, 2147483648, 'Cannot exceed INT_MAX' );
+$overflower->(-2147483649);
+isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' ); 
 
 my $to_upper = Ctypes::Function->new
   ( { lib    => 'c',
       name   => 'toupper',
       argtypes => 'i',
-      restype  => c_int } );  # can only do this if c_int is a sub?
+      restype  => c_int } );
 ok( defined $to_upper, '$to_upper created with hashref' );
 is( $to_upper->restype, 'c_int',
     'Function obj accepts & returns type objs arguments' );
