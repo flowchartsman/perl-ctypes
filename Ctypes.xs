@@ -486,11 +486,6 @@ CODE:
   /* XXX almost wholly unimplemented! Only 'i' works */
   void *rvalue, *argvalue;
   NV num_arg;
-  } else if(SvPOK(arg_sv)) {
-    argvalue = SvPV_nolen(arg_sv);
-  } else {
-    croak("[%s:%i] _cast_value: Neither number nor string in cast", __FILE__, __LINE__ );
-  }
   RETVAL = 0;
   switch (type) {
     case 'c':

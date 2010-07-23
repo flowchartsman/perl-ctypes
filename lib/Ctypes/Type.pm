@@ -71,13 +71,14 @@ our $allow_overflow_cint = 1;
 
 # XXX do need to tie self->{val} to get lvalue behaviour?
 # is such behaviour even wanted? 
-sub string_ovl : lvalue { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
+sub string_ovl { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
+                   print "args 2 and 3: " . $_[1] . " " . $_[2] . "\n" if $DEBUG == 1;
                    print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
                    return shift->{val};
 }
 
-sub num_ovl : lvalue { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
-                   print "    numOvl returning: " . $_[0]->{val} if $DEBUG == 1;
+sub num_ovl { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
+                   print "    numOvl returning: " . $_[0]->{val} . "\n" if $DEBUG == 1;
                    return shift->{val};
 }
 

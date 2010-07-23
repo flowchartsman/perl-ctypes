@@ -27,6 +27,11 @@ subtest 'Set new value' => sub {
   is( $number_seven->{val}, 12, "\$obj->{val}: " . $number_seven->{val} );
 };
 
+$number_seven += 3;
+is( $number_seven, 15, "Binary increment" );
+$number_seven--;
+is( $number_seven, 14, "Unary decrement" );
+
 my $letter_y = c_int('y');
 is( $letter_y, 121, 'Initialised c_int with letter' );
 
@@ -34,7 +39,7 @@ is( $letter_y, 121, 'Initialised c_int with letter' );
 my $overflower = c_int(2147483648);
 isnt( $overflower, 2147483648, 'Cannot exceed INT_MAX' );
 $overflower->(-2147483649);
-isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' ); 
+isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' );
 
 my $to_upper = Ctypes::Function->new
   ( { lib    => 'c',
