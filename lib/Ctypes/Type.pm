@@ -98,7 +98,7 @@ sub new {
   my $self = { val => 0, packcode => 'i', overflow => 0,
               data => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
-  $self->val($arg) if $arg;
+  $self->val($arg); # !$arg is handled by val()
   if( $DEBUG == 1 ) {
     if( $arg ) { print "    c_int::new ret: " . $self. "\n"; }
     else { print "    c_int::new returning...\n"; }
@@ -110,6 +110,7 @@ sub val {
   print "In val()...\n" if $DEBUG == 1;
   my $self = shift;
   my $arg = shift;
+  $arg = 0 unless defined $arg;
   croak("c_int can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if numeric but out of range
   my $is_valid = Ctypes::valid_type_value($arg,$self->{packcode});

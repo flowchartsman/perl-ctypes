@@ -32,6 +32,10 @@ is( $number_seven, 15, "Binary increment" );
 $number_seven--;
 is( $number_seven, 14, "Unary decrement" );
 
+my $no_value = c_int;
+ok( defined $no_value, 'Created object without initializer' );
+is( $no_value, 0, 'Default initialization to 0' );
+
 my $letter_y = c_int('y');
 is( $letter_y, 121, 'Initialised c_int with letter' );
 
