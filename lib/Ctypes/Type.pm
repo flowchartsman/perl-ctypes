@@ -56,6 +56,20 @@ our $_pytypes =
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 our $allow_overflow_all = 0;
 
+# http://docs.python.org/library/ctypes.html
+# #ctypes-fundamental-data-types-2:
+# Fundamental data types, when returned as foreign function call
+# results, or, for example, by retrieving structure field members
+# or array items, are transparently converted to native Python types.
+# In other words, if a foreign function has a restype of c_char_p,
+# you will always receive a Python string, not a c_char_p instance.
+
+# Subclasses of fundamental data types do not inherit this behavior.
+# So, if a foreign functions restype is a subclass of c_void_p, you
+# will receive an instance of this subclass from the function call.
+# Of course, you can get the value of the pointer by accessing the
+# value attribute.
+
 package Ctypes::Type::c_int;
 use Carp;
 use Data::Dumper;
@@ -95,8 +109,8 @@ sub new {
   print "In c_int::new...\n" if $DEBUG == 1;
   my $class = shift;
   my $arg = shift;
-  my $self = { val => 0, packcode => 'i', overflow => 0,
-              data => '', size => Ctypes::sizeof('i') };
+  my $self = { val => 0, packcode => 'i', overflow => 0, alignment => 0,
+               name=> 'c_int', data => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
   $self->val($arg); # !$arg is handled by val()
   if( $DEBUG == 1 ) {

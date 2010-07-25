@@ -48,12 +48,15 @@ isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' );
 my $to_upper = Ctypes::Function->new
   ( { lib    => 'c',
       name   => 'toupper',
-      argtypes => 'i',
+      argtypes => c_int,
       restype  => c_int } );
 ok( defined $to_upper, '$to_upper created with hashref' );
-is( $to_upper->restype, 'c_int',
-    'Function obj accepts & returns type objs arguments' );
+is( $to_upper->argtypes->[0], 'i',
+    'Function argtype specified with Type object' );
+is( $to_upper->restype, 'i',
+    'Function restype specified with Type object' );
+
 my $ret = $to_upper->( $letter_y );
-like( ref($ret), qr/Ctypes::Type/, 'Function returns type obj');
+is( $ret, ord("Y"), 'Function returns type obj');
 my $ret_as_char = c_char($ret);
 is( $ret_as_char->value, 'Y', 'c_char converts from number types' );
