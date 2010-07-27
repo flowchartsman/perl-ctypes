@@ -21,12 +21,6 @@
 #include "src/util.c"
 
 //#include "const-c.inc"
-#ifdef CTYPES_DEBUG
-#define debug_warn( ... ) warn( __VA_ARGS__ )
-#else
-#define debug_warn( ... )
-#endif
-
 
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
@@ -406,11 +400,7 @@ _CallProc( pProc, argtuple, pIunk, iid, flags, converters, restype, checker )
         SV* v;
         /* REM to decref later! */
         this_converter = Ct_AVref_GET_ITEM(converters, i);
-        if( !SvOK(this_converter)
-            || !( SvROK(this_converter)
-                  && SvTYPE(SvRV(this_converter)) == SVt_PVCV 
-                )
-          )
+        if( Ct_IsCoderef(this_convertor) ) 
           croak("[%s:%i] _CallProc: converter %i invalid!",
                 __FILE__, __LINE__, i);
         v = Ct_CallPerlFunctionSVArgs(this_converter, arg, NULL);

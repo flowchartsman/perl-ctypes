@@ -13,6 +13,12 @@
 #ifndef _INC_CTYPES_H
 #define _INC_CTYPES_H
 
+#ifdef CTYPES_DEBUG
+#define debug_warn( ... ) warn( __VA_ARGS__ )
+#else
+#define debug_warn( ... )
+#endif
+
 typedef struct _cb_data_t {
   char* sig;
   SV* coderef;
