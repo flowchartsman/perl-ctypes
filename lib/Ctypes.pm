@@ -915,7 +915,7 @@ and Shlomi Fish for giving me the opportunity to work on the project.
 Copyright 2010 Ryan Jendoubi.
 
 This program is free software; you can redistribute it and/or modify it
-under the terms of the Artistic License.
+under the terms of the Artistic License 2.0.
 
 See http://dev.perl.org/licenses/ for more information.
 

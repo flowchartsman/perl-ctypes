@@ -252,6 +252,11 @@ sub _call {
   if( ref($inargs[$#inargs]) eq 'HASH' )
     { %kwds = %{pop @inargs}; }
   my( $outmask, $inoutmask, $numretvals );
+
+  my $result; # XXX what is this? array? ref? success indicator?
+  my $pProc; # XXX this is to do with COM objects, not implemented yet!
+  my $checker;
+
   # all arguments taken as references...
   my @callargs = _build_callargs( $self,
                                   @inargs,
@@ -286,7 +291,15 @@ sub _call {
     }
   }
 
-  
+  $result = _CallProc( $pProc,
+                       @callargs,
+              $^O eq 'MSWin32' ? $iunk : undef,
+              $^O eq 'MSWin32' ? $self->{iid} : undef,
+                       $self->{flags},
+                       $self->{converters},
+                       $self->{restype},
+                       $checker,
+                     );
 
   my $retval;
   my $sig = $self->_form_sig;

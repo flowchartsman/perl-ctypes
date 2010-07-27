@@ -16,6 +16,9 @@
 
 #include "ffi.h"
 #include "limits.h"
+#include "Ctypes.h"
+#include "src/py_funcs.c"
+#include "src/util.c"
 
 //#include "const-c.inc"
 #ifdef CTYPES_DEBUG
@@ -24,65 +27,6 @@
 #define debug_warn( ... )
 #endif
 
-// Copied verbatim from FFI.xs on 21/05/2010: http://cpansearch.perl.org/src/GAAL/FFI-1.04/FFI.xs
-static int validate_signature (char *sig)
-{
-    STRLEN i;
-    STRLEN len = strlen(sig);
-    int args_in_sig;
-
-    if (len < 2)
-        croak("Invalid function signature: %s (too short)", sig);
-
-    if (sig[0] != 'c' && *sig != 's')
-        croak("Invalid function signature: '%c' (should be 'c' or 's')", sig[0]);
-
-    if (strchr("cCsSiIlLfdDpv", sig[1]) == NULL)
-        croak("Invalid return type: '%c' (should be one of \"cCsSiIlLfdDpv\")", sig[1]);
-
-    i = strspn(sig+2, "cCsSiIlLfdDp");
-    args_in_sig = len - 2;
-    if (i != args_in_sig)
-        croak("Invalid argument type (arg %d): '%c' (should be one of \"cCsSiIlLfdDp\")",
-              i+1, sig[i+2]);
-    return args_in_sig;
-}
-
-ffi_type* get_ffi_type(char type)
-{
-  switch (type) {
-    case 'v': return &ffi_type_void;         break;
-    case 'c': return &ffi_type_schar;        break;
-    case 'C': return &ffi_type_uchar;        break;
-    case 's': return &ffi_type_sshort;       break;
-    case 'S': return &ffi_type_ushort;       break;
-    case 'i': return &ffi_type_sint;         break;
-    case 'I': return &ffi_type_uint;         break;
-    case 'l': return &ffi_type_slong;        break;
-    case 'L': return &ffi_type_ulong;        break;
-    case 'f': return &ffi_type_float;        break;
-    case 'd': return &ffi_type_double;       break;
-    case 'D': return &ffi_type_longdouble;   break;
-    case 'p': return &ffi_type_pointer;      break;
-    default: croak( "Unrecognised type: %c!", type );
-  }
-}
-
-int cmp ( const void* one, const void* two ) {
-  int a,b;
-  a = *(int*)one;
-  b = *(int*)two;
-  if( a < b ) return -1;
-  if( a == b ) return 0;
-  if( a > b ) return 1;
-}
-
-typedef struct _cb_data_t {
-  char* sig;
-  SV* coderef;
-  ffi_cif* cif;
-  ffi_closure* closure; 
-} cb_data_t;
 
 void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
@@ -227,8 +171,9 @@ void
 _call( addr, sig, ... )
     void* addr;
     strictchar* sig;
-  # PROTOTYPE: $$;@
+  PROTOTYPE: DISABLE
   PPCODE:
+    /* PROTOTYPE: $$;@ ? */
     ffi_cif cif;
     ffi_status status;
     ffi_type *rtype;
@@ -383,6 +328,98 @@ _call( addr, sig, ... )
       debug_warn( "#    Successfully free'd argvalues[%i]", i );
     }
     debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
+
+SV*
+_CallProc( pProc, argtuple, pIunk, iid, flags, converters, restype, checker )
+    SV* pProc;
+    SV* argtuple;
+    SV* pIunk;
+    int flags;
+    SV* converters;
+    SV* restype;
+    SV* checker;
+  PROTOTYPE: \$\@\$\$\$\$\$\$
+  CODE:
+    /* pProc *should* be type PPROC */
+    /* pIunk should be type IUnknown, Win32 only */
+    /* iid should be type GUID, Win32 only */
+    /* Note: "converters" is called "argtypes" in the Py func,
+       but this is a misnomer */
+    int i, n, argcount, converter_count;
+    void* resbuf;
+    struct argument *args, *pa;
+    ffi_type **atypes;
+    ffi_type *rtype;
+    void **avalues;
+    SV* retval = NULL;
+    AV* callargs = NULL;
+
+    /* First thought to convert argtuple SV* ref -> AV*,
+       but it'll be easier following the Py code for now not to
+
+    if (SvROK(argtuple) && SvTYPE(SvRV(argtuple))==SVt_PVAV)
+        callargs = (AV*)SvRV(argtuple);
+    else
+        croak("[%s:%s] is not an array reference", __FILE__, __LINE__);
+         ${$ALIAS?\q[GvNAME(CvGV(cv))]:\qq[\"$pname\"]}, \"$var\") */
+
+    n = argcount = av_len(callargs) + 1;
+#ifdef MS_WIN32
+    /* an optional COM object this pointer */
+    /* XXX The Win32 conditional stuff in Perl space isn't written yet! */
+    if (pIunk)
+      ++argcount;
+#endif
+    Newxz(args, argcount, struct argument);
+    if(!args)
+      croak("[%s:%i] _CallProc: Out of memory!", __FILE__, __LINE__);
+
+    converter_count = converters ? Ct_AVref_GET_NUM_ELEMS(converters) : 0;
+    if( converter_count == -1 )
+      croak("[%s:%i] _CallProc: convertors must be an array reference!",
+            __FILE__, __LINE__);
+#ifdef MS_WIN32
+    if(pIunk) {
+      args[0].ffi_type = &ffi_type_pointer;
+      /* XXX this definitely needs looked at
+         Not sure how pIunk has been defined in Perl space */
+      args[0].value.p = INT2PTR(pIunk);
+      pa = &args[1];
+    } else
+#endif
+        pa = &args[0];
+
+    /* Convert the arguments */
+    for( i = 0; i < n; ++i, ++pa) {
+      SV* this_converter;
+      SV* arg;
+      int err;
+
+      arg = Ct_AVref_GET_ITEM(argtuple, i); /* REM to decref later! */
+      if( !SvOK(arg) )
+        croak("[%s:%i] _CallProc: argtuple must be an array reference!",
+              __FILE__, __LINE__);
+      /* For cdecl functions, we allow more actual arguments
+         than the length of the argtypes tuple.
+         This is checked in _ctypes::CFuncPtr_Call  */
+      if(converters && converter_count > i) {
+        SV* v;
+        /* REM to decref later! */
+        this_converter = Ct_AVref_GET_ITEM(converters, i);
+        if( !SvOK(this_converter)
+            || !( SvROK(this_converter)
+                  && SvTYPE(SvRV(this_converter)) == SVt_PVCV 
+                )
+          )
+          croak("[%s:%i] _CallProc: converter %i invalid!",
+                __FILE__, __LINE__, i);
+        v = Ct_CallPerlFunctionSVArgs(this_converter, arg, NULL);
+
+
+        /* XXX XXX */
+      }
+    }
+
 
 int 
 sizeof(type)
