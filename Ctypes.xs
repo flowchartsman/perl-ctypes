@@ -22,7 +22,14 @@
 
 //#include "const-c.inc"
 
-void _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
+static int
+ConvParam(SV* obj, int index, struct argument* pa) {
+  HV* dict;
+  pa->keep = NULL
+}
+
+void
+_perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
 {
     dSP;
     debug_warn( "\n#[%s:%i] Entered _perl_cb_call...", __FILE__, __LINE__ );
@@ -400,10 +407,16 @@ _CallProc( pProc, argtuple, pIunk, iid, flags, converters, restype, checker )
         SV* v;
         /* REM to decref later! */
         this_converter = Ct_AVref_GET_ITEM(converters, i);
-        if( Ct_IsCoderef(this_convertor) ) 
+        if( !Ct_IsCoderef(this_convertor) ) 
           croak("[%s:%i] _CallProc: converter %i invalid!",
                 __FILE__, __LINE__, i);
         v = Ct_CallPerlFunctionSVArgs(this_converter, arg, NULL);
+        if( v == NULL ) {
+        /* XXX Python uses its exception system here; Investigate */
+          goto cleanup;
+        }
+
+        err = ConvParam(v, i+1, pa);
 
 
         /* XXX XXX */
