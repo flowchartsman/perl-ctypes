@@ -24,7 +24,7 @@
 
 static int
 ConvArg(SV* obj, char type_got, char type_expected,
-        ffi_type** argtypes, void** argvalues, int index)
+        ffi_type **argtypes, void **argvalues, int index)
 {
   SV* arg;
   char type;
@@ -451,13 +451,13 @@ _call(self, ...)
     ffi_cif cif;
     ffi_status status;
     ffi_type *rtype;
-    char *rvalue;
+    char *rvalue, rtypechar;
     STRLEN len;
     unsigned int num_argtypes, rsize;
     unsigned int num_args = items - 1;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
-    SV *self_argtypesRV;
+    SV *self_argtypesRV, *rtypeSV,
     AV *self_argtypes;
 
     debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)(intptr_t)addr, sig );
@@ -471,14 +471,20 @@ _call(self, ...)
     if( !(Ct_Obj_IsDeriv(self,"Ctypes::Function"))) 
       croak("Ctypes::_call: $self must be a Ctypes::Function or derivative");
 
-    /* XXX insert code for rtype here
-    rtype = get_ffi_type( sig[1] );
+    rtypeSV = Ct_HVObj_GET_ATTR_KEY(self, "restype");
+    if( Ct_Obj_IsDeriv(rtypeSV,"Ctypes::Type") ) {
+      rtypechar =
+        (char)*SvPV_nolen(Ct_HVObj_GET_ATTR_KEY(rtypeSV,"typecode"));
+      rtype = get_ffi_type( rtypechar );
+    } else {
+      rtypechar = (char)*SvPV_nolen(rtypeSV);
+      rtype = get_ffi_type( rtypechar );
+    }
     debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
     rsize = FFI_SIZEOF_ARG;
-    if (sig[1] == 'd') rsize = sizeof(double);
-    if (sig[1] == 'D') rsize = sizeof(long double);
+    if (rtypechar == 'd') rsize = sizeof(double);
+    if (rtypechar == 'D') rsize = sizeof(long double);
     rvalue = (char*)malloc(rsize);
-    */
  
     if( num_args > 0 ) {
       debug_warn( "#[%s:%i] Getting types & values of args...",
@@ -530,11 +536,14 @@ _call(self, ...)
                  argtypes,
                  argvalues,
                  index );
-
       }
+
+      SvREFCNT_dec(self_argtypesRV);
+
     } else {
       debug_warn( "#[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
     }
+
     if((status = ffi_prep_cif
          (&cif,
 	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
@@ -545,99 +554,35 @@ _call(self, ...)
 
     debug_warn( "#[%s:%i] cif OK.", __FILE__, __LINE__ );
 
-SV*
-_CallProc( pProc, argtuple, pIunk, iid, flags, converters, restype, checker )
-    SV* pProc;
-    SV* argtuple;
-    SV* pIunk;
-    int flags;
-    SV* converters;
-    SV* restype;
-    SV* checker;
-  PROTOTYPE: \$\@\$\$\$\$\$\$
-  CODE:
-    /* pProc *should* be type PPROC */
-    /* pIunk should be type IUnknown, Win32 only */
-    /* iid should be type GUID, Win32 only */
-    /* Note: "converters" is called "argtypes" in the Py func,
-       but this is a misnomer */
-    int i, n, argcount, converter_count;
-    void* resbuf;
-    struct argument *args, *pa;
-    ffi_type **atypes;
-    ffi_type *rtype;
-    void **avalues;
-    SV* retval = NULL;
-    AV* callargs = NULL;
-
-    /* First thought to convert argtuple SV* ref -> AV*,
-       but it'll be easier following the Py code for now not to
-
-    if (SvROK(argtuple) && SvTYPE(SvRV(argtuple))==SVt_PVAV)
-        callargs = (AV*)SvRV(argtuple);
-    else
-        croak("[%s:%s] is not an array reference", __FILE__, __LINE__);
-         ${$ALIAS?\q[GvNAME(CvGV(cv))]:\qq[\"$pname\"]}, \"$var\") */
-
-    n = argcount = av_len(callargs) + 1;
-#ifdef MS_WIN32
-    /* an optional COM object this pointer */
-    /* XXX The Win32 conditional stuff in Perl space isn't written yet! */
-    if (pIunk)
-      ++argcount;
-#endif
-    Newxz(args, argcount, struct argument);
-    if(!args)
-      croak("[%s:%i] _CallProc: Out of memory!", __FILE__, __LINE__);
-
-    converter_count = converters ? Ct_AVref_GET_NUM_ELEMS(converters) : 0;
-    if( converter_count == -1 )
-      croak("[%s:%i] _CallProc: convertors must be an array reference!",
-            __FILE__, __LINE__);
-#ifdef MS_WIN32
-    if(pIunk) {
-      args[0].ffi_type = &ffi_type_pointer;
-      /* XXX this definitely needs looked at
-         Not sure how pIunk has been defined in Perl space */
-      args[0].value.p = INT2PTR(pIunk);
-      pa = &args[1];
-    } else
-#endif
-        pa = &args[0];
-
-    /* Convert the arguments */
-    for( i = 0; i < n; ++i, ++pa) {
-      SV* this_converter;
-      SV* arg;
-      int err;
-
-      arg = Ct_AVref_GET_ITEM(argtuple, i); /* REM to decref later! */
-      if( !SvOK(arg) )
-        croak("[%s:%i] _CallProc: argtuple must be an array reference!",
-              __FILE__, __LINE__);
-      /* For cdecl functions, we allow more actual arguments
-         than the length of the argtypes tuple.
-         This is checked in _ctypes::CFuncPtr_Call  */
-      if(converters && converter_count > i) {
-        SV* v;
-        /* REM to decref later! */
-        this_converter = Ct_AVref_GET_ITEM(converters, i);
-        if( !Ct_IsCoderef(this_convertor) ) 
-          croak("[%s:%i] _CallProc: converter %i invalid!",
-                __FILE__, __LINE__, i);
-        v = Ct_CallPerlFunctionSVArgs(this_converter, arg, NULL);
-        if( v == NULL ) {
-        /* XXX Python uses its exception system here; Investigate */
-          goto cleanup;
-        }
-
-        err = ConvParam(v, i+1, pa);
-
-
-        /* XXX XXX */
-      }
+    debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
+    ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
+    debug_warn( "#    ffi_call returned!");
+    debug_warn( "#[%s:%i] Pushing retvals to Perl stack...", __FILE__, __LINE__ );
+    switch (rtypechar)
+    {
+      case 'v': break;
+      case 'c': 
+      case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
+      case 's': 
+      case 'S': XPUSHs(sv_2mortal(newSVpv((char *)rvalue, 0)));   break;
+      case 'i': XPUSHs(sv_2mortal(newSViv(*(int*)rvalue)));   break;
+      case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)rvalue)));   break;
+      case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)rvalue)));   break;
+      case 'L': XPUSHs(sv_2mortal(newSVuv(*(unsigned long*)rvalue)));   break;
+      case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)rvalue)));    break;
+      case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)rvalue)));    break;
+      case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)rvalue)));    break;
+      case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
+    debug_warn( "#[%s:%i] Cleaning up...", __FILE__, __LINE__ );
+    free(rvalue);
+    int i = 0;
+    for( i = 0; i < num_args; i++ ) {
+      Safefree(argvalues[i]);
+      debug_warn( "#    Successfully free'd argvalues[%i]", i );
+    }
+    debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
 
 int 
 sizeof(type)
