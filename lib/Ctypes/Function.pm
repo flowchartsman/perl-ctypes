@@ -60,7 +60,7 @@ sub _call;
 sub _call_overload;
 sub _form_sig;
 sub _get_args;
-sub _to_packstyle; 
+sub _to_typecodes; 
 
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, 
@@ -348,12 +348,12 @@ sub _get_args (\@\@) {
   return $ret;
 }
 
-# Interpret Ctypes type objects to pack-style notation
+# Interpret Ctypes type objects to type-code enotation
 # Takes ARRAY ref of typecodes/Type objects
 #    or typecode string
 #    or list
 # Returns ARRAY ref
-sub _to_packstyle {
+sub _to_typecodes {
   my @inputs = @_;
   my $output = [];
   # Make sure we've got the input we want...
@@ -380,11 +380,11 @@ sub _to_packstyle {
     die( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
     $output = $inputs[0];
   }
-  # Now canonize Type objs to packcodes
+  # Now canonize Type objs to typecodes
   # and check supplied code characters are valid...
   for( my $i=0; $i<=$#{$output}; $i++ ) {
     if( ref($output->[$i]) =~ /Ctypes::Type/ ) {
-      $output->[$i] = $output->[$i]->{packcode};
+      $output->[$i] = $output->[$i]->{typecode};
     } else {
       die( "argtypes can only be Type objects or 1-character codes")
         if ref($output->[$i]);
@@ -478,8 +478,9 @@ characters denote argument types: <abi><restype><argtypes>. B<Note> that a
 
 Alternatively, more in the style of L<C::DynaLib> and Python's ctypes,
 it can be an (anonymous) list reference of the functions argument types.
-Types can be specified in Perl's L<pack> notation ('i', 'd', etc.) or
-with Ctypes's C type objects (c_uint, c_double, etc.).
+Types can be specified using single-letter codes, similar (but different)
+to Perl's L<pack> notation ('i', 'd', etc.) or with Ctypes's Type objects
+(c_uint, c_double, etc.).
 
 This is a convenience for positional parameter passing (as they're simply
 assigned to the C<argtypes> attribute internally). These alternatives
@@ -508,7 +509,7 @@ The return type of the function can be represented as
 
 =over
 
-=item a single character (pack-style), using the same notation as L<Ctypes::call>,
+=item a single character type-code, using the same notation as L<Ctypes::call>,
 
 =item a Ctype::Type definition, or
 
@@ -526,10 +527,10 @@ and UNIX64 architectures, not yet on 64bit libraries.
 
 =item argtypes
 
-A pack-style string of the argument types, or a list reference of the
-types of arguments the function takes. These can be specified in
-Perl's L<pack> notation ('i', 'd', etc.)  or with L<Ctypes>'s C type
-objects (c_int, c_double, etc.).
+A string of the type-code characters, or a list reference of the types
+of arguments the function takes. These can be specified as type-codes 
+('i', 'd', etc.)  or with L<Ctypes>'s Type objects (c_int, c_double,
+etc.).
 
 =item func
 
@@ -582,15 +583,15 @@ sub new {
 
   if(defined $$sig) {
     if(ref($$sig) eq 'ARRAY') {
-      $$argtypes = _to_packstyle($$sig) unless $$argtypes;
+      $$argtypes = _to_typecodes($$sig) unless $$argtypes;
     } else {
       $$abi = substr($$sig, 0, 1) unless $$abi;
       $$restype = substr($$sig, 1, 1) unless $$restype;
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
     }
   }
-  if( defined $$argtypes ) { $$argtypes = _to_packstyle( $$argtypes ); }
-  if( defined $$restype ) { $$restype = (_to_packstyle( $$restype ))->[0]; }
+  if( defined $$argtypes ) { $$argtypes = _to_typecodes( $$argtypes ); }
+  if( defined $$restype ) { $$restype = (_to_typecodes( $$restype ))->[0]; }
   $$restype = 'i' unless defined $$restype;
 
   if (!$$func) {
@@ -690,7 +691,7 @@ sub argtypes {
     # if we got an offset...
     if(Scalar::Util::looks_like_number($_[1])) {
       die("Usage: argtypes( \$arrayref, <offset> )") if exists $_[2];
-      $new_argtypes = _to_packstyle(shift);
+      $new_argtypes = _to_typecodes(shift);
       my $offset = shift;
       if($self->{argtypes}) {
         splice(@{$self->{argtypes}},$offset,$#$new_argtypes,@$new_argtypes);
@@ -699,7 +700,7 @@ sub argtypes {
         $self->{argtypes} = $new_argtypes; 
       }
     } else {
-      $new_argtypes = _to_packstyle( @_ );
+      $new_argtypes = _to_typecodes( @_ );
       $self->{argtypes} = $new_argtypes;
     }
   }

@@ -1,6 +1,7 @@
 /*###########################################################################
-## Name:        py_funcs.c
-## Purpose:     Utility functions adapted from Python / ctypes source
+## Name:        obj_utils.c
+## Purpose:     Utility functions for working with Ctypes objects, to make
+##              Ctypes.xs prettier to read
 ## Author:      Ryan Jendoubi
 ## Based on:    Python's ctypes-1.0.6
 ## Created:     2010-07-27
@@ -10,13 +11,41 @@
 ##              http://www.opensource.org/licenses/artistic-license-2.0.php
 ###########################################################################*/
 
-#ifndef _INC_PY_FUNCS_C
-#define _INC_PY_FUNCS_C
+#ifndef _INC_OBJ_UTILS_C
+#define _INC_OBJ_UTILS_C
+
+SV*
+Ct_HVObj_GET_ATTR_KEY(SV* obj, const char[] key) {
+  SV* tmp, res;
+  int klen = sizeof(key);
+  if( sv_isobject(obj)
+      && (SvTYPE(SvRV(obj)) == SVt_PVHV)
+      && hv_exists(SvRV(obj), key, klen) ) {
+    tmp = hv_fetch(SvRV(obj), key, klen, 0);
+    if( tmp != NULL )
+      res = SvREFCNT_inc(*tmp);
+  } else {
+    res = NULL;
+  return res;
+}
 
 int
-Ct_IsCoderef(SV* var) {
-  if( SvROK(this_converter)
-      && (SvTYPE(SvRV(this_converter)) == SVt_PVCV)
+Ct_Obj_IsDeriv(SV* var, const char* type) {
+    if( !( sv_isobject(self)
+           && ( sv_isa(self, type)
+                || sv_derived_from(self, type)
+              )
+         )
+      )
+    return 1;
+  else
+    return 0;
+}
+
+int
+Ct_IsCoderef(SV* arg) {
+  if( SvROK(arg)
+      && (SvTYPE(SvRV(arg)) == SVt_PVCV)
     )
     return 1;
   else
@@ -155,4 +184,4 @@ Ct_CallPerlFunctionSVArgs(SV* callable, ...) {
   return tmp;
 }
 
-#endif
+#endif  /* _INC_OBJ_UTILS_C */

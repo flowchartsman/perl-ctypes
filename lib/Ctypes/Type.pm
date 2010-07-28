@@ -75,7 +75,7 @@ use Carp;
 use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
-use fields qw(alignment name packcode size val data);
+use fields qw(alignment name typecode size val data);
 use overload q("") => \&string_ovl,
              '0+'  => \&num_ovl,
              '&{}' => \&code_ovl,
@@ -109,7 +109,7 @@ sub new {
   print "In c_int::new...\n" if $DEBUG == 1;
   my $class = shift;
   my $arg = shift;
-  my $self = { val => 0, packcode => 'i', overflow => 0, alignment => 0,
+  my $self = { val => 0, typecode => 'i', overflow => 0, alignment => 0,
                name=> 'c_int', data => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
   $self->val($arg); # !$arg is handled by val()
@@ -127,7 +127,7 @@ sub val {
   $arg = 0 unless defined $arg;
   croak("c_int can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if numeric but out of range
-  my $is_valid = Ctypes::valid_type_value($arg,$self->{packcode});
+  my $is_valid = Ctypes::valid_type_value($arg,$self->{typecode});
   if( $is_valid < 1 ) {
     print "\t$arg wasn't valid type\n" if $DEBUG == 1;
     if( ($is_valid == -1) and not ( $self->{overflow}
@@ -135,13 +135,13 @@ sub val {
       croak( "Value out of range for c_int: $arg");
     } else {
     # This is not a true C cast. It will always return
-    # _something_ if it recognises the packcode
-    my $temp = Ctypes::_cast_value($arg,$self->{packcode});
-    # XXX check $temp here again in case packcode was invalid?
+    # _something_ if it recognises the typecode
+    my $temp = Ctypes::_cast_value($arg,$self->{typecode});
+    # XXX check $temp here again in case typecode was invalid?
     $arg = $temp;
     }
   }
-  $self->{data} = pack( $self->{packcode}, $arg );
+  $self->{data} = pack( $self->{typecode}, $arg );
   $self->{val} = $arg;
   print "    val() ret: " . $self->{data} . "\n" if $DEBUG == 1;
   return $self->{val};
@@ -157,7 +157,7 @@ sub c_int {
 
 =over
 
-=item new Ctypes::Type (pack-char, c_type-name) 
+=item new Ctypes::Type (type-code, c_type-name) 
 
 Create a simple Ctypes::Type instance. This is almost always 
 called by the global c_X<lt>typeX<gt> functions.
@@ -168,7 +168,7 @@ function arguments and return values.
 
 Each type is defined as function returning a c_type object.
 
-Each c_type object holds the pack-style char, the c name, the size, 
+Each c_type object holds the type-code char, the c name, the size, 
 the alignment and the address if used.
 
 =cut
@@ -178,9 +178,9 @@ use Ctypes::Type;
 our @ISA = qw(Ctypes::Type);
 
 sub new {
-  my ($class, $pack, $name) = @_;
-  my $size = sizeof($pack); # a xs function
-  return bless { pack => $pack, name => $name, 
+  my ($class, $type, $name) = @_;
+  my $size = sizeof($type); # a xs function
+  return bless { pack => $type, name => $name, 
 		 size => $size, address => 0, 
 		 alignment => 0 }, $class;
 }

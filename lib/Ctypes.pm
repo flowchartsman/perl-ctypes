@@ -82,8 +82,9 @@ Return a value as specified by the second character in sig.
 
 B<sig> is the signature string. The first character specifies the
 calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
-The second character specifies the pack-style return type, 
-the subsequent characters specify the pack-style argument types.
+The second character specifies the type-code for the return type, 
+the subsequent characters specify the argument types in type-code
+characters.
 
 B<addr> is the function address, the return value of L<find_function> or
 L<DynaLoader::dl_find_symbol>.
@@ -91,7 +92,9 @@ L<DynaLoader::dl_find_symbol>.
 B<args> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Currently supported signature characters - Perl L<pack|perlfunc/pack>-style:
+Currently supported signature type-code characters - similar to Perl's
+L<pack|perlfunc/pack> notation, although slightly different (v), and may
+change:
 
   'v': void
   'c': signed char
@@ -306,8 +309,9 @@ specified by the signature and a reference to a perl sub.
 
 B<sig> is the signature string. The first character specifies the
 calling-convention, B<s> for C<stdcall>, B<c> for C<cdecl> (or 64-bit fastcall). 
-The second character specifies the pack-style return type, 
-the subsequent characters specify the pack-style argument types.
+The second character specifies the type-code for the return type, 
+the subsequent characters specify the argument types in type-code
+characters.
 
 B<perlfunc> is a Perl subref.
 
