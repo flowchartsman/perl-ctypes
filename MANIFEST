@@ -19,7 +19,7 @@ lib/Ctypes/FuncProto.pm
 lib/Ctypes/Function.pm
 lib/Ctypes/Type.pm
 lib/Ctypes/WinTypes.pm
-src/py_funcs.c
+src/obj_util.c
 src/util.c
 t/000-load.t
 t/001-_call.t

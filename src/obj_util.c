@@ -15,13 +15,13 @@
 #define _INC_OBJ_UTILS_C
 
 SV*
-Ct_HVObj_GET_ATTR_KEY(SV* obj, const char[] key) {
-  SV* tmp, res;
-  int klen = sizeof(key);
+Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
+  SV **tmp, *res;
+  int klen = strlen(key);
   if( sv_isobject(obj)
       && (SvTYPE(SvRV(obj)) == SVt_PVHV)
-      && hv_exists(SvRV(obj), key, klen) ) {
-    tmp = hv_fetch(SvRV(obj), key, klen, 0);
+      && hv_exists((HV*)SvRV(obj), key, klen) ) {
+    tmp = hv_fetch((HV*)SvRV(obj), key, klen, 0);
     if( tmp != NULL )
       res = SvREFCNT_inc(*tmp);
   } else {
@@ -31,9 +31,9 @@ Ct_HVObj_GET_ATTR_KEY(SV* obj, const char[] key) {
 
 int
 Ct_Obj_IsDeriv(SV* var, const char* type) {
-    if( !( sv_isobject(self)
-           && ( sv_isa(self, type)
-                || sv_derived_from(self, type)
+    if( !( sv_isobject(var)
+           && ( sv_isa(var, type)
+                || sv_derived_from(var, type)
               )
          )
       )
@@ -72,7 +72,7 @@ Ct_AVref_GET_NUM_ELEMS(SV* avref) {
   }
 }
 
-SV*
+AV*
 Ct_SVargs_mkAV(va_list va) {
   int i, n = 0;
   va_list countva;
@@ -104,62 +104,65 @@ Ct_SVargs_mkAV(va_list va) {
 
 SV*
 Ct_CallPerlFunction(SV* callable, AV* args) {
-  if( Ct_IsCoderef(callable) ) {
-    SV *result, *tmp;
-    int n, count;
-    dSP;
+  if( !Ct_IsCoderef(callable) )
+    croak("Ct_CallPerlFunction: arg 1 not a coderef");
+  
+  SV *result, *tmp, **fetched;
+  int i, n, count;
+  dSP;
 
-    EXTEND(SP,n);
+  EXTEND(SP,n);
+  ENTER;
+  SAVETMPS;
 
-    ENTER;
-    SAVETMPS;
-
-    PUSHMARK(SP);
-    n = av_len(args);
-    for( int i = 0; i <= n; ++i ) {
-      PUSHs(sv_2mortal(newSVsv(av_fetch(args,i,0))));
-    }
-    PUTBACK;
-    
-    count = call_sv(callable, G_ARRAY);
-
-    if( count == 0 ) {
-      result = NULL;
-    } else if ( count == 1 ) {
-      SPAGAIN;
-      result = newSVsv(POPs);
-    } else {
-      SPAGAIN;
-      AV* ary = newAV();
-      if( arg != NULL ) {
-        SV** stored;
-        int fail = 0;
-        for( int i = 0; i <= n; ++i ) {
-          tmp = POPs;
-          stored = av_store(ary,i,tmp) /* XXX need to REFCNT_inc here?? */
-          if( stored == NULL ) {
-            fail = 1;
-            SvREFCNT_dec(tmp);
-          }
-        }
-        if( !fail ) {
-          result = newRV_noinc((SV*)ary);
-        } else {
-          result = NULL;
-        }
-      } else {
-        result == NULL;
-      }
-    }
-
-    PUTBACK;
-    FREETMPS;
-    LEAVE;
-
-    return result;
+  PUSHMARK(SP);
+  n = av_len(args);
+  for( i = 0; i <= n; ++i ) {
+    fetched = av_fetch(args,i,0);
+    if( fetched != NULL )
+      PUSHs(sv_2mortal(newSVsv(*fetched)));
+    else
+      croak("Ct_CallPerlFunction:%i error: couldn't get arg from AV",
+            __LINE__);
   }
-  croak("Ct_CallPerlFunction: arg 1 not a coderef");
-  return NULL;
+  PUTBACK;
+    
+  count = call_sv(callable, G_ARRAY);
+
+  if( count == 0 ) {
+    result = NULL;
+  } else if ( count == 1 ) {
+    SPAGAIN;
+    result = newSVsv(POPs);
+  } else {
+    SPAGAIN;
+    AV* ary = newAV();
+    if( ary != NULL ) {
+      SV** stored;
+      int i, fail = 0;
+      for( i = 0; i <= n; ++i ) {
+        tmp = POPs;
+        stored = av_store(ary,i,tmp); /* XXX need to REFCNT_inc here?? */
+        if( stored == NULL ) {
+          fail = 1;
+          SvREFCNT_dec(tmp);
+        }
+      }
+      if( !fail ) {
+        result = newRV_noinc((SV*)ary);
+      } else {
+        result = NULL;
+      }
+    } else {
+      result == NULL;
+    }
+  }
+
+  PUTBACK;
+  FREETMPS;
+  LEAVE;
+
+  return result;
 }
 
 

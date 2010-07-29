@@ -17,7 +17,7 @@
 #include "ffi.h"
 #include "limits.h"
 #include "Ctypes.h"
-#include "src/py_funcs.c"
+#include "src/obj_util.c"
 #include "src/util.c"
 
 //#include "const-c.inc"
@@ -32,17 +32,17 @@ ConvArg(SV* obj, char type_got, char type_expected,
     type = type_expected;
   else if( type_got )
     type = type_got;
-  else if( SvPOK )
+  else if( SvPOK(obj) )
     type = 's';
-  else if( SvNOK )
+  else if( SvNOK(obj) )
     type = 'd';
-  else if( SvIOK )
+  else if( SvIOK(obj) )
     type = 'i';
   else
     croak("ConvArg error: No type information for SV object");
 
   debug_warn( "#  type %i: %c", i+1, type);
-  argtypes[i] = get_ffi_type(type);
+  argtypes[index] = get_ffi_type(type);
 
   if( type_got )
     arg = Ct_HVObj_GET_ATTR_KEY(obj, "data");
@@ -52,84 +52,84 @@ ConvArg(SV* obj, char type_got, char type_expected,
   switch(type)
   {
   case 'c':
-    Newxc(argvalues[i], 1, char, char);
-    *(char*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, char, char);
+    *(char*)argvalues[index] = type_got
       ? *(char*)SvPVX(arg)
-      : SvIV(arg) 
+      : SvIV(arg); 
     break;
   case 'C':
-    Newxc(argvalues[i], 1, unsigned char, unsigned char);
-    *(unsigned char*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, unsigned char, unsigned char);
+    *(unsigned char*)argvalues[index] = type_got
       ? *(unsigned char*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 's':
-    Newxc(argvalues[i], 1, short, short);
-    *(short*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, short, short);
+    *(short*)argvalues[index] = type_got
       ? *(short*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 'S':
-    Newxc(argvalues[i], 1, unsigned short, unsigned short);
-    *(unsigned short*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, unsigned short, unsigned short);
+    *(unsigned short*)argvalues[index] = type_got
       ? *(unsigned short*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 'i':
-    Newxc(argvalues[i], 1, int, int);
-    *(int*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, int, int);
+    *(int*)argvalues[index] = type_got
       ? *(int*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 'I':
-    Newxc(argvalues[i], 1, unsigned int, unsigned int);
-    *(unsigned int*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, unsigned int, unsigned int);
+    *(unsigned int*)argvalues[index] = type_got
       ? *(unsigned int*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 'l':
-    Newxc(argvalues[i], 1, long, long);
-    *(long*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, long, long);
+    *(long*)argvalues[index] = type_got
       ? *(long*)SvPVX(arg)
       : SvIV(arg);
     break;
   case 'L':
-    Newxc(argvalues[i], 1, unsigned long, unsigned long);
-    *(unsigned long*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, unsigned long, unsigned long);
+    *(unsigned long*)argvalues[index] = type_got
       ? *(unsigned long*)SvPVX(arg)
       : SvIV(arg);
    break;
   case 'f':
-    Newxc(argvalues[i], 1, float, float);
-    *(float*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, float, float);
+    *(float*)argvalues[index] = type_got
       ? *(float*)SvPVX(arg)
       : SvNV(arg);
     break;
   case 'd':
-    Newxc(argvalues[i], 1, double, double);
-    *(double*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, double, double);
+    *(double*)argvalues[index] = type_got
       ? *(double*)SvPVX(arg)
       : SvNV(arg);
     break;
   case 'D':
-    Newxc(argvalues[i], 1, long double, long double);
-    *(long double*)argvalues[i] = type_got
+    Newxc(argvalues[index], 1, long double, long double);
+    *(long double*)argvalues[index] = type_got
       ? *(long double*)SvPVX(arg)
       : SvNV(arg);
     break;
   case 'p':
-    len = sv_len(arg);
-    Newx(argvalues[i], 1, void);
+    Newx(argvalues[index], 1, void);
+    STRLEN len = sv_len(arg);
     if(SvIOK(arg)) {
       debug_warn( "#    [%s:%i] Pointer: SvIOK: assuming 'PTR2IV' value",
                    __func__, __LINE__ );
-      *(intptr_t*)argvalues[i] = type_got
+      *(intptr_t*)argvalues[index] = type_got
         ? (intptr_t)INT2PTR(void*, *(intptr_t*)SvPVX(arg))
         : (intptr_t)INT2PTR(void*, SvIV(arg));
     } else {
       debug_warn( "#    [%s:%i] Pointer: Not SvIOK: assuming 'pack' value",
                    __func__, __LINE__ );
-      *(intptr_t*)argvalues[i] = type_got
+      *(intptr_t*)argvalues[index] = type_got
         ? (intptr_t)*(intptr_t*)SvPVX(arg)
         : (intptr_t)SvPVX(arg);
     }
@@ -457,8 +457,9 @@ _call(self, ...)
     unsigned int num_args = items - 1;
     ffi_type *argtypes[num_args];
     void *argvalues[num_args];
-    SV *self_argtypesRV, *rtypeSV,
+    SV *self_argtypesRV, *rtypeSV;
     AV *self_argtypes;
+    STRLEN tc_len = 1;
 
     debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)(intptr_t)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
@@ -505,7 +506,7 @@ _call(self, ...)
           croak("Ctypes::_call error: argtypes must be array reference");
         else
           self_argtypes = (AV*)SvRV(self_argtypesRV);
-        if( av_len(self_argtypes == -1 ) ) {
+        if( av_len(self_argtypes) == -1 ) {
           /* could this equally be SvREFCNT_dec(self_argtypes)? */ 
           SvREFCNT_dec(self_argtypesRV);
           self_argtypes == NULL;
@@ -514,20 +515,26 @@ _call(self, ...)
 
       for (i = 0; i < num_args; ++i) {
         SV* this_arg = ST(i+1);
-        SV* this_argtype;
+        SV *this_argtype, **fetched_argtype;
         if( self_argtypes ) {
-          this_argtype = av_fetch(self_argtypes, i, 0);
-          type_expected = Ct_Obj_IsDeriv(this_argtype, "Ctypes::Type")
-            ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"))
-            : (char)*SvPV(this_argtype);
+          fetched_argtype = av_fetch(self_argtypes, i, 0);
+          if( fetched_argtype != NULL ) {
+            this_argtype = *fetched_argtype;
+            type_expected = Ct_Obj_IsDeriv(this_argtype, "Ctypes::Type")
+              ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"),tc_len)
+              : (char)*SvPV(this_argtype,tc_len);
+          } else {
+            croak("Ctypes::_call:%i error: Couldn't get argtype from array",
+                  __LINE__);
+          }
         } else {
           this_argtype = NULL;
-          type_expected = NULL; /* "\0"? */
+          type_expected = '\0';
         }
 
         type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
-          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"))
-          : NULL;
+          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"),tc_len)
+          : '\0';
 
         /* err not used yet, ConvArg croaks a lot */
         err = ConvArg( this_arg,
@@ -535,7 +542,7 @@ _call(self, ...)
                  type_expected,
                  argtypes,
                  argvalues,
-                 index );
+                 i);
       }
 
       SvREFCNT_dec(self_argtypesRV);
@@ -544,10 +551,13 @@ _call(self, ...)
       debug_warn( "#[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
     }
 
+    char abi =  *SvPV((Ct_HVObj_GET_ATTR_KEY(self,"abi")),tc_len);
+    void* addr = INT2PTR(void*,(int)SvIV(Ct_HVObj_GET_ATTR_KEY(self,"func")));
+
     if((status = ffi_prep_cif
          (&cif,
 	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
-          sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
+           abi == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
       croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
     }
