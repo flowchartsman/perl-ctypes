@@ -14,7 +14,7 @@
 #define _INC_UTIL_C
 
 // Copied verbatim from FFI.xs on 21/05/2010: http://cpansearch.perl.org/src/GAAL/FFI-1.04/FFI.xs
-static int
+int
 validate_signature (char *sig)
 {
     STRLEN i;

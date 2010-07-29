@@ -22,7 +22,7 @@
 
 //#include "const-c.inc"
 
-static int
+int
 ConvArg(SV* obj, char type_got, char type_expected,
         ffi_type **argtypes, void **argvalues, int index)
 {

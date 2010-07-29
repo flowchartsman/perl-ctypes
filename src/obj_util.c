@@ -16,7 +16,7 @@
 
 SV*
 Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
-  SV **tmp, *res;
+  SV **tmp, *res = NULL;
   int klen = strlen(key);
   if( sv_isobject(obj)
       && (SvTYPE(SvRV(obj)) == SVt_PVHV)
@@ -24,8 +24,7 @@ Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
     tmp = hv_fetch((HV*)SvRV(obj), key, klen, 0);
     if( tmp != NULL )
       res = SvREFCNT_inc(*tmp);
-  } else {
-    res = NULL;
+    }
   return res;
 }
 
