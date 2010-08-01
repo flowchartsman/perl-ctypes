@@ -26,6 +26,9 @@ int
 ConvArg(SV* obj, char type_got, char type_expected,
         ffi_type **argtypes, void **argvalues, int index)
 {
+  debug_warn("#[%s:%i] In ConvArg...", __FILE__, __LINE__);
+  debug_warn("#    Type expected: %c",type_expected);
+  debug_warn("#    Type got: %c", type_got);
   SV* arg;
   char type;
   if( type_expected )
@@ -41,7 +44,7 @@ ConvArg(SV* obj, char type_got, char type_expected,
   else
     croak("ConvArg error: No type information for SV object");
 
-  debug_warn( "#  type %i: %c", i+1, type);
+  debug_warn( "#  type %i: %c", index+1, type);
   argtypes[index] = get_ffi_type(type);
 
   if( type_got )
@@ -282,7 +285,7 @@ MODULE = Ctypes		PACKAGE = Ctypes
 #define strictchar char
 
 void
-_call_raw( addr, sig, ... )
+_call( addr, sig, ... )
     void* addr;
     strictchar* sig;
   PROTOTYPE: DISABLE
@@ -443,6 +446,9 @@ _call_raw( addr, sig, ... )
     }
     debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
 
+
+MODULE = Ctypes		PACKAGE = Ctypes::Function
+
 void
 _call(self, ...)
     SV* self;
@@ -461,7 +467,8 @@ _call(self, ...)
     AV *self_argtypes;
     STRLEN tc_len = 1;
 
-    debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)(intptr_t)addr, sig );
+    debug_warn( "\n#[%s:%i] XS_Ctypes_Function__call( %i args )",
+                __FILE__, __LINE__, num_args );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
 #ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
     if( num_args < 0 ) {
@@ -481,7 +488,7 @@ _call(self, ...)
       rtypechar = (char)*SvPV_nolen(rtypeSV);
       rtype = get_ffi_type( rtypechar );
     }
-    debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  sig[1] );
+    debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  rtypechar );
     rsize = FFI_SIZEOF_ARG;
     if (rtypechar == 'd') rsize = sizeof(double);
     if (rtypechar == 'D') rsize = sizeof(long double);
@@ -532,6 +539,14 @@ _call(self, ...)
           type_expected = '\0';
         }
 
+        /* XXX This made qsort work - check it still does!
+           May well need to use return references in _get_arg() */
+        if( SvROK(this_arg) 
+            && !sv_isobject(this_arg) ) {
+          SV* tmp = SvRV(this_arg);
+          this_arg = tmp;
+        }
+
         type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
           ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"),tc_len)
           : '\0';
@@ -545,7 +560,8 @@ _call(self, ...)
                  i);
       }
 
-      SvREFCNT_dec(self_argtypesRV);
+      if( av_len(self_argtypes) > -1 ) /* if not, has been dec'd already */
+        SvREFCNT_dec(self_argtypesRV);
 
     } else {
       debug_warn( "#[Ctypes.xs: %i ] No argtypes/values to get", __LINE__ );
@@ -593,6 +609,9 @@ _call(self, ...)
       debug_warn( "#    Successfully free'd argvalues[%i]", i );
     }
     debug_warn( "#[%s:%i] Leaving XS_Ctypes_call...\n\n", __FILE__, __LINE__ );
+
+
+MODULE = Ctypes		PACKAGE = Ctypes
 
 int 
 sizeof(type)
@@ -717,7 +736,7 @@ CODE:
         RETVAL = newSViv((int)(SvPV_nolen(arg_sv))[0]);
         break;
       }
-      RETVAL = -1;
+      RETVAL = NULL;
       break;
     case 'I':
     case 'l':

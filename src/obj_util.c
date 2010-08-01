@@ -30,11 +30,12 @@ Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
 
 int
 Ct_Obj_IsDeriv(SV* var, const char* type) {
-    if( !( sv_isobject(var)
+debug_warn("# In Ct_Obj_IsDeriv...");
+debug_warn("#   type is %s", type);
+    if( sv_isobject(var)
            && ( sv_isa(var, type)
                 || sv_derived_from(var, type)
               )
-         )
       )
     return 1;
   else

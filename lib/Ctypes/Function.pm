@@ -3,7 +3,7 @@ package Ctypes::Function;
 use strict;
 use warnings;
 use Ctypes;
-use overload '&{}' => \&_call_overload;
+use overload '&{}' => \&call_overload;
 use Scalar::Util;
 use Carp;
 
@@ -62,6 +62,12 @@ sub _form_sig;
 sub _get_args;
 sub _to_typecodes; 
 
+BEGIN {
+sub PF_IN () { 1; }
+sub PF_OUT () { 2; }
+sub PF_INDEF0 () { 4; }
+}
+
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, 
 		 restype => 1, argtypes => 1, lib => 1,
@@ -96,117 +102,76 @@ sub AUTOLOAD {
   }
 }
 
+sub _build_callargs ($\@\$\$\$) {
+  print "In _build_callargs...\n";
   require Data::Dumper;
-  print Data::Dumper::Dumper( @_ );
-  my $func = shift;
-  my $sig = shift;
-  my @args = @_;
-  my @argtypes = ();
-  my @callargs = ();
-  @argtypes = split( //, substr( $sig, 2 ) ) if length $sig > 2;
-  for(my $i=0 ; $i<=$#args ; $i++) {
-    if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and
-        not Scalar::Util::looks_like_number($args[$i]) ) {
-      die "$i-th argument $args[$i] is no number";
-    }
-    if( ref($args[$i]) ) {
-      if( defined $args[$i]->{_as_parameter} ) {
-        $callargs[$i] = $args[$i]->{_as_parameter};
-      } else {
-    }
-  }
-  return _call( $func, $sig, @args );
-
-$ob = _get_arg($inargs_index, $name, $defval, @inargs, %kwds);
-sub _get_arg (\$\$\$\@\%) {
-  my $inargs_index = \shift;
-  my $name = shift;
-  my $defval = shift;
-  my @inargs = shift;
-  my %kwds = shift;
-  
-  my $ret;
-  if($inargs_index < scalar @inargs) {
-    $ret = $inargs[$inargs_index];
-    ++$inargs_index;
-    return $ret;
-  }
-  if( scalar %kwds and ($ret = $kwds{$name} ) {
-    ++$inargs_index;
-    return $ret;
-  }
-  if( $defval ) {
-    return $defval;
-  }
-  # XXX These are poor error messages, apparently...
-  if( $name ) {
-    croak("Required argument '", $name, "' is missing");
-  } else {
-    croak("Not enough arguments");
-  }
-  return undef;
-}
-
-sub PF_IN () { 1; }
-sub PF_OUT () { 2; }
-sub PF_INDEF0 () { 4; }
-
-sub _build_callargs (\$\@\%\$\$\$) {
-  my $self = \shift;
-  my @inargs = \shift;
-  my %kwds = \shift;
-  my $outmask = \shift;
-  my $inoutmask = \shift;
-  my $numretvals = \shift;
+  print Data::Dumper::Dumper(@_);
+  my $self = shift;
+  my $inargs = shift;
+  my $outmask = shift;
+  my $inoutmask = shift;
+  my $numretvals = shift;
+  print Data::Dumper::Dumper( $self );
   my( $actual_args );
   if( !defined $self->{argtypes} or !defined $self->{paramflags} or
       $#{$self->{argtypes}} == 0 ) {
-    return \@inargs;
+    print "    Returning inargs...\n";
+    return @$inargs;
   }
   my $inargs_index = 0;
   my $len = $#{$self->{argtypes}} + 1;
 
   my @callargs;
-  for(my $i = 0; $i < $len, $i++) {
+  for(my $i = 0; $i < $len; $i++) {
     my $item = $self->{paramflags}->[$i];
     my( $ob, $flag, $name, $defval );
 
-    my $pmflg_length = scalar @$item;
     $flag = $item->[0];
     $name = $item->[1] ? $item->[1] : '';
     $defval = $item->[2] ? $item->[2] : '';
+# "i|zO" is in _validate_paramflags - need to do this, but when?"w
 # paramflags flag values:
 # 1 = input param
 # 2 = output param
 # 4 = input param defaulting to 0
     SWITCH: {
-      if( $flag == (PF_IN | PF_INDEF0) ) { 
+      if( $flag & (PF_IN | PF_INDEF0) ) { 
+# /* ['in', 'lcid'] parameter.  Always taken from defval,
+#    if given, else the integer 0. */
         if( !$defval ) {
-          defval = Ctypes::Type::c_int(0);
+          $defval = Ctypes::Type::c_int(0);
         }
-        @callargs[$i] = $defval;
+        $callargs[$i] = $defval;
         last SWITCH;
       }
-      if( $flag == (PF_IN | PF_OUT) ) {
+      if( $flag & (PF_IN | PF_OUT) ) {
         $inoutmask |= ( 1 << $i ); # mark as inout arg
         $numretvals++;
       } # fall through ...
-      if( $flag == 0 or $flag == PF_IN ) {
-        $ob = _get_arg($inargs_index, $name, $defval, @inargs, %kwds);
-        @callargs[$i] = $ob;
+      if( $flag == 0 or $flag & PF_IN ) {
+      # Py calls out to a _get_arg func here, but it's only used once
+      # and we'd have less logic in ours (no kwds), so just inlined it
+        if($inargs_index <= scalar @$inargs) {
+          ++$inargs_index;
+          $ob = @$inargs[$inargs_index]; 
+        } elsif( $defval ) {
+          $ob = $defval;
+        } elsif( $name ) {
+          croak("Required argument '", $name, "' is missing");
+        } else {
+          croak("Not enough arguments");
+        }
+        $callargs[$i] = $ob;
         last SWITCH;
       }
-      if( $flag == PF_OUT ) {
+      if( $flag & PF_OUT ) {
         if( $defval ) {
-          @callargs[$i] = $defval;
-          $outmask |= ( 1 << i ); # mark as out arg
+          $callargs[$i] = $defval;
+          $outmask |= ( 1 << $i ); # mark as out arg
           $numretvals++;
           last SWITCH; 
         }
         $ob = $self->{argtypes}[$i];
-        unless( $ob ) {
-          croak("Missing argtype for outarg");
-        }
         if( $ob->{proto} ) {
           # XXX don't understand this logic yet..
           # Means $ob is a Pointer/Array type? So what?
@@ -215,7 +180,7 @@ sub _build_callargs (\$\@\%\$\$\$) {
         }
         # XXX This probably needs changed when Array objects worked out
         if( ref($ob) =~ /Ctypes::Type::Array/ ) {
-          # PyObject_CallObject(ob,NULL)? Wonder what this returns...
+          # Calling the array itself? Wonder what this returns...
           # Will be annoying to do in C space.
           $ob = $ob->();
         } else {
@@ -226,7 +191,7 @@ sub _build_callargs (\$\@\%\$\$\$) {
         unless( $ob ) {
           croak("Could not create type of Array / Pointer object (I think...)");
         }
-        @callargs[$i] = $ob;
+        $callargs[$i] = $ob;
         $outmask |= ( 1 << $i ); # mark as out arg
         $numretvals++;
         last SWITCH;
@@ -234,82 +199,165 @@ sub _build_callargs (\$\@\%\$\$\$) {
       croak("paramflag ", $flag, " not yet implemented");
     }
   }
-  $actual_args = scalar @inargs + scalar %kwds;
+  $actual_args = scalar @$inargs; # already added in %kwds
   if( $actual_args != $inargs_index) {
     # /* When we have default values or named parameters, this error
     # message is misleading.  See unittests/test_paramflags.py
+    # ^ The above might not apply to us, since we add in %kwds early?
     croak("call takes ", $inargs_index, "arguments (", $actual_args, " given)... or maybe a different error");
   }
+  print "End of _build_callargs...\n";
+  print Data::Dumper::Dumper( @_ );
   return @callargs;
 }
 
-sub _call {
+sub _build_result (\$\@\$\$\$) {
+  print "In _build_result...\n";
+  require Data::Dumper;
+  print Data::Dumper::Dumper( @_ );
+  my($result, $callargs, $outmask, $inoutmask, $numretvals)
+    = @_;
+  my( $i, $index, $bit, @ret );
+
+  if( scalar @$callargs == 0 ) {
+    return $$result;
+  }
+  if( !$$result || $$numretvals == 0 ) {
+    @$callargs = ();
+    undef @$callargs;
+    return $$result;
+  }
+
+  my @results if $$numretvals > 1;
+
+  $index = 0;
+  for( $bit = 1, $i = 0; $i < 32; $i++, $bit <<= 1) {
+    my $v;
+    if( $bit & $inoutmask ) {
+      $v = $$callargs[$i];
+      return $v if $numretvals == 1;
+      $results[$i] = $v;
+      $index++;
+    } elsif( $bit & $outmask ) {
+      $v = $callargs->[$i];
+      $v->__ctypes_from_outparam__ if $v->can("__ctypes_from_outparam__");
+    # XXX Why return v if NULL? This could happen at any point in the
+    # @results building process
+      if( !$v || $numretvals == 1 ) {
+        return $v;
+      }
+      $results[$i] = $v;
+      $index++;
+    }
+    print "    \$index = $index\n";
+    print "    \$numretvals = $$numretvals\n"; 
+    last if $index == $$numretvals;
+  }
+  return @results;
+}
+
+sub call {
   require Data::Dumper;
   print Data::Dumper::Dumper( @_ );
   my $self = shift;
   my @inargs = @_;
-  my %kwds = {}; # 'keywords': hash of named arguments
+  my %kwds = (); # 'keywords': hash of named arguments
   if( ref($inargs[$#inargs]) eq 'HASH' )
     { %kwds = %{pop @inargs}; }
-  my( $outmask, $inoutmask, $numretvals );
+  my( $outmask, $inoutmask );
+  my $numretvals = 0;
 
-  my $result; # XXX what is this? array? ref? success indicator?
-  my $pProc; # XXX this is to do with COM objects, not implemented yet!
-  my $checker;
+  # If paramflags mark an arg as OUT or INOUT, they should be taken
+  # as a reference rather than by value
+  if( $self->{paramflags} && defined $self->{paramflags}[0] ) {
+    for(my $i = 0; $i <= $#inargs; $i++){
+      next if $inargs[$i] == undef;
+      next if $self->{paramflags}[$i] == undef;
+      if( $self->{paramflags}[$i][0] & PF_OUT ) {
+        $inargs[$i] = \$_[$i];
+      }
+    }
+  }
 
-  # all arguments taken as references...
+  # Put keyword arguments where they ought to be in @inargs...
+  if( keys(%kwds) ) {
+    if( !$self->{paramflags} ) {
+      croak("Keywords used without specification; set your paramflags!");
+    } else {
+      KEYLOOP:
+      for(keys(%kwds)) {
+        my $key = $_;
+        for(my $i=0; $i<=$#{$self->{paramflags}}; $i++) {
+          if($self->{paramflags}[$i] = $key) {
+            if(exists $inargs[$i]) {
+              croak("Argument supplied both named and by position");
+            } else {
+              if( $self->{paramflags}[$i][0] & PF_OUT ) {
+                $inargs[$i] = \$kwds{$key};
+              } else {
+                $inargs[$i] = $kwds{$key};
+              }
+              next KEYLOOP;
+        } } }
+        croak("Named argument not found in paramflags: $key");
+      }
+    }
+  }
+
   my @callargs = _build_callargs( $self,
                                   @inargs,
-                                  %kwds,
                                   $outmask,
                                   $inoutmask,
                                   $numretvals);
-  if( scalar @callargs == 1 and not defined $callargs[0]) {
-    croak("_build_callargs returned a lemon!");
-  }
+  print Data::Dumper::Dumper( @callargs );
+
+# /* For cdecl functions, we allow more actual arguments
+#    than the length of the argtypes tuple.               */
+# XXX Not sure yet if above logic allows this behaviour
+# Py checks it by number of converters? (_ctypes.c:3334-3360) 
 
 #ctypes-1.0.2/source/ctypes.h:238
 # Currently, CFuncPtr types have 'converters' and 'checker'
 # entries in their type dict.  They are only used to cache
 # attributes from other entries, which is wrong.
 
-# convertors will be an arrayref?
-  if( (my $required = scalar @{$self->{convertors}}) ) {
-    my $actual = scalar @callargs;
-    if( $self->{abi} eq 'c' ) {
-# /* For cdecl functions, we allow more actual arguments
-#    than the length of the argtypes tuple.               */
-      if( $required > $actual ) {
-        croak("This function takes at least ", $required,
-          "argument", ($required == 1 ? '' : 's'),
-          " (", $actual, " given)");
+# Do conversions of args we can't understand...
+  for(@callargs) {
+    my $converted;
+    if( ref($_) and ref($_) !~ /Ctypes::Type/ ) {
+      if( $_->can("_as_param_") ) {
+        $converted = $_->_as_param_();
+        if( ref($converted) and ref($converted) !~ /Ctypes::Type/ ) {
+          croak("_as_param_() must return a Ctypes::Type or simple scalar");
+        }
+      } elsif( $_->{_as_param_} ) {
+        $converted = $_->{_as_param_};
+        if( ref($converted) and ref($converted) !~ /Ctypes::Type/ ) {
+          croak("_as_param_() must be a Ctypes::Type or simple scalar");
+        }
+      } else {
+        croak("_as_param function or property needed for non-Ctypes::Type " .
+              "object argument");
       }
-    } elsif( $required != $actual ) {
-        croak("This function takes ", $required,
-          "argument", ($required == 1 ? '' : 's'),
-          " (", $actual, " given)");
     }
   }
 
-  $result = _CallProc( $pProc,
-                       @callargs,
-              $^O eq 'MSWin32' ? $iunk : undef,
-              $^O eq 'MSWin32' ? $self->{iid} : undef,
-                       $self->{flags},
-                       $self->{converters},
-                       $self->{restype},
-                       $checker,
-                     );
+# Py's StgDictObject's int 'flags' field holds ABI info and
+# FUNCFLAG_PYTHONAPI
 
-  my $retval;
-  my $sig = $self->_form_sig;
-  $retval = Ctypes::call( $self->func, $sig, @args );
-  return $retval;
+# callargs should be changed in place?
+# XXX May well need to use references in _get_arg()
+  my $result = _call($self, @callargs);
+
+# XXX <insert errcheck protocol here>
+
+  return _build_result($result, @callargs, $outmask,
+                       $inoutmask, $numretvals);
 }
 
-sub _call_overload {
+sub call_overload {
   my $self = shift;
-  return sub { _call($self, @_) };
+  return sub { call($self, @_) };
 }
 
 # Put Ctypes::_call style sig string together from $self's attributes
