@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Ctypes;
 use overload '&{}' => \&call_overload;
-use Scalar::Util;
+use Scalar::Util qw|blessed looks_like_number|;
 use Carp;
 
 # Public functions defined in POD order
@@ -309,6 +309,7 @@ sub call {
                                   $outmask,
                                   $inoutmask,
                                   $numretvals);
+  print "    call: Built callargs:\n";
   print Data::Dumper::Dumper( @callargs );
 
 # /* For cdecl functions, we allow more actual arguments
@@ -324,7 +325,7 @@ sub call {
 # Do conversions of args we can't understand...
   for(@callargs) {
     my $converted;
-    if( ref($_) and ref($_) !~ /Ctypes::Type/ ) {
+    if( ref($_) and blessed($_) and ref($_) !~ /Ctypes::Type/ ) {
       if( $_->can("_as_param_") ) {
         $converted = $_->_as_param_();
         if( ref($converted) and ref($converted) !~ /Ctypes::Type/ ) {
@@ -737,7 +738,7 @@ sub argtypes {
   my $new_argtypes;
   if(@_) {
     # if we got an offset...
-    if(Scalar::Util::looks_like_number($_[1])) {
+    if(looks_like_number($_[1])) {
       die("Usage: argtypes( \$arrayref, <offset> )") if exists $_[2];
       $new_argtypes = _to_typecodes(shift);
       my $offset = shift;
