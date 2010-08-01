@@ -16,30 +16,42 @@
 
 SV*
 Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
+debug_warn("# In Ct_HVObj_GET_ATTR_KEY...");
+debug_warn("#    key is %s", key);
   SV **tmp, *res = NULL;
   int klen = strlen(key);
   if( sv_isobject(obj)
       && (SvTYPE(SvRV(obj)) == SVt_PVHV)
       && hv_exists((HV*)SvRV(obj), key, klen) ) {
+    debug_warn("#    Obj checks out, getting %s attribute...", key);
     tmp = hv_fetch((HV*)SvRV(obj), key, klen, 0);
     if( tmp != NULL )
       res = SvREFCNT_inc(*tmp);
-    }
+    else
+      debug_warn("Eek! Couldn't find that attribute!");
+  } else {
+      debug_warn("Object wasn't what you thought!");
+  }
+debug_warn("#    returning %c", res);
   return res;
 }
 
 int
 Ct_Obj_IsDeriv(SV* var, const char* type) {
 debug_warn("# In Ct_Obj_IsDeriv...");
-debug_warn("#   type is %s", type);
-    if( sv_isobject(var)
-           && ( sv_isa(var, type)
-                || sv_derived_from(var, type)
-              )
-      )
+debug_warn("#    type is %s", type);
+  if( sv_isobject(var)
+         && ( sv_isa(var, type)
+              || sv_derived_from(var, type)
+            )
+    ) {
+    debug_warn("#    returning True!");
     return 1;
-  else
+  }
+  else {
+    debug_warn("#    returning False!");
     return 0;
+  }
 }
 
 int

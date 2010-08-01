@@ -488,7 +488,7 @@ _call(self, ...)
       rtypechar = (char)*SvPV_nolen(rtypeSV);
       rtype = get_ffi_type( rtypechar );
     }
-    debug_warn( "#[Ctypes.xs: %i ] Return type found: %c", __LINE__,  rtypechar );
+    debug_warn( "#[Ctypes.xs:%i] Return type found: %c", __LINE__,  rtypechar );
     rsize = FFI_SIZEOF_ARG;
     if (rtypechar == 'd') rsize = sizeof(double);
     if (rtypechar == 'D') rsize = sizeof(long double);
@@ -519,8 +519,9 @@ _call(self, ...)
           self_argtypes == NULL;
         }
       }
-
+      debug_warn("    num_args is %i", num_args);
       for (i = 0; i < num_args; ++i) {
+        debug_warn("    i is %i", i);
         SV* this_arg = ST(i+1);
         SV *this_argtype, **fetched_argtype;
         if( self_argtypes ) {
@@ -547,11 +548,15 @@ _call(self, ...)
           this_arg = tmp;
         }
 
+        debug_warn("    Checking type_got...");
         type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
-          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"),tc_len)
+          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"typecode"),tc_len)
           : '\0';
 
+        debug_warn("    type_got: %c", type_got);
+
         /* err not used yet, ConvArg croaks a lot */
+        debug_warn("    calling ConvArg...");
         err = ConvArg( this_arg,
                  type_got,
                  type_expected,
