@@ -378,6 +378,7 @@ sub _form_sig {
       die("Return type not defined (even void must be defined with '_')");
   }
   if(defined $self->{argtypes}) {
+      print "FORM SIG:\n";
       print Data::Dumper::Dumper($self->{argtypes});
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
       if( ref($self->{argtypes}[$i]) ) {
@@ -451,19 +452,21 @@ sub _make_types_arrayref {
         carp("No unblessed references as argtypes!");
         return undef;
       } else {
-        if( !eval{ $_->can('_as_param_') }
-            and not defined($_->_as_param_) ) {
+        if( !$_->can("_as_param_")
+            and not defined($_->{_as_param_}) ) {
           carp("argtypes must have _as_param_ method or attribute");
           return undef;
         }
         # try for attribute first
         $typecode = $_->{_typecode_};
-        if( not defined($typecode)
-            and !$_->can("_typecode_") ) {
-          carp("argtypes must have _typecode_ method or attribute");
-          return undef;
-        } else {
-          $typecode = $_->_typecode_;
+        print "\$typecode: $typecode\n";
+        if( not defined($typecode) ) {
+          if( $_->can("_typecode_") ) {
+            $typecode = $_->_typecode_;
+          } else {
+            carp("argtypes must have _typecode_ method or attribute");
+            return undef;
+          }
         }
         eval{ Ctypes::sizeof($typecode) };
         if( $@ ) { 

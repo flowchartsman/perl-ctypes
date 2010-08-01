@@ -75,7 +75,7 @@ use Carp;
 use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
-use fields qw(alignment name typecode size val _as_param_);
+use fields qw(alignment name _typecode_ size val _as_param_);
 use overload q("") => \&string_overload,
              '0+'  => \&num_overload,
              '&{}' => \&code_overload,
@@ -111,7 +111,7 @@ sub new {
   print "In c_int::new...\n" if $DEBUG == 1;
   my $class = shift;
   my $arg = shift;
-  my $self = { val => 0, typecode => 'i', overflow => 0, alignment => 0,
+  my $self = { val => 0, _typecode_ => 'i', overflow => 0, alignment => 0,
                name=> 'c_int', _as_param_ => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
   $self->val($arg); # !$arg is handled by val()
@@ -129,7 +129,7 @@ sub val {
   $arg = 0 unless defined $arg;
   croak("c_int can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if numeric but out of range
-  my $is_valid = Ctypes::valid_type_value($arg,$self->{typecode});
+  my $is_valid = Ctypes::valid_type_value($arg,$self->{_typecode_});
   if( $is_valid < 1 ) {
     print "\t$arg wasn't valid type\n" if $DEBUG == 1;
     if( ($is_valid == -1) and not ( $self->{overflow}
@@ -137,13 +137,13 @@ sub val {
       croak( "Value out of range for c_int: $arg");
     } else {
     # This is not a true C cast. It will always return
-    # _something_ if it recognises the typecode
-    my $temp = Ctypes::_cast_value($arg,$self->{typecode});
-    # XXX check $temp here again in case typecode was invalid?
+    # _something_ if it recognises the _typecode_
+    my $temp = Ctypes::_cast_value($arg,$self->{_typecode_});
+    # XXX check $temp here again in case _typecode_ was invalid?
     $arg = $temp;
     }
   }
-  $self->{_as_param_} = pack( $self->{typecode}, $arg );
+  $self->{_as_param_} = pack( $self->{_typecode_}, $arg );
   $self->{val} = $arg;
   print "    val() ret: " . $self->{_as_param_} . "\n" if $DEBUG == 1;
   return $self->{val};

@@ -48,7 +48,8 @@ ConvArg(SV* obj, char type_got, char type_expected,
   argtypes[index] = get_ffi_type(type);
 
   if( type_got )
-    arg = Ct_HVObj_GET_ATTR_KEY(obj, "data");
+    arg = Ct_HVObj_GET_ATTR_KEY(obj, "_as_param_");
+
   else  /* no intrinsic type info: obj is (should be) simple scalar */
     arg = obj;
 
@@ -482,7 +483,7 @@ _call(self, ...)
     rtypeSV = Ct_HVObj_GET_ATTR_KEY(self, "restype");
     if( Ct_Obj_IsDeriv(rtypeSV,"Ctypes::Type") ) {
       rtypechar =
-        (char)*SvPV_nolen(Ct_HVObj_GET_ATTR_KEY(rtypeSV,"typecode"));
+        (char)*SvPV_nolen(Ct_HVObj_GET_ATTR_KEY(rtypeSV,"_typecode_"));
       rtype = get_ffi_type( rtypechar );
     } else {
       rtypechar = (char)*SvPV_nolen(rtypeSV);
@@ -529,7 +530,7 @@ _call(self, ...)
           if( fetched_argtype != NULL ) {
             this_argtype = *fetched_argtype;
             type_expected = Ct_Obj_IsDeriv(this_argtype, "Ctypes::Type")
-              ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"typecode"),tc_len)
+              ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"_typecode_"),tc_len)
               : (char)*SvPV(this_argtype,tc_len);
           } else {
             croak("Ctypes::_call:%i error: Couldn't get argtype from array",
@@ -550,7 +551,8 @@ _call(self, ...)
 
         debug_warn("    Checking type_got...");
         type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
-          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"typecode"),tc_len)
+          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"_typecode_"),tc_len)
+
           : '\0';
 
         debug_warn("    type_got: %c", type_got);
