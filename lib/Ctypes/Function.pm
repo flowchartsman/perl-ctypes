@@ -60,7 +60,7 @@ sub _call;
 sub _call_overload;
 sub _form_sig;
 sub _get_args;
-sub _to_typecodes; 
+sub _make_types_arrayref; 
 
 BEGIN {
 sub PF_IN () { 1; }
@@ -367,10 +367,28 @@ sub _form_sig {
   my $self = shift;
   my @sig_parts;
   $sig_parts[0] = $self->{abi} or abi_default();
-  $sig_parts[1] = $self->{restype} or 
-    die("Return type not defined (even void must be defined with '_')");
+  if( ref($self->{restype}) ) {
+    if( ref($self->{restype}) =~ /Ctypes::Type/ ) {
+      $sig_parts[1] = $self->{restype}->{_typecode_};
+    } else {
+      return undef; # Can't take typecodes for non Type objects
+    }
+  } else {
+    $sig_parts[1] = $self->{restype} or 
+      die("Return type not defined (even void must be defined with '_')");
+  }
   if(defined $self->{argtypes}) {
+      print Data::Dumper::Dumper($self->{argtypes});
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
+      if( ref($self->{argtypes}[$i]) ) {
+        if( ref($self->{argtypes}[$i]) ) {
+          $sig_parts[$i+2] = $self->{argtypes}[$i]->{typecode};
+        }
+        # Can't represent non-Type objects as typecodes!
+        return undef;
+      }
+      # Don't know how this would happen, but...
+      return undef if length $self->{argtypes}[$i] > 1;
       $sig_parts[$i+2] = $self->{argtypes}[$i];
     }
   }
@@ -402,44 +420,72 @@ sub _get_args (\@\@) {
 #    or typecode string
 #    or list
 # Returns ARRAY ref
-sub _to_typecodes {
+sub _make_types_arrayref {
   my @inputs = @_;
   my $output = [];
-  # Make sure we've got the input we want...
+  # Turn single arg or LIST into arrayref...
   if( ref($inputs[0]) ne 'ARRAY' ) {
     if( $#inputs > 0 ) {      # there is a list of inputs 
       for(@inputs) {
-        if( ref =~ /Ctypes::Type/ or !ref ) {
-          push @{$output}, $_;
-        } else {
-          die( "argtypes can only be Type objects or 1-character codes");
-        }    
-      }
-    } else {       # there is only one input  
-      if( ref($inputs[0]) =~ /Ctypes::Type/ ) {
-        push @{$output}, $inputs[0];
-      } elsif( !ref($inputs[0]) ) {
+        push @{$output}, $_;
+      }    
+    } else {   # there is only one input 
+      if( !ref($inputs[0]) ) {
       # We can make list of argtypes from string of type codes...
         $output = [ split(//,$inputs[0]) ];
       } else {
-        die( "argtypes can only be Type objects or 1-character codes");
+        push @{$output}, $inputs[0];
       }
     }
   } else {  # first arg is an ARRAY ref, must be the only arg
-    die( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
+    croak( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
     $output = $inputs[0];
   }
-  # Now canonize Type objs to typecodes
-  # and check supplied code characters are valid...
+  # Now check supplied args are valid...
+  my $typecode;
   for( my $i=0; $i<=$#{$output}; $i++ ) {
-    if( ref($output->[$i]) =~ /Ctypes::Type/ ) {
-      $output->[$i] = $output->[$i]->{typecode};
+    $_ = $output->[$i];
+    # Check objects fulfil all the requirements...
+    if( ref($_) ) {
+      if( !blessed($_) ) {
+        carp("No unblessed references as argtypes!");
+        return undef;
+      } else {
+        if( !eval{ $_->can('_as_param_') }
+            and not defined($_->_as_param_) ) {
+          carp("argtypes must have _as_param_ method or attribute");
+          return undef;
+        }
+        # try for attribute first
+        $typecode = $_->{_typecode_};
+        if( not defined($typecode)
+            and !$_->can("_typecode_") ) {
+          carp("argtypes must have _typecode_ method or attribute");
+          return undef;
+        } else {
+          $typecode = $_->_typecode_;
+        }
+        eval{ Ctypes::sizeof($typecode) };
+        if( $@ ) { 
+          carp( @_ );
+          return undef;
+        }
+      } 
     } else {
-      die( "argtypes can only be Type objects or 1-character codes")
-        if ref($output->[$i]);
-      Ctypes::sizeof($output->[$i]); # this will croak if not a proper type code
+    # Not a ref; make sure it's a valid 1-char typecode...
+      if( length($_) > 1 ) {
+carp("argtypes must be valid objects or 1-char typecodes (perldoc Ctypes)");
+        return undef;
+      }
+      eval{ Ctypes::sizeof($_); };
+      if( $@ ) { 
+        carp( @_ );
+        return undef;
+      }
     }
   }
+  print "_make_types_arrayref output:\n";
+  print Data::Dumper::Dumper( $output );
   return $output;
 }
 
@@ -630,18 +676,14 @@ sub new {
 
   if (!$$func && !$$name) { die( "Need function ref or name" ); }
 
-  if(defined $$sig) {
-    if(ref($$sig) eq 'ARRAY') {
-      $$argtypes = _to_typecodes($$sig) unless $$argtypes;
-    } else {
+  if(defined $$sig and ref($$sig) ne 'ARRAY' ) {
       $$abi = substr($$sig, 0, 1) unless $$abi;
       $$restype = substr($$sig, 1, 1) unless $$restype;
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
-    }
   }
-  if( defined $$argtypes ) { $$argtypes = _to_typecodes( $$argtypes ); }
-  if( defined $$restype ) { $$restype = (_to_typecodes( $$restype ))->[0]; }
   $$restype = 'i' unless defined $$restype;
+  print Data::Dumper::Dumper( $$argtypes );
+  $$argtypes = _make_types_arrayref($$argtypes) if defined($$argtypes);
 
   if (!$$func) {
     $$lib = '-lc' unless $$lib; #default libc
@@ -732,28 +774,28 @@ Or: argtypes( $arrayref [ offset ] )
 
 =cut
 
-sub argtypes {
+sub argtypes : lvalue {
   my $self = shift;
   die("Object method") if ref($self) ne 'Ctypes::Function';
   my $new_argtypes;
   if(@_) {
     # if we got an offset...
     if(looks_like_number($_[1])) {
-      die("Usage: argtypes( \$arrayref, <offset> )") if exists $_[2];
-      $new_argtypes = _to_typecodes(shift);
+      croak("Usage: argtypes( \$arrayref, <offset> )") if exists $_[2];
+      croak("Usage: argtypes( \$arrayref, <offset> )")
+        if ref($_[0]) ne 'HASH';
+      $new_argtypes = shift;
       my $offset = shift;
       if($self->{argtypes}) {
         splice(@{$self->{argtypes}},$offset,$#$new_argtypes,@$new_argtypes);
       } else {
-        # user provided offset, but there were no pre-existing argtypes
+        carp("Offset received but there were no pre-existing argtypes");
         $self->{argtypes} = $new_argtypes; 
       }
     } else {
-      $new_argtypes = _to_typecodes( @_ );
-      $self->{argtypes} = $new_argtypes;
+      $self->{argtypes} = _make_types_arrayref( @_ );
     }
   }
-  return undef if not defined $self->{argtypes}; # <3 Perl
   return $self->{argtypes};
 }
 

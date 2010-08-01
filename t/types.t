@@ -1,6 +1,6 @@
 #!perl
 
-use Test::More tests => 8;
+use Test::More tests => 13;
 use Ctypes::Function;
 use Ctypes::Type qw(c_int);
 use Data::Dumper;

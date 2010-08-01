@@ -75,28 +75,30 @@ use Carp;
 use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
-use fields qw(alignment name typecode size val data);
-use overload q("") => \&string_ovl,
-             '0+'  => \&num_ovl,
-             '&{}' => \&code_ovl,
+use fields qw(alignment name typecode size val _as_param_);
+use overload q("") => \&string_overload,
+             '0+'  => \&num_overload,
+             '&{}' => \&code_overload,
              fallback => TRUE;
+use subs qw|new val|;
+
 our $DEBUG = 0;
 our $allow_overflow_cint = 1;
 
 # XXX do need to tie self->{val} to get lvalue behaviour?
 # is such behaviour even wanted? 
-sub string_ovl { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
+sub string_overload { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
                    print "args 2 and 3: " . $_[1] . " " . $_[2] . "\n" if $DEBUG == 1;
                    print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
                    return shift->{val};
 }
 
-sub num_ovl { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
+sub num_overload { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
                    print "    numOvl returning: " . $_[0]->{val} . "\n" if $DEBUG == 1;
                    return shift->{val};
 }
 
-sub code_ovl { 
+sub code_overload { 
   print "In ovlVal...\n" if $DEBUG == 1;
   if( $DEBUG == 1 ) {
     for(@_) { print "\targref: " . ref($_)  .  "\n"; }
@@ -110,7 +112,7 @@ sub new {
   my $class = shift;
   my $arg = shift;
   my $self = { val => 0, typecode => 'i', overflow => 0, alignment => 0,
-               name=> 'c_int', data => '', size => Ctypes::sizeof('i') };
+               name=> 'c_int', _as_param_ => '', size => Ctypes::sizeof('i') };
   bless $self, $class;
   $self->val($arg); # !$arg is handled by val()
   if( $DEBUG == 1 ) {
@@ -141,9 +143,9 @@ sub val {
     $arg = $temp;
     }
   }
-  $self->{data} = pack( $self->{typecode}, $arg );
+  $self->{_as_param_} = pack( $self->{typecode}, $arg );
   $self->{val} = $arg;
-  print "    val() ret: " . $self->{data} . "\n" if $DEBUG == 1;
+  print "    val() ret: " . $self->{_as_param_} . "\n" if $DEBUG == 1;
   return $self->{val};
 }
 
