@@ -4,6 +4,7 @@ Makefile
 Makefile.old
 Build
 Build.bat
+const-c.inc
 _build*
 pm_to_blib*
 *.tar.gz
@@ -11,5 +12,9 @@ pm_to_blib*
 cover_db
 pod2htm*.tmp
 Ctypes-*
+*.base
+*.def
+*.exp
 libffi*
 libffi/*
+win32/*

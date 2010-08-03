@@ -1,7 +1,6 @@
 .gitignore
 Changes
 const-xs.inc
-const-c.inc
 Ctypes.xs
 ignore.txt
 Makefile.PL
@@ -14,10 +13,18 @@ include/ffi_common.h
 include/ffi.h
 include/ffitarget.h
 lib/Ctypes.pm
+lib/Ctypes/Callback.pm
+lib/Ctypes/FuncProto.pm
 lib/Ctypes/Function.pm
+lib/Ctypes/Type.pm
+lib/Ctypes/WinTypes.pm
 t/000-load.t
 t/001-_call.t
 t/002-Function.t
+t/callbacks.t
+t/func-access.t
+t/library.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
+t/win-proto.t

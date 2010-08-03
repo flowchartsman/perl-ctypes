@@ -1,6 +1,7 @@
 Build
 Build.bat
 cover_db
+const-c.inc
 Ctypes-
 Ctypes.c
 Ctypes.o
@@ -14,6 +15,9 @@ pod2htm*.tmp
 .lwpcookies
 .tar.gz
 *.bak
+*.base
+*.def
+*.exp
 *.swp
 *.swo
 *.bs
@@ -23,4 +27,5 @@ _build
 blib
 libffi-3.0.9*
 libffi/
+win32/
 const-c.inc

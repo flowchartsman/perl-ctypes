@@ -113,12 +113,12 @@ sub _call_overload {
 sub _form_sig {
   my $self = shift;
   my @sig_parts;
-  $sig_parts[0] = $self->abi or abi_default();
-  $sig_parts[1] = $self->restype or 
+  $sig_parts[0] = $self->{abi} or abi_default();
+  $sig_parts[1] = $self->{restype} or 
     die("Return type not defined (even void must be defined with '_')");
-  if(defined $self->argtypes) {
+  if(defined $self->{argtypes}) {
     my @argtypes;
-    my $argtypes = $self->argtypes;
+    my $argtypes = $self->{argtypes};
     if (!ref($argtypes)) { # string
       @argtypes = split //, $argtypes if length $argtypes; 
     }
@@ -220,7 +220,7 @@ check with a regex to make sure they look like a string of
 numbers - what a DL handle normally looks like. This means that
 yes, you could do yourself a mischief by passing any string of numbers
 as a library reference, even though that would be a Silly Thing To Do.
-Thanksfully there are no dll's consisting only of numbers, but if so, 
+Thankfully there are no dll's consisting only of numbers, but if so, 
 add the extension.
 
 =item name
@@ -349,8 +349,6 @@ sub new {
   if(defined $$sig) {
     if(ref($$sig) eq 'ARRAY') {
       $$argtypes = [ _to_packstyle($$sig) ] unless $$argtypes;
-      if(defined $$restype) { # _form_sig dies w/out restype: not wanted here
-        $$sig = _form_sig($ret); } # arrayref -> usual string
     } else {
       $$abi = substr($$sig, 0, 1) unless $$abi;
       $$restype = substr($$sig, 1, 1) unless $$restype;
@@ -383,6 +381,7 @@ sub new {
     $$abi = 's' if $$abi eq 'stdcall';
     $$abi = 'f' if $$abi eq 'fastcall';
   }
+  $$sig = _form_sig($ret); # arrayref -> usual string
   return bless $ret, $class;
 }
 

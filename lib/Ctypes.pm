@@ -581,7 +581,7 @@ library, and only returns libraries which could successfully be dynaloaded.
 =cut
 
 sub find_library($;@) {# from C::DynaLib::new
-  my $libname = shift;
+  my $libname = $_ = shift;
   my $so = $libname;
   -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
   my $lib;
@@ -600,7 +600,7 @@ sub find_library($;@) {# from C::DynaLib::new
     if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
       $so = $ENV{SYSTEMROOT}."\\System32\\MSVCRT.DLL";
       if ($lib = DynaLoader::dl_load_file($so, @_)) {
-	return $so;
+	      return $so;
       }
       # python has a different logic: The version+subversion is taken from 
       # msvcrt dll used in the python.exe
@@ -624,12 +624,12 @@ sub find_library($;@) {# from C::DynaLib::new
   LOOP:
     for my $name (@names) {
       for my $dir (@dirs, @dl_library_path) {
-	next unless -d $dir;
-	my $file = File::Spec->catfile($dir,$name);
-	if (-f $file) {
-	  $found = $file;
-	  last LOOP;
-	}
+	      next unless -d $dir;
+	      my $file = File::Spec->catfile($dir,$name);
+	      if (-f $file) {
+	        $found = $file;
+	        last LOOP;
+	      }
       }
     }
     if ($found) {

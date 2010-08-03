@@ -22,7 +22,7 @@ WriteMakefile(
      (ABSTRACT_FROM     => 'lib/Ctypes.pm',
       AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
      : () ),
-    LIBS              => [ '-Llibffi -lffi' ],
+    LIBS              => $^O eq 'MSWin32' ? ['-Lwin32 -lffi'] : [ '-Llibffi -lffi' ],
     INC               => '-I. -I./include',
     #DEFINE            => '-DCTYPES_DEBUG',
     #OPTIMIZE         => '-ggdb3 -O0',
