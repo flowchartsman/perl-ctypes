@@ -70,6 +70,73 @@ our $allow_overflow_all = 0;
 # Of course, you can get the value of the pointer by accessing the
 # value attribute.
 
+package Ctypes::Type::value;
+use Carp;
+
+our $DEBUG = 0;
+my $owner;
+
+sub protect ($) {
+  ref shift or return undef;
+  my($cpack, $cfile, $cline, $csub) = caller(0);
+  print "# In protect()\n" if $DEBUG > 1;
+  if( $DEBUG > 3 ) {
+    print "\t\$cpack: $cpack\n";
+    print "\t\$cfile: $cfile\n";
+    print "\t\$cline: $cline\n";
+    print "\t\$csub: $csub\n";
+  }
+  if( $cpack ne __PACKAGE__
+      or $cfile ne __FILE__ ) {
+    return undef;
+  }
+  return 1;
+}
+ 
+sub TIESCALAR {
+  my $class = shift;
+  $owner = shift;
+  return bless \my $self => $class;
+}
+
+sub STORE {
+  print "In STORE called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
+  my $self = shift;
+  my $arg = shift;
+  protect $self or carp("Unauthorised access of val attribute") && return undef;
+  print "    Got $arg as arg\n" if $DEBUG > 32;
+  croak("c_int can only be assigned a single value") if @_;
+  # return 1 on success, 0 on fail, -1 if numeric but out of range
+  my $is_valid = Ctypes::valid_for_type($arg,$owner->{_typecode_});
+  if( $is_valid < 1 ) {
+    print "\t$arg wasn't valid type\n" if $DEBUG > 3;
+    no strict 'refs';
+    if( ($is_valid == -1)
+        and not ( $owner->allow_overflow
+        || $owner->allow_overflow_class
+        || $Ctypes::Type::allow_overflow_all ) ) {
+      croak( "Value out of range for c_int: $arg");
+    } else {
+    # This is not a true C cast. It will always return
+    # _something_ if it recognises the typecode
+    my $temp = Ctypes::_cast_value($arg,$owner->{_typecode_});
+    # XXX check $temp here again in case _typecode_ was invalid?
+    $arg = $temp;
+    }
+  }
+  $owner->{_as_param_} = pack( $owner->{_typecode_}, $arg );
+  $$self = $arg;
+  print "    STORE ret: " . $$self . "\n" if $DEBUG > 1;
+  return $$self;
+}
+
+sub FETCH {
+  print "FETCHing, called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
+  my $self = shift;
+  print "My \$self: $$self\n" if $DEBUG > 1;
+  return $$self;
+}
+
 package Ctypes::Type::c_int;
 use Carp;
 use Data::Dumper;
@@ -79,28 +146,59 @@ use fields qw(alignment name _typecode_ size val _as_param_);
 use overload q("") => \&string_overload,
              '0+'  => \&num_overload,
              '&{}' => \&code_overload,
+             '%{}' => \&hash_overload,
              fallback => TRUE;
 use subs qw|new val|;
 
 our $DEBUG = 0;
-our $allow_overflow_cint = 1;
-
-# XXX do need to tie self->{val} to get lvalue behaviour?
-# is such behaviour even wanted? 
-sub string_overload { print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG == 1;
-                   print "args 2 and 3: " . $_[1] . " " . $_[2] . "\n" if $DEBUG == 1;
-                   print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG == 1;
-                   return shift->{val};
+{
+  my $allow_overflow_class = 1;
+  sub allow_overflow_class {
+    my $self = shift;
+    my $arg = shift;
+    if( @_ or ( $arg and $arg != 1 and $arg != 0 ) ) {
+      croak("Usage: allow_overflow(x) (1 or 0)");
+    }
+    $allow_overflow_class = $arg if $arg;
+    return $allow_overflow_class;
+  }
 }
 
-sub num_overload { print "In numOvl with $#_ args!\n" if $DEBUG == 1;
-                   print "    numOvl returning: " . $_[0]->{val} . "\n" if $DEBUG == 1;
-                   return shift->{val};
+sub string_overload {
+  print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG > 2;
+  print "args 2 and 3: " . $_[1] . " " . $_[2] . "\n" if $DEBUG > 2;
+  print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG > 2;
+  return shift->{val};
 }
+
+sub num_overload {
+  print "In numOvl with $#_ args!\n" if $DEBUG > 2;
+  print "    numOvl returning: " . $_[0]->{val} . "\n" if $DEBUG > 2;
+  return shift->{val};
+}
+
+sub hash_overload {
+  print "hash_overload called by " . (caller(1))[3] . "!\n" if $DEBUG > 2;
+  my($cpack, $cfile, $cline, $csub) = caller(0);
+  if( $DEBUG > 3 ) {
+    print "\$cpack: $cpack\n";
+    print "\$cfile: $cfile\n";
+    print "\$cline: $cline\n";
+    print "\$csub: $csub\n";
+  }
+  if( ($cpack ne __PACKAGE__
+       and $cpack ne "Ctypes::Type::value")
+      or $cfile ne __FILE__ ) {
+    carp("Unauthorized direct attribute access! Get thee gone!");
+    return {};
+  }
+  return shift;
+}
+
 
 sub code_overload { 
-  print "In ovlVal...\n" if $DEBUG == 1;
-  if( $DEBUG == 1 ) {
+  print "In ovlVal...\n" if $DEBUG > 2;
+  if( $DEBUG > 3 ) {
     for(@_) { print "\targref: " . ref($_)  .  "\n"; }
   }
   my $self = shift;
@@ -108,45 +206,46 @@ sub code_overload {
 }
 
 sub new {
-  print "In c_int::new...\n" if $DEBUG == 1;
+  print "In c_int::new...\n" if $DEBUG > 1;
+  print Dumper( @_ ) if $DEBUG > 3;
   my $class = shift;
   my $arg = shift;
-  my $self = { val => 0, _typecode_ => 'i', overflow => 0, alignment => 0,
+  my $self = { val => 0, _typecode_ => 'i', allow_overflow => 0, alignment => 0,
                name=> 'c_int', _as_param_ => '', size => Ctypes::sizeof('i') };
-  bless $self, $class;
-  $self->val($arg); # !$arg is handled by val()
-  if( $DEBUG == 1 ) {
+  bless $self => $class;
+  $arg = 0 unless $arg;
+  print "    \$arg: $arg\n" if $DEBUG > 2;
+  $self->{obj} = tie $self->{val}, "Ctypes::Type::value", $self;
+  $self->{val} = $arg;
+  if( $DEBUG > 2 ) {
     if( $arg ) { print "    c_int::new ret: " . $self. "\n"; }
     else { print "    c_int::new returning...\n"; }
   }
   return $self;
 }
 
-sub val {
-  print "In val()...\n" if $DEBUG == 1;
+sub val : lvalue {
+  print "In val() called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
+  print Dumper( @_ ) if $DEBUG > 3;
   my $self = shift;
   my $arg = shift;
-  $arg = 0 unless defined $arg;
-  croak("c_int can only be assigned a single value") if @_;
-  # return 1 on success, 0 on fail, -1 if numeric but out of range
-  my $is_valid = Ctypes::valid_type_value($arg,$self->{_typecode_});
-  if( $is_valid < 1 ) {
-    print "\t$arg wasn't valid type\n" if $DEBUG == 1;
-    if( ($is_valid == -1) and not ( $self->{overflow}
-      || $allow_overflow_cint || $allow_overflow_all ) ) {
-      croak( "Value out of range for c_int: $arg");
-    } else {
-    # This is not a true C cast. It will always return
-    # _something_ if it recognises the _typecode_
-    my $temp = Ctypes::_cast_value($arg,$self->{_typecode_});
-    # XXX check $temp here again in case _typecode_ was invalid?
-    $arg = $temp;
-    }
+  print Dumper( [$self,$arg] ) if $DEBUG > 3;
+  $self->{val} = $arg if $arg;
+  print "    val() ret: " . $self->{_as_param_} . "\n" if $DEBUG > 2;
+  $self->{val};
+}
+
+sub allow_overflow {
+  my $self = shift;
+  my $arg = shift;
+  if( @_ or ( $arg and $arg != 1 and $arg != 0 ) ) {
+    croak("Usage: allow_overflow(x) (1 or 0)");
   }
-  $self->{_as_param_} = pack( $self->{_typecode_}, $arg );
-  $self->{val} = $arg;
-  print "    val() ret: " . $self->{_as_param_} . "\n" if $DEBUG == 1;
-  return $self->{val};
+  unless( ref($self) ) {  # object method
+    croak("allow_overflow is an object method; maybe you wanted allow_overflow_class?");
+  }
+  $self->{allow_overflow} = $arg if $arg;
+  return $self->{allow_overflow};
 }
 
 package Ctypes::Type;

@@ -103,19 +103,14 @@ sub AUTOLOAD {
 }
 
 sub _build_callargs ($\@\$\$\$) {
-  print "In _build_callargs...\n";
-  require Data::Dumper;
-  print Data::Dumper::Dumper(@_);
   my $self = shift;
   my $inargs = shift;
   my $outmask = shift;
   my $inoutmask = shift;
   my $numretvals = shift;
-  print Data::Dumper::Dumper( $self );
   my( $actual_args );
   if( !defined $self->{argtypes} or !defined $self->{paramflags} or
       $#{$self->{argtypes}} == 0 ) {
-    print "    Returning inargs...\n";
     return @$inargs;
   }
   my $inargs_index = 0;
@@ -206,8 +201,6 @@ sub _build_callargs ($\@\$\$\$) {
     # ^ The above might not apply to us, since we add in %kwds early?
     croak("call takes ", $inargs_index, "arguments (", $actual_args, " given)... or maybe a different error");
   }
-  print "End of _build_callargs...\n";
-  print Data::Dumper::Dumper( @_ );
   return @callargs;
 }
 
@@ -222,6 +215,8 @@ sub _build_result (\$\@\$\$\$) {
   if( scalar @$callargs == 0 ) {
     return $$result;
   }
+
+  # XXX This looks like a fishy translation from C...
   if( !$$result || $$numretvals == 0 ) {
     @$callargs = ();
     undef @$callargs;
@@ -249,16 +244,12 @@ sub _build_result (\$\@\$\$\$) {
       $results[$i] = $v;
       $index++;
     }
-    print "    \$index = $index\n";
-    print "    \$numretvals = $$numretvals\n"; 
     last if $index == $$numretvals;
   }
   return @results;
 }
 
 sub call {
-  require Data::Dumper;
-  print Data::Dumper::Dumper( @_ );
   my $self = shift;
   my @inargs = @_;
   my %kwds = (); # 'keywords': hash of named arguments
@@ -309,8 +300,6 @@ sub call {
                                   $outmask,
                                   $inoutmask,
                                   $numretvals);
-  print "    call: Built callargs:\n";
-  print Data::Dumper::Dumper( @callargs );
 
 # /* For cdecl functions, we allow more actual arguments
 #    than the length of the argtypes tuple.               */
@@ -378,8 +367,6 @@ sub _form_sig {
       die("Return type not defined (even void must be defined with '_')");
   }
   if(defined $self->{argtypes}) {
-      print "FORM SIG:\n";
-      print Data::Dumper::Dumper($self->{argtypes});
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
       if( ref($self->{argtypes}[$i]) ) {
         if( ref($self->{argtypes}[$i]) ) {
@@ -459,7 +446,6 @@ sub _make_types_arrayref {
         }
         # try for attribute first
         $typecode = $_->{_typecode_};
-        print "\$typecode: $typecode\n";
         if( not defined($typecode) ) {
           if( $_->can("_typecode_") ) {
             $typecode = $_->_typecode_;
@@ -487,8 +473,6 @@ carp("argtypes must be valid objects or 1-char typecodes (perldoc Ctypes)");
       }
     }
   }
-  print "_make_types_arrayref output:\n";
-  print Data::Dumper::Dumper( $output );
   return $output;
 }
 
@@ -685,7 +669,6 @@ sub new {
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
   }
   $$restype = 'i' unless defined $$restype;
-  print Data::Dumper::Dumper( $$argtypes );
   $$argtypes = _make_types_arrayref($$argtypes) if defined($$argtypes);
 
   if (!$$func) {

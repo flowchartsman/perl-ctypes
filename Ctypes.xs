@@ -644,7 +644,7 @@ OUTPUT:
   RETVAL
 
 int
-valid_type_value(arg,type)
+valid_for_type(arg,type)
   SV* arg;
   char type;
 CODE:

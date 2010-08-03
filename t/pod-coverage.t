@@ -15,5 +15,7 @@ eval "use Pod::Coverage $min_pc";
 plan skip_all => "Pod::Coverage $min_pc required for testing POD coverage"
     if $@;
 
-my $trustme = { trustme => [qr/^c_[a-z_]*$/] };
-all_pod_coverage_ok($trustme);
+my $opts = { trustme => [ qr/^c_[a-z_]*$/,    # all private methods
+                          qr/^PF_.*/          # inlined flags, Function.pm
+                        ] };
+all_pod_coverage_ok($opts);
