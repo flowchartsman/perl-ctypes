@@ -644,7 +644,7 @@ OUTPUT:
   RETVAL
 
 int
-valid_for_type(arg,type)
+_valid_for_type(arg,type)
   SV* arg;
   char type;
 CODE:
@@ -664,14 +664,8 @@ CODE:
     case 'i':
       if( SvPOK(arg) ) { RETVAL = 0; break; }
       if( !SvIOK(arg) ) { RETVAL = 0; break; }
-   /*   signed int max = 1;
-      for(i=1;i<(sizeof(signed int) * 8 - 1);i++) {
-        max = max << 1; max | 1;
-      }  */
-      /* max = 1 << (sizeof(signed int) * 8 - 1); */
       double thearg = SvNV(arg);
       if( thearg < INT_MIN || thearg > INT_MAX ) { RETVAL = -1; break; }
-      /* if( thearg > max ) { RETVAL = 0; break; } */
       RETVAL = 1; break;
     case 'I':
       if( SvNOK(arg) ) { RETVAL = 0; break; }

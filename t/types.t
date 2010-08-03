@@ -20,15 +20,18 @@ my $number_twelve = $number_seven;
 is_deeply( $number_twelve, $number_seven, "Assignment copies object" );
 
 $number_seven->(12);
-is( $number_seven, 12, "Assign value with ->(x)" );
+is( $number_seven->val, 12, "Assign value with ->(x)" );
 
 $number_seven->val = 15;
 is( $number_seven, 15, "Assign value with ->val = x" );
 
 $number_seven += 3;
-is( $number_seven, 18, "Binary increment" );
+is( $number_seven->val, 18, '$obj += <num>' );
 $number_seven--;
-is( $number_seven, 17, "Unary decrement" );
+is( $number_seven->val, 17, '$obj -= <num>' );
+
+is( $number_seven->typecode, 'i', "->typecode getter" );
+is( $number_seven->typecode('p'), 'p', "->typecode(x) setter" );
 
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');
@@ -46,5 +49,5 @@ isnt( $overflower, 2147483648, 'Cannot exceed INT_MAX' );
 $overflower->(-2147483649);
 isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' );
 
-my $ret_as_char = c_char($ret);
+my $ret_as_char = c_char(89);
 is( $ret_as_char->val, 'Y', 'c_char converts from number types' );

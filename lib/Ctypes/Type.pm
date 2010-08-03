@@ -107,7 +107,7 @@ sub STORE {
   print "    Got $arg as arg\n" if $DEBUG > 32;
   croak("c_int can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if numeric but out of range
-  my $is_valid = Ctypes::valid_for_type($arg,$owner->{_typecode_});
+  my $is_valid = Ctypes::_valid_for_type($arg,$owner->{_typecode_});
   if( $is_valid < 1 ) {
     print "\t$arg wasn't valid type\n" if $DEBUG > 3;
     no strict 'refs';
@@ -138,15 +138,17 @@ sub FETCH {
 }
 
 package Ctypes::Type::c_int;
+use Ctypes;
 use Carp;
 use Data::Dumper;
 use Devel::Peek;
 our @ISA = ("Ctypes::Type");
 use fields qw(alignment name _typecode_ size val _as_param_);
-use overload q("") => \&string_overload,
-             '0+'  => \&num_overload,
-             '&{}' => \&code_overload,
-             '%{}' => \&hash_overload,
+use overload '0+'  => \&_num_overload,
+             '+'   => \&_add_overload,
+             '-'   => \&_subtract_overload,
+             '&{}' => \&_code_overload,
+             '%{}' => \&_hash_overload,
              fallback => TRUE;
 use subs qw|new val|;
 
@@ -164,39 +166,50 @@ our $DEBUG = 0;
   }
 }
 
-sub string_overload {
-  print "In stringOvl with " . ($#_ + 1) . " args!\n" if $DEBUG > 2;
-  print "args 2 and 3: " . $_[1] . " " . $_[2] . "\n" if $DEBUG > 2;
-  print "    stringOvl returning: " . ${$_[0]->{val}} . "\n" if $DEBUG > 2;
-  return shift->{val};
+sub _num_overload { return shift->{val}; }
+
+sub _add_overload {
+  my( $x, $y, $swap ) = @_;
+  my $ret;
+  if( defined($swap) ) {
+    if( !$swap ) { $ret = $x->{val} + $y; }
+    else { $ret = $y->{val} + $x; }
+  } else {           # += etc.
+    $x->val($x->{val} + $y);
+    $ret = $x;
+  }
+  return $ret;
 }
 
-sub num_overload {
-  print "In numOvl with $#_ args!\n" if $DEBUG > 2;
-  print "    numOvl returning: " . $_[0]->{val} . "\n" if $DEBUG > 2;
-  return shift->{val};
+sub _subtract_overload {
+  my( $x, $y, $swap ) = @_;
+  my $ret;
+  if( defined($swap) ) {
+    if( !$swap ) { $ret = $x->{val} - $y; }
+    else { $ret = $x - $y->{val}; }
+  } else {           # -= etc.
+    $x->val($x->{val} - $y);
+    $ret = $x;
+  }
+  return $ret;
 }
 
-sub hash_overload {
-  print "hash_overload called by " . (caller(1))[3] . "!\n" if $DEBUG > 2;
+sub _hash_overload {
+  print "hash_overload called by " . (caller(1))[3] . "!\n";
   my($cpack, $cfile, $cline, $csub) = caller(0);
-  if( $DEBUG > 3 ) {
     print "\$cpack: $cpack\n";
     print "\$cfile: $cfile\n";
     print "\$cline: $cline\n";
     print "\$csub: $csub\n";
-  }
-  if( ($cpack ne __PACKAGE__
-       and $cpack ne "Ctypes::Type::value")
-      or $cfile ne __FILE__ ) {
-    carp("Unauthorized direct attribute access! Get thee gone!");
+  if( $cpack !~ /^Ctypes::/ 
+      or $cfile !~ /Ctypes\// ) {
+    carp("Unauthorized direct Type attribute access!");
     return {};
   }
   return shift;
 }
 
-
-sub code_overload { 
+sub _code_overload { 
   print "In ovlVal...\n" if $DEBUG > 2;
   if( $DEBUG > 3 ) {
     for(@_) { print "\targref: " . ref($_)  .  "\n"; }
@@ -224,16 +237,40 @@ sub new {
   return $self;
 }
 
+# val can't go in the loop below simply because
+# it's an lvalue. To make them all lvalue would
+# require tie'ing _typecode_ too for checks.
 sub val : lvalue {
-  print "In val() called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
-  print Dumper( @_ ) if $DEBUG > 3;
   my $self = shift;
   my $arg = shift;
-  print Dumper( [$self,$arg] ) if $DEBUG > 3;
   $self->{val} = $arg if $arg;
-  print "    val() ret: " . $self->{_as_param_} . "\n" if $DEBUG > 2;
   $self->{val};
 }
+
+#
+# Accessor generation
+#
+my %access = ( _data => ['_as_param_',undef],
+               typecode => ['_typecode_',\&Ctypes::sizeof],
+             );
+for my $func (keys(%access)) {
+  no strict 'refs';
+  my $key = $access{$func}[0];
+  *$func = sub {
+    my $self = shift;
+    my $arg = shift;
+    croak("The $key method only takes one argument") if @_;
+    if($access{$func}[1] and $arg){
+      eval{ $access{$func}[1]->($arg); };
+      if( $@ ) {
+        croak("Invalid argument for $key method: $@");
+      }
+    }
+    $self->{$key} = $arg if $arg;
+    $self->{$key};
+  }
+}
+
 
 sub allow_overflow {
   my $self = shift;

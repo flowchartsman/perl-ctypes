@@ -3,7 +3,7 @@ package Ctypes::Function;
 use strict;
 use warnings;
 use Ctypes;
-use overload '&{}' => \&call_overload;
+use overload '&{}' => \&_call_overload;
 use Scalar::Util qw|blessed looks_like_number|;
 use Carp;
 
@@ -345,7 +345,7 @@ sub call {
                        $inoutmask, $numretvals);
 }
 
-sub call_overload {
+sub _call_overload {
   my $self = shift;
   return sub { call($self, @_) };
 }
