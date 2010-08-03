@@ -33,6 +33,9 @@ is( $number_seven->val, 17, '$obj -= <num>' );
 is( $number_seven->typecode, 'i', "->typecode getter" );
 is( $number_seven->typecode('p'), 'p', "->typecode(x) setter" );
 
+is( $number_seven->_data, pack('i', 17), "->_data getter" );
+is( $number_seven->_data(pack('i', 19)), pack('i', 19), "->_data setter" );
+
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');
 
@@ -41,7 +44,7 @@ ok( ref($no_value) =~ /Ctypes::Type/, 'Created object without initializer' );
 is( $no_value, 0, 'Default initialization to 0' );
 
 my $letter_y = c_int('y');
-is( $letter_y, 121, 'Initialised c_int with letter' );
+is( $letter_y, 121, 'Initialised c_int with ASCII character' );
 
 # XXX: Exceeding range on signed variables undefined?
 my $overflower = c_int(2147483648);

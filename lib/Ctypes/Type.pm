@@ -195,12 +195,7 @@ sub _subtract_overload {
 }
 
 sub _hash_overload {
-  print "hash_overload called by " . (caller(1))[3] . "!\n";
   my($cpack, $cfile, $cline, $csub) = caller(0);
-    print "\$cpack: $cpack\n";
-    print "\$cfile: $cfile\n";
-    print "\$cline: $cline\n";
-    print "\$csub: $csub\n";
   if( $cpack !~ /^Ctypes::/ 
       or $cfile !~ /Ctypes\// ) {
     carp("Unauthorized direct Type attribute access!");

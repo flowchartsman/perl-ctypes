@@ -723,7 +723,10 @@ construction is a lot faster.
 This function is similar to the cast operator in C. It returns a new
 instance of type which points to the same memory block as obj. type
 must be a pointer type, and obj must be an object that can be
-interpreted as a pointer.  create_string_buffer(init_or_size[, size])
+interpreted as a pointer.
+
+=item create_string_buffer(init_or_size[, size])
+
 This function creates a mutable character buffer. The returned object
 is a ctypes array of c_char.
 
