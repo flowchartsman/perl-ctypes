@@ -101,13 +101,30 @@ sub TIESCALAR {
 
 sub STORE {
   print "In STORE called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
+  protect $self or carp("Unauthorised access of val attribute") && return undef;
   my $self = shift;
   my $arg = shift;
-  protect $self or carp("Unauthorised access of val attribute") && return undef;
+  # Deal with being assigned other Type objects and the like...
+  if(my $ref = ref($arg)) {
+    if($ref =~ /^Ctypes::Type::/) {
+      $arg = $arg->{_as_param_};
+    } else {
+      if($arg->can("_as_param_")) {
+        $arg = $arg->_as_param_;
+      } elsif($arg->{_as_param_}) {
+        $arg = $arg->{_as_param_};
+      } else {
+  # XXX Would you ever want to store an object/reference as the value
+  # of a type? What would get pack()ed in the end?
+        croak("Can only store native types or Ctypes compatible objects");
+      }
+    }
+  }
+  my $typecode = $owner->{_typecode_};
   print "    Got $arg as arg\n" if $DEBUG > 32;
   croak("c_int can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if numeric but out of range
-  my $is_valid = Ctypes::_valid_for_type($arg,$owner->{_typecode_});
+  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   if( $is_valid < 1 ) {
     print "\t$arg wasn't valid type\n" if $DEBUG > 3;
     no strict 'refs';
@@ -117,14 +134,14 @@ sub STORE {
         || $Ctypes::Type::allow_overflow_all ) ) {
       croak( "Value out of range for c_int: $arg");
     } else {
-    # This is not a true C cast. It will always return
-    # _something_ if it recognises the typecode
-    my $temp = Ctypes::_cast_value($arg,$owner->{_typecode_});
-    # XXX check $temp here again in case _typecode_ was invalid?
-    $arg = $temp;
+    my $temp = Ctypes::_cast($arg,$typecode);
+    if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
+      $arg = $temp;
+    } else {
+      croak("Unreconcilable argument for type '$typecode': $arg");
     }
   }
-  $owner->{_as_param_} = pack( $owner->{_typecode_}, $arg );
+  $owner->{_as_param_} = pack( $typecode, $arg );
   $$self = $arg;
   print "    STORE ret: " . $$self . "\n" if $DEBUG > 1;
   return $$self;
@@ -150,6 +167,8 @@ use overload '0+'  => \&_num_overload,
              '&{}' => \&_code_overload,
              '%{}' => \&_hash_overload,
              fallback => TRUE;
+             # XXX Multiplication will have to be overridden
+             # to implement Python's Array contruction with "type * x"?
 use subs qw|new val|;
 
 our $DEBUG = 0;
@@ -234,7 +253,7 @@ sub new {
 
 # val can't go in the loop below simply because
 # it's an lvalue. To make them all lvalue would
-# require tie'ing _typecode_ too for checks.
+# require more tie'ing for validity checks.
 sub val : lvalue {
   my $self = shift;
   my $arg = shift;

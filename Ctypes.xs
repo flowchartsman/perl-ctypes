@@ -650,26 +650,29 @@ _valid_for_type(arg,type)
 CODE:
   double max;
   short i;
+  RETVAL = 0;
   if( !SvOK(arg) ) { XSRETURN_UNDEF; }
   switch (type) {
     case 'c':
     case 'C':
-      if( !SvPOK(arg) ) { RETVAL = 0; break; }
-      if( sv_len(arg) != 1 ) { RETVAL = 0; break; }
+      if( !SvPOK(arg) ) break;
+      if( sv_len(arg) != 1 ) break;
       RETVAL = 1; break;
     case 's':
     case 'S':
-      if( !SvPOK(arg) ) { RETVAL = 0; break; }
+      if( !SvPOK(arg) ) break
       RETVAL = 1; break;
     case 'i':
-      if( SvPOK(arg) ) { RETVAL = 0; break; }
-      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      if( SvPOK(arg) ) break;
+      if( !SvIOK(arg) ) break;
       double thearg = SvNV(arg);
-      if( thearg < INT_MIN || thearg > INT_MAX ) { RETVAL = -1; break; }
+      if( thearg < PERL_INT_MIN || thearg > PERL_INT_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'I':
-      if( SvNOK(arg) ) { RETVAL = 0; break; }
-      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      if( SvNOK(arg) ) break; 
+      if( !SvIOK(arg) ) break;
       max = 1 << (sizeof(unsigned int) * 8); 
       if( (unsigned int)SvIV(arg) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
@@ -709,45 +712,162 @@ OUTPUT:
   RETVAL
 
 SV*
-_cast_value(arg_sv,type)
+_cast(arg_sv,type)
   SV* arg_sv;
   char type;
 CODE:
-  /* XXX almost wholly unimplemented! Only 'i' works */
-  void *rvalue, *argvalue;
-  NV num_arg;
-  RETVAL = 0;
+  void *retval = NULL;
+  STRLEN len = 1; 
+  RETVAL = NULL;
   switch (type) {
     case 'c':
+      if(SvPOK(arg_sv)) {
+        retval = SvPV(arg_sv, len);
+      } else {
+        *(signed char*) retval = (signed char)SvNV(arg_sv);
+      }
+      if(*(signed char*)retval)
+        RETVAL = newSVpv((signed char*)retval, len);
+      break;
     case 'C':
-      RETVAL = newSViv((char)*(int*)argvalue);
+      if(SvPOK(arg_sv)) {
+        retval = SvPV(arg_sv, len);
+      } else {
+        *(unsigned char*) retval = (unsigned char)SvNV(arg_sv);
+      }
+      if(*(unsigned char*)retval)
+        RETVAL = newSVpv((unsigned char*)retval, len);
       break;
     case 's':
+      if(SvIOK(arg_sv)) {
+        *(short int*) retval = (short int)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(short int*) retval = (short int)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(short int*) retval = (short int)*SvPV_nolen(arg_sv);
+      }
+      if(*(short int*)retval) {
+        RETVAL = newSViv(*(short int*)retval);
+      }
+      break;
     case 'S':
-      RETVAL = newSVpv((char*)argvalue, 0);
+      if(SvIOK(arg_sv)) {
+        *(unsigned short*) retval = (unsigned short)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(unsigned short*) retval = (unsigned short)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(unsigned short*) retval = (unsigned short)*SvPV_nolen(arg_sv);
+      }
+      if(*(unsigned short*)retval) {
+        RETVAL = newSViv(*(unsigned short*)retval);
+      }
       break;
     case 'i':
-      if(SvIOK(arg_sv) || SvNOK(arg_sv)) {
-        signed int retval;
-        num_arg = SvNV(arg_sv);
-        retval = (int)num_arg;
-        RETVAL = newSViv(retval);
-        break;
+      if(SvIOK(arg_sv)) {
+        *(int*) retval = (int)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
-        RETVAL = newSViv((int)(SvPV_nolen(arg_sv))[0]);
-        break;
+        *(int*) retval = (int)*SvPV_nolen(arg_sv);
       }
-      RETVAL = NULL;
+      if(*(int*)retval) {
+        RETVAL = newSViv(*(int*)retval);
+      }
       break;
     case 'I':
+      if(SvIOK(arg_sv)) {
+        *(unsigned int*) retval = (unsigned int)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(unsigned int*) retval = (unsigned int)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(unsigned int*) retval = (unsigned int)*SvPV_nolen(arg_sv);
+      }
+      if(*(unsigned int*)retval) {
+        RETVAL = newSViv(*(unsigned int*)retval);
+      }
+      break;
     case 'l':
+      if(SvIOK(arg_sv)) {
+        *(long*) retval = (long)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(long*) retval = (long)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(long*) retval = (long)*SvPV_nolen(arg_sv);
+      }
+      if(*(long*)retval) {
+        if(LONGSIZE <= IVSIZE)
+          RETVAL = newSViv(*(long*)retval);
+        else
+          RETVAL = newSVnv(*(long*)retval);
+      }
+      break;
     case 'L':
+      if(SvIOK(arg_sv)) {
+        *(unsigned long*) retval = (unsigned long)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(unsigned long*) retval = (unsigned long)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(unsigned long*) retval = (unsigned long)*SvPV_nolen(arg_sv);
+      }
+      if(*(unsigned long*)retval) {
+        if(LONGSIZE <= IVSIZE)
+          RETVAL = newSViv(*(long*)retval);
+        else
+          RETVAL = newSVnv(*(long*)retval);
+      }
+      break;
     case 'f':
+      if(SvIOK(arg_sv)) {
+        *(float*) retval = (float)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(float*) retval = (float)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(float*) retval = (float)*SvPV_nolen(arg_sv);
+      }
+      if(*(float*)retval) {
+        RETVAL = newSVnv(*(float*)retval);
+      }
+      break;
     case 'd':
+      if(SvIOK(arg_sv)) {
+        *(double*) retval = (double)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(double*) retval = (double)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(double*) retval = (double)*SvPV_nolen(arg_sv);
+      }
+      if(*(double*)retval) {
+        RETVAL = newSVnv(*(double*)retval);
+      }
+      break;
 #ifdef HAS_LONG_DOUBLE
     case 'D':
+      if(SvIOK(arg_sv)) {
+        *(long double*) retval = (long double)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        *(long double*) retval = (long double)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(long double*) retval = (long double)*SvPV_nolen(arg_sv);
+      }
+      if(*(long double*)retval) {
+        RETVAL = newSVnv(*(long double*)retval);
+      }
+      break;
 #endif
     case 'p':
+      if(SvIOK(arg_sv)) {
+      debug_warn("#[%s:%i] _cast: Pointer SvIOK, assuming 'PTR2IV' value",
+        __FILE__, __LINE__ );
+        *(intptr_t*)retval = (intptr_t)INT2PTR(void*, SvIV(arg_sv));
+      } else {
+      debug_warn("#[%s:%i] _case: Pointer not SvIOK, assuming 'pack' value",
+        __FILE__,  __LINE__ );
+        *(intptr_t*)retval = (intptr_t)SvPVX(arg_sv);
+      }
+      if(retval) {
+          RETVAL = newSViv(PTR2IV(*(intptr_t*)retval));
+      }
+      break;
     default: croak( "Unimplemented / Invalid type: %c", type );
   }
 OUTPUT:
