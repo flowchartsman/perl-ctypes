@@ -86,8 +86,8 @@ sub protect ($) {
     print "\t\$cline: $cline\n";
     print "\t\$csub: $csub\n";
   }
-  if( $cpack ne __PACKAGE__
-      or $cfile ne __FILE__ ) {
+  if( $cpack !~ /^Ctypes::/ 
+      or $cfile !~ /Ctypes\// ) {
     return undef;
   }
   return 1;
@@ -101,8 +101,8 @@ sub TIESCALAR {
 
 sub STORE {
   print "In STORE called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
-  protect $self or carp("Unauthorised access of val attribute") && return undef;
   my $self = shift;
+  protect $self or carp("Unauthorised access of val attribute") && return undef;
   my $arg = shift;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
@@ -134,11 +134,12 @@ sub STORE {
         || $Ctypes::Type::allow_overflow_all ) ) {
       croak( "Value out of range for c_int: $arg");
     } else {
-    my $temp = Ctypes::_cast($arg,$typecode);
-    if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
-      $arg = $temp;
-    } else {
-      croak("Unreconcilable argument for type '$typecode': $arg");
+      my $temp = Ctypes::_cast($arg,$typecode);
+      if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
+        $arg = $temp;
+      } else {
+        croak("Unreconcilable argument for type '$typecode': $arg");
+      }
     }
   }
   $owner->{_as_param_} = pack( $typecode, $arg );

@@ -644,67 +644,71 @@ OUTPUT:
   RETVAL
 
 int
-_valid_for_type(arg,type)
-  SV* arg;
+_valid_for_type(arg_sv,type)
+  SV* arg_sv;
   char type;
 CODE:
+  void* arg_p;
   double max;
   short i;
   RETVAL = 0;
-  if( !SvOK(arg) ) { XSRETURN_UNDEF; }
+  if( !SvOK(arg_sv) || !type ) { XSRETURN_UNDEF; }
   switch (type) {
     case 'c':
     case 'C':
-      if( !SvPOK(arg) ) break;
-      if( sv_len(arg) != 1 ) break;
+    /* We want the real value, not implicit conversion */
+      if( !SvPOKp(arg_sv) ) break;
+    /* XXX What about UTF8? */
+      if( sv_len(arg_sv) != 1 ) break;
       RETVAL = 1; break;
     case 's':
     case 'S':
-      if( !SvPOK(arg) ) break
+      if( !SvIOKp(arg_sv) ) break;
       RETVAL = 1; break;
     case 'i':
-      if( SvPOK(arg) ) break;
-      if( !SvIOK(arg) ) break;
-      double thearg = SvNV(arg);
+      if( !SvIOKp(arg_sv) ) break;
+      double thearg = SvNV(arg_sv);
       if( thearg < PERL_INT_MIN || thearg > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( SvNOK(arg) ) break; 
-      if( !SvIOK(arg) ) break;
+      if( SvNOK(arg_sv) ) break; 
+      if( !SvIOK(arg_sv) ) break;
       max = 1 << (sizeof(unsigned int) * 8); 
-      if( (unsigned int)SvIV(arg) > max ) { RETVAL = 0; break; }
+      if( (unsigned int)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'l':
-      if( SvNOK(arg) ) { RETVAL = 0; }
-      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      if( SvNOK(arg_sv) ) { RETVAL = 0; }
+      if( !SvIOK(arg_sv) ) { RETVAL = 0; break; }
       max = 1 << (sizeof(signed long) * 8 - 1);
-      if( (signed long)SvIV(arg) > max ) { RETVAL = 0; break; }
+      if( (signed long)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'L':
-      if( SvNOK(arg) ) { RETVAL = 0; break; }
-      if( !SvIOK(arg) ) { RETVAL = 0; break; }
+      if( SvNOK(arg_sv) ) { RETVAL = 0; break; }
+      if( !SvIOK(arg_sv) ) { RETVAL = 0; break; }
       max = 1 << (sizeof(unsigned long) * 8 - 1);
-      if( (unsigned long)SvIV(arg) > max ) { RETVAL = 0; break; }
+      if( (unsigned long)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'f':
-      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
       max = 1 << (sizeof(float) * 8 - 1);
-      if( (float)SvNV(arg) > max ) { RETVAL = 0; break; }
+      if( (float)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     case 'd':
-      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
       max = 1 << (sizeof(double) * 8 - 1);
-      if( (double)SvNV(arg) > max ) { RETVAL = 0; break; }
+      if( (double)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
+#ifdef HAS_LONG_DOUBLE
     case 'D':
-      if( !SvNOK(arg) ) { RETVAL = 0; break; }
+      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
       max = 1 << (sizeof(long double) * 8 - 1);
-      if( (long double)SvNV(arg) > max ) { RETVAL = 0; break; }
+      if( (long double)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
       RETVAL = 1; break;
+#endif
     case 'p':
-      if( !SvPOK(arg) ) { RETVAL = 0; break; }
+      if( !SvPOK(arg_sv) ) { RETVAL = 0; break; }
       RETVAL = 1; break;
     default: croak( "Invalid type: %c", type );
   }
