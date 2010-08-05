@@ -205,9 +205,6 @@ sub _build_callargs ($\@\$\$\$) {
 }
 
 sub _build_result (\$\@\$\$\$) {
-  print "In _build_result...\n";
-  require Data::Dumper;
-  print Data::Dumper::Dumper( @_ );
   my($result, $callargs, $outmask, $inoutmask, $numretvals)
     = @_;
   my( $i, $index, $bit, @ret );

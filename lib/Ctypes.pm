@@ -353,6 +353,8 @@ or called directly.
 =cut
 
 package Ctypes::DLL;
+use strict;
+use warnings;
 use Ctypes;
 use Ctypes::Function;
 use Carp;
@@ -482,6 +484,8 @@ Windows only.
 =cut
 
 package Ctypes::CDLL;
+use strict;
+use warnings;
 use Ctypes;
 our @ISA = qw(Ctypes::DLL);
 use Carp;
@@ -507,6 +511,8 @@ sub new {
 #}
 
 package Ctypes::WinDLL;
+use strict;
+use warnings;
 our @ISA = qw(Ctypes::DLL);
 
 sub new {
@@ -520,6 +526,8 @@ sub new {
 }
 
 package Ctypes::OleDLL;
+use strict;
+use warnings;
 use Ctypes;
 our @ISA = qw(Ctypes::DLL);
 
@@ -534,6 +542,8 @@ sub new {
 }
 
 package Ctypes::PerlDLL;
+use strict;
+use warnings;
 our @ISA = qw(Ctypes::DLL);
 
 sub new {
@@ -549,6 +559,8 @@ sub new {
 }
 
 package Ctypes::Util;
+use strict;
+use warnings;
 
 =head1 Utility Functions
 

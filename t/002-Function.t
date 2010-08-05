@@ -23,9 +23,9 @@ my $to_upper2 = Ctypes::Function->new
       name   => 'toupper',
       argtypes => c_int,
       restype  => c_int } );
-is( ref($to_upper2->argtypes->[0]->name), 'c_int',
+is( $to_upper2->argtypes->[0]->name, 'c_int',
     'Function argtype specified with Type object' );
-is( ref($to_upper2->restype->name), 'c_int',
+is( $to_upper2->restype->name, 'c_int',
     'Function restype specified with Type object' );
 my $letter_y = c_int('y');
 $ret = $to_upper2->( $letter_y );

@@ -1,7 +1,8 @@
 package Ctypes::Type;
 # always loaded and all c types are exported.
 
-
+use strict;
+use warnings;
 use Carp;
 use Ctypes;
 require Exporter;
@@ -71,6 +72,8 @@ our $allow_overflow_all = 0;
 # value attribute.
 
 package Ctypes::Type::Simple::value;
+use strict;
+use warnings;
 use Carp;
 
 my $owner;
@@ -136,6 +139,7 @@ sub STORE {
       }
     }
   }
+  no warnings;
   $owner->{_as_param_} = pack( $typecode, $arg );
   $$self = $arg;
   return $$self;
@@ -148,6 +152,8 @@ sub FETCH {
 
 
 package Ctypes::Type::Simple;
+use strict;
+use warnings;
 use Ctypes;
 use Carp;
 our @ISA = qw|Ctypes::Type|;
@@ -158,7 +164,7 @@ use overload '0+'  => \&_num_overload,
              '-'   => \&_subtract_overload,
              '&{}' => \&_code_overload,
              '%{}' => \&_hash_overload,
-             fallback => TRUE;
+             fallback => 'TRUE';
              # TODO Multiplication will have to be overridden
              # to implement Python's Array contruction with "type * x"???
 
@@ -273,10 +279,8 @@ for my $func (keys(%access)) {
   *$func = sub {
     my $self = shift;
     my $arg = shift;
-    carp("\tCalled for $key");
     croak("The $key method only takes one argument") if @_;
     if($access{$func}[1] and defined($arg)){
-      carp("\tGot this arg: $arg");
       eval{ $access{$func}[1]->($arg); };
       if( $@ ) {
         croak("Invalid argument for $key method: $@");
