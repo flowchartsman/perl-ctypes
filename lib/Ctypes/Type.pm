@@ -9,7 +9,7 @@ require Exporter;
 our @ISA = ("Exporter");
 use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
-our @EXPORT_OK = qw(&c_int);
+our @EXPORT_OK = qw|&_types|;
 
 our $_perltypes = 
 { 
@@ -55,6 +55,7 @@ our $_pytypes =
   O =>  "c_void_p",
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
+sub _types () { return $_types; }
 our $allow_overflow_all = 0;
 
 # http://docs.python.org/library/ctypes.html

@@ -654,6 +654,7 @@ CODE:
     __FILE__, __LINE__, type);
   if( !SvOK(arg_sv) || !type ) { XSRETURN_UNDEF; }
   switch (type) {
+    case 'v': break;
     case 'c':
     case 'C':
     /* We want the real value, not implicit conversion */
