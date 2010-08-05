@@ -663,13 +663,22 @@ CODE:
       if( sv_len(arg_sv) != 1 ) break;
       RETVAL = 1; break;
     case 's':
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < PERL_SHORT_MIN || arg_nv > PERL_SHORT_MAX ) {
+        RETVAL = -1; break;
+      }
+      RETVAL = 1; break;
     case 'S':
       if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < PERL_USHORT_MIN || arg_nv > PERL_USHORT_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'i':
       if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
-      debug_warn("arg_nv: %f", arg_nv);
       if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
