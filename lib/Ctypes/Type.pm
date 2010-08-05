@@ -331,6 +331,8 @@ for my $k (keys %$_types) {
 }
 our @_allnames = keys %_defined;
 
+package Ctypes::Array;
+# XXX
 
 package Ctypes::Type::Field;
 use Ctypes::Type;
