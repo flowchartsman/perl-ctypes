@@ -70,24 +70,16 @@ our $allow_overflow_all = 0;
 # Of course, you can get the value of the pointer by accessing the
 # value attribute.
 
-package Ctypes::Type::value;
+package Ctypes::Type::Simple::value;
 use Carp;
 
-our $DEBUG = 0;
 my $owner;
 
 sub protect ($) {
   ref shift or return undef;
   my($cpack, $cfile, $cline, $csub) = caller(0);
-  print "# In protect()\n" if $DEBUG > 1;
-  if( $DEBUG > 3 ) {
-    print "\t\$cpack: $cpack\n";
-    print "\t\$cfile: $cfile\n";
-    print "\t\$cline: $cline\n";
-    print "\t\$csub: $csub\n";
-  }
-  if( $cpack !~ /^Ctypes::/ 
-      or $cfile !~ /Ctypes\// ) {
+  if( $cpack ne __PACKAGE__ 
+      or $cfile ne __FILE__ ) {
     return undef;
   }
   return 1;
@@ -100,9 +92,9 @@ sub TIESCALAR {
 }
 
 sub STORE {
-  print "In STORE called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
   my $self = shift;
-  protect $self or carp("Unauthorised access of val attribute") && return undef;
+  protect $self
+    or carp("Unauthorised access of val attribute") && return undef;
   my $arg = shift;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
@@ -114,28 +106,30 @@ sub STORE {
       } elsif($arg->{_as_param_}) {
         $arg = $arg->{_as_param_};
       } else {
-  # XXX Would you ever want to store an object/reference as the value
+  # ??? Would you ever want to store an object/reference as the value
   # of a type? What would get pack()ed in the end?
         croak("Can only store native types or Ctypes compatible objects");
       }
     }
   }
   my $typecode = $owner->{_typecode_};
-  print "    Got $arg as arg\n" if $DEBUG > 32;
-  croak("c_int can only be assigned a single value") if @_;
-  # return 1 on success, 0 on fail, -1 if numeric but out of range
+  croak("Simple Types can only be assigned a single value") if @_;
+  # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   if( $is_valid < 1 ) {
-    print "\t$arg wasn't valid type\n" if $DEBUG > 3;
     no strict 'refs';
     if( ($is_valid == -1)
         and not ( $owner->allow_overflow
         || $owner->allow_overflow_class
         || $Ctypes::Type::allow_overflow_all ) ) {
-      croak( "Value out of range for c_int: $arg");
+      croak( "Value out of range for " . $owner->{name} . ": $arg");
     } else {
       my $temp = Ctypes::_cast($arg,$typecode);
       if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
+        if( $is_valid == -1 ) {
+          carp("Argument $arg overflows for type " . $owner->{name}
+                . ". Value now " . $temp );
+        }
         $arg = $temp;
       } else {
         croak("Unreconcilable argument for type '$typecode': $arg");
@@ -144,42 +138,39 @@ sub STORE {
   }
   $owner->{_as_param_} = pack( $typecode, $arg );
   $$self = $arg;
-  print "    STORE ret: " . $$self . "\n" if $DEBUG > 1;
   return $$self;
 }
 
 sub FETCH {
-  print "FETCHing, called by " . (caller(1))[3] . "\n" if $DEBUG > 1;
   my $self = shift;
-  print "My \$self: $$self\n" if $DEBUG > 1;
   return $$self;
 }
 
-package Ctypes::Type::c_int;
+
+package Ctypes::Type::Simple;
 use Ctypes;
 use Carp;
-use Data::Dumper;
-use Devel::Peek;
-our @ISA = ("Ctypes::Type");
-use fields qw(alignment name _typecode_ size val _as_param_);
+our @ISA = qw|Ctypes::Type|;
+use fields qw|alignment name _typecode_ size
+              allow_overflow val _as_param_|;
 use overload '0+'  => \&_num_overload,
              '+'   => \&_add_overload,
              '-'   => \&_subtract_overload,
              '&{}' => \&_code_overload,
              '%{}' => \&_hash_overload,
              fallback => TRUE;
-             # XXX Multiplication will have to be overridden
-             # to implement Python's Array contruction with "type * x"?
-use subs qw|new val|;
+             # TODO Multiplication will have to be overridden
+             # to implement Python's Array contruction with "type * x"???
 
-our $DEBUG = 0;
 {
   my $allow_overflow_class = 1;
   sub allow_overflow_class {
-    my $self = shift;
+# ??? This could be improved; could still be called as a class method
+# with an object instead of a 1 or 0 and user would not be notified
+    my $self = shift if ref($_[0]);
     my $arg = shift;
-    if( @_ or ( $arg and $arg != 1 and $arg != 0 ) ) {
-      croak("Usage: allow_overflow(x) (1 or 0)");
+    if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
+      croak("Usage: allow_overflow_class(x) (1 or 0)");
     }
     $allow_overflow_class = $arg if $arg;
     return $allow_overflow_class;
@@ -215,8 +206,8 @@ sub _subtract_overload {
 }
 
 sub _hash_overload {
-  my($cpack, $cfile, $cline, $csub) = caller(0);
-  if( $cpack !~ /^Ctypes::/ 
+  my($cpack, $cfile) = caller(0);
+  if( $cpack !~ /^Ctypes::/
       or $cfile !~ /Ctypes\// ) {
     carp("Unauthorized direct Type attribute access!");
     return {};
@@ -225,30 +216,30 @@ sub _hash_overload {
 }
 
 sub _code_overload { 
-  print "In ovlVal...\n" if $DEBUG > 2;
-  if( $DEBUG > 3 ) {
-    for(@_) { print "\targref: " . ref($_)  .  "\n"; }
-  }
   my $self = shift;
   return sub { val($self, @_) };
 }
 
 sub new {
-  print "In c_int::new...\n" if $DEBUG > 1;
-  print Dumper( @_ ) if $DEBUG > 3;
   my $class = shift;
+  my $typecode = shift;
   my $arg = shift;
-  my $self = { val => 0, _typecode_ => 'i', allow_overflow => 0, alignment => 0,
-               name=> 'c_int', _as_param_ => '', size => Ctypes::sizeof('i') };
+  my $self = { _as_param_      => '',
+               _typecode_      => $typecode,
+               val             => 0,
+               address         => undef,
+               name            => $_types->{$typecode},
+               size            => 0,
+               alignment       => 0,
+               allow_overflow  => 0,
+             };
   bless $self => $class;
+  $self->{size} = Ctypes::sizeof($self->{_typecode_});
   $arg = 0 unless $arg;
-  print "    \$arg: $arg\n" if $DEBUG > 2;
-  $self->{obj} = tie $self->{val}, "Ctypes::Type::value", $self;
+  tie $self->{val}, "Ctypes::Type::Simple::value", $self;
   $self->{val} = $arg;
-  if( $DEBUG > 2 ) {
-    if( $arg ) { print "    c_int::new ret: " . $self. "\n"; }
-    else { print "    c_int::new returning...\n"; }
-  }
+# XXX Unimplemented! Must come after setting val;
+#  $self->{address} = Ctypes::addressof($self);
   return $self;
 }
 
@@ -265,8 +256,16 @@ sub val : lvalue {
 #
 # Accessor generation
 #
-my %access = ( _data => ['_as_param_',undef],
-               typecode => ['_typecode_',\&Ctypes::sizeof],
+my %access = ( 
+  _data             => ['_as_param_',undef],
+  typecode          => ['_typecode_',\&Ctypes::sizeof],
+  allow_overflow =>
+    [ 'allow_overflow',
+      sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} } ],
+  alignment         => ['alignment',undef],
+  name              => ['name',undef],
+# Users ~could~ modify size, but only of they delight in the meaningless.
+  size              => ['size',undef],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -274,8 +273,10 @@ for my $func (keys(%access)) {
   *$func = sub {
     my $self = shift;
     my $arg = shift;
+    carp("\tCalled for $key");
     croak("The $key method only takes one argument") if @_;
-    if($access{$func}[1] and $arg){
+    if($access{$func}[1] and defined($arg)){
+      carp("\tGot this arg: $arg");
       eval{ $access{$func}[1]->($arg); };
       if( $@ ) {
         croak("Invalid argument for $key method: $@");
@@ -287,24 +288,7 @@ for my $func (keys(%access)) {
 }
 
 
-sub allow_overflow {
-  my $self = shift;
-  my $arg = shift;
-  if( @_ or ( $arg and $arg != 1 and $arg != 0 ) ) {
-    croak("Usage: allow_overflow(x) (1 or 0)");
-  }
-  unless( ref($self) ) {  # object method
-    croak("allow_overflow is an object method; maybe you wanted allow_overflow_class?");
-  }
-  $self->{allow_overflow} = $arg if $arg;
-  return $self->{allow_overflow};
-}
-
 package Ctypes::Type;
-
-sub c_int {
-  return Ctypes::Type::c_int->new(@_);
-}
 
 =head1 METHODS
 
@@ -326,47 +310,22 @@ the alignment and the address if used.
 
 =cut
 
-package Ctypes::Type::Simple;
-use Ctypes::Type;
-our @ISA = qw(Ctypes::Type);
-
-sub new {
-  my ($class, $type, $name) = @_;
-  my $size = sizeof($type); # a xs function
-  return bless { pack => $type, name => $name, 
-		 size => $size, address => 0, 
-		 alignment => 0 }, $class;
+#
+# Create global c_<type> functions...
+#
+my %_defined;
+for my $k (keys %$_types) {
+  my $name = $_types->{$k};
+  my $func;
+  unless ($_defined{$name}) {
+    no strict 'refs';
+    $func = sub { Ctypes::Type::Simple->new($k, @_); };
+    *{"Ctypes::$name"} = $func;
+    $_defined{$name} = 1;
+  }
 }
+our @_allnames = keys %_defined;
 
-package Ctypes::Type;
-
-# define the simple c_types
-#my %_defined;
-#for my $k (keys %$_types) {
-#  my $name = $_types->{$k};
-#  unless ($_defined{$name}) {
-#    no strict 'refs';
-#    eval "sub $name { Ctypes::Types::Simple->new(\"$k\", \"$name\"); }";
-#    # *&{"Ctypes::$name"} = *&name;
-#    $_defined{$name} = 1;
-#  }
-#}
-#our @_allnames = keys %_defined;
-
-=item sizeof()
-
-B<Method> of a Ctypes::Type object, returning its size. This size is
-that of the represented C type, calculated at instantiation.
-
-=cut
-
-sub sizeof {
-  return shift->{size};
-}
-
-#sub addressof {
-#  return shift->{address};
-#}
 
 package Ctypes::Type::Field;
 use Ctypes::Type;

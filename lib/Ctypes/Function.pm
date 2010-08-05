@@ -336,7 +336,6 @@ sub call {
 # FUNCFLAG_PYTHONAPI
 
 # callargs should be changed in place?
-# XXX May well need to use references in _get_arg()
   my $result = _call($self, @callargs);
 
 # XXX <insert errcheck protocol here>

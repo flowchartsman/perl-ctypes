@@ -32,7 +32,6 @@ debug_warn("#    key is %s", key);
   } else {
       debug_warn("Object wasn't what you thought!");
   }
-debug_warn("#    returning %c", res);
   return res;
 }
 

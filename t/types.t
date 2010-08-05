@@ -1,10 +1,8 @@
 #!perl
 
-use Test::More tests => 16;
+use Test::More tests => 20;
+use Ctypes;
 use Ctypes::Function;
-use Ctypes::Type qw(c_int);
-use Data::Dumper;
-use Devel::Peek;
 
 my $number_seven = c_int(7);
 ok( defined $number_seven, 'c_int returned object');
@@ -46,7 +44,8 @@ is( $no_value, 0, 'Default initialization to 0' );
 my $letter_y = c_int('y');
 is( $letter_y, 121, 'Initialised c_int with ASCII character' );
 
-# XXX: Exceeding range on signed variables undefined?
+# Exceeding range on _signed_ variables is undefined in the standard,
+# so these tests can't really be any better.
 my $overflower = c_int(2147483648);
 isnt( $overflower, 2147483648, 'Cannot exceed INT_MAX' );
 $overflower->(-2147483649);

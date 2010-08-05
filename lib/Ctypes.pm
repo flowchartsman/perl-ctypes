@@ -302,22 +302,23 @@ sub PERLFUNCTYPE {
   return Ctypes::FuncProto::Perl->new( @_ );
 }
 
-=item callback (sig, perlfunc) (NYI)
+=item callback (<perlfunc>, <restype>, <argtypes>)
 
 Creates a callable, an external function which calls back into perl,
 specified by the signature and a reference to a perl sub.
 
-B<sig> is the signature string. The first character specifies the
-calling-convention, B<s> for C<stdcall>, B<c> for C<cdecl> (or 64-bit fastcall). 
-The second character specifies the type-code for the return type, 
-the subsequent characters specify the argument types in type-code
-characters.
+B<perlfunc> is a named (or anonymous?) subroutine reference. B<restype>
+is a single character string representing the return type, and
+B<argtypes> is a multi-character string representing the argument
+types the function will receive from C. All types are represented
+in typecode format.
 
-B<perlfunc> is a Perl subref.
+B<Note> that the interface for Callback->new() will be updated
+to be more consistent with Function->new().
 
 =cut
 
-sub callback($$) { # TODO ffi_prep_closure
+sub callback($$$) {
   return Ctypes::Callback->new( @_ );
 }
 

@@ -541,8 +541,6 @@ _call(self, ...)
           type_expected = '\0';
         }
 
-        /* XXX This made qsort work - check it still does!
-           May well need to use return references in _get_arg() */
         if( SvROK(this_arg) 
             && !sv_isobject(this_arg) ) {
           SV* tmp = SvRV(this_arg);
@@ -649,66 +647,84 @@ _valid_for_type(arg_sv,type)
   char type;
 CODE:
   void* arg_p;
-  double max;
+  NV arg_nv;
   short i;
   RETVAL = 0;
+  debug_warn("#[%s:%i] Entered _valid_for_type with type %c",
+    __FILE__, __LINE__, type);
   if( !SvOK(arg_sv) || !type ) { XSRETURN_UNDEF; }
   switch (type) {
     case 'c':
     case 'C':
     /* We want the real value, not implicit conversion */
       if( !SvPOKp(arg_sv) ) break;
-    /* XXX What about UTF8? */
+    /* ??? What about UTF8? */
       if( sv_len(arg_sv) != 1 ) break;
       RETVAL = 1; break;
     case 's':
     case 'S':
-      if( !SvIOKp(arg_sv) ) break;
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       RETVAL = 1; break;
     case 'i':
-      if( !SvIOKp(arg_sv) ) break;
-      double thearg = SvNV(arg_sv);
-      if( thearg < PERL_INT_MIN || thearg > PERL_INT_MAX ) {
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      debug_warn("arg_nv: %f", arg_nv);
+      if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( SvNOK(arg_sv) ) break; 
-      if( !SvIOK(arg_sv) ) break;
-      max = 1 << (sizeof(unsigned int) * 8); 
-      if( (unsigned int)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < PERL_UINT_MIN || arg_nv > PERL_UINT_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'l':
-      if( SvNOK(arg_sv) ) { RETVAL = 0; }
-      if( !SvIOK(arg_sv) ) { RETVAL = 0; break; }
-      max = 1 << (sizeof(signed long) * 8 - 1);
-      if( (signed long)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
+    /* ??? Are Longs always guaranteed to be IV rather than NV? */
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < PERL_LONG_MIN || arg_nv > PERL_LONG_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'L':
-      if( SvNOK(arg_sv) ) { RETVAL = 0; break; }
-      if( !SvIOK(arg_sv) ) { RETVAL = 0; break; }
-      max = 1 << (sizeof(unsigned long) * 8 - 1);
-      if( (unsigned long)SvIV(arg_sv) > max ) { RETVAL = 0; break; }
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < PERL_ULONG_MIN || arg_nv > PERL_ULONG_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'f':
-      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
-      max = 1 << (sizeof(float) * 8 - 1);
-      if( (float)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+    /* ??? Is NV, usually double, alright to use here?
+       Also, any Perl vars to use instead of stdlib ones? */
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < FLT_MIN || arg_nv > FLT_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
     case 'd':
-      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
-      max = 1 << (sizeof(double) * 8 - 1);
-      if( (double)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < DBL_MIN || arg_nv > DBL_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
 #ifdef HAS_LONG_DOUBLE
     case 'D':
-      if( !SvNOK(arg_sv) ) { RETVAL = 0; break; }
-      max = 1 << (sizeof(long double) * 8 - 1);
-      if( (long double)SvNV(arg_sv) > max ) { RETVAL = 0; break; }
+      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      arg_nv = SvNV(arg_sv);
+      if( arg_nv < LDBL_MIN || arg_nv > LDBL_MAX ) {
+        RETVAL = -1; break;
+      }
       RETVAL = 1; break;
 #endif
     case 'p':
-      if( !SvPOK(arg_sv) ) { RETVAL = 0; break; }
+    /* Pointers can be just about anything
+       ??? Could this be improved? */
+      if( !SvPOK(arg_sv) && !SvNOK(arg_sv) && !SvIOK(arg_sv) )
+        RETVAL = 0; break;
       RETVAL = 1; break;
     default: croak( "Invalid type: %c", type );
   }
@@ -721,6 +737,12 @@ _cast(arg_sv,type)
   char type;
 CODE:
   void *retval = NULL;
+#ifdef HAS_LONG_DOUBLE
+  Newxc(retval, 1, long double, long double);
+#else
+  Newxc(retval, 1, double, double);
+#endif
+  if(retval == NULL) croak("Ctypes::_cast: Out of memory!");
   STRLEN len = 1; 
   RETVAL = NULL;
   switch (type) {
@@ -772,7 +794,7 @@ CODE:
       } else if(SvNOK(arg_sv)) {
         *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
-        *(int*) retval = (int)*SvPV_nolen(arg_sv);
+        *(int*)retval = (int)*(SvPV_nolen(arg_sv));
       }
       if(*(int*)retval) {
         RETVAL = newSViv(*(int*)retval);
@@ -874,6 +896,7 @@ CODE:
       break;
     default: croak( "Unimplemented / Invalid type: %c", type );
   }
+  Safefree(retval);
 OUTPUT:
   RETVAL
 
