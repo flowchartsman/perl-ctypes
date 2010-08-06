@@ -399,95 +399,11 @@ sub _get_args (\@\@) {
   return $ret;
 }
 
-# Take input of:
-#   ARRAY ref
-#   or list
-#   or typecode string
-# ... and interpret into an array ref
-sub _make_arrayref {
-  my @inputs = @_;
-  my $output = [];
-  # Turn single arg or LIST into arrayref...
-  if( ref($inputs[0]) ne 'ARRAY' ) {
-    if( $#inputs > 0 ) {      # there is a list of inputs 
-      for(@inputs) {
-        push @{$output}, $_;
-      }    
-    } else {   # there is only one input 
-      if( !ref($inputs[0]) ) {
-      # We can make list of argtypes from string of type codes...
-        $output = [ split(//,$inputs[0]) ];
-      } else {
-        push @{$output}, $inputs[0];
-      }
-    }
-  } else {  # first arg is an ARRAY ref, must be the only arg
-    croak( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
-    $output = $inputs[0];
-  }
-  return $output;
-}
-
-# Take an arrayref (see _make_arrayref) and makes sure all contents are
-#   valid typecodes
-#   Type objects
-#   Objects implementing _as_param_ attribute or method
-# Returns UNDEF on SUCCESS
-# Returns the index of the failing thingy on failure
-sub _check_invalid_types ($) {
-  my $typesref = shift;
-  # Now check supplied args are valid...
-  my $typecode;
-  for( my $i=0; $i<=$#{$typesref}; $i++ ) {
-    $_ = $typesref->[$i];
-    # Check objects fulfil all the requirements...
-    if( ref($_) ) {
-      if( !blessed($_) ) {
-        carp("No unblessed references as argtypes!");
-        return $i;
-      } else {
-        if( !$_->can("_as_param_")
-            and not defined($_->{_as_param_}) ) {
-          carp("argtypes must have _as_param_ method or attribute");
-          return $i;
-        }
-        # try for attribute first
-        $typecode = $_->{_typecode_};
-        if( not defined($typecode) ) {
-          if( $_->can("_typecode_") ) {
-            $typecode = $_->_typecode_;
-          } else {
-            carp("argtypes must have _typecode_ method or attribute");
-            return $i;
-          }
-        }
-        eval{ Ctypes::sizeof($typecode) };
-        if( $@ ) { 
-          carp( @_ );
-          return $i;
-        }
-      } 
-    } else {
-    # Not a ref; make sure it's a valid 1-char typecode...
-      if( length($_) > 1 ) {
-carp("argtypes must be valid objects or 1-char typecodes (perldoc Ctypes)");
-        return $i;
-      }
-      eval{ Ctypes::sizeof($_); };
-      if( $@ ) { 
-        carp( @_ );
-        return $i;
-      }
-    }
-  }
-  return undef;
-}
-
 ################################
 #       PUBLIC FUNCTIONS       #
 ################################
 
-=head1 PUBLIC SUBROUTINES/METHODS
+=head1 METHODS
 
 Ctypes::Function's methods are designed for flexibility.
 
@@ -676,8 +592,8 @@ sub new {
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
   }
   $$restype = 'i' unless defined $$restype;
-  $$argtypes = _make_arrayref($$argtypes) if defined($$argtypes);
-  my $errpos =  _check_invalid_types($$argtypes);
+  $$argtypes = Ctypes::_make_arrayref($$argtypes) if defined($$argtypes);
+  my $errpos =  Ctypes::_check_invalid_types($$argtypes);
   croak("Invalid argtype at position $errpos: " . $$argtypes[$errpos] )
     if $errpos;
 

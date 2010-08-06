@@ -214,7 +214,7 @@ sub _subtract_overload {
 
 sub _hash_overload {
   my($cpack, $cfile) = caller(0);
-  if( $cpack !~ /^Ctypes::/
+  if( $cpack !~ /^Ctypes/
       or $cfile !~ /Ctypes\// ) {
     carp("Unauthorized direct Type attribute access!");
     return {};
@@ -332,7 +332,15 @@ for my $k (keys %$_types) {
 our @_allnames = keys %_defined;
 
 package Ctypes::Array;
-# XXX
+use strict;
+use warnings;
+use Ctypes;  # which uses Ctypes::Type?
+
+sub new {
+  my $class = shift;
+  return undef unless $_[0]; # TODO: Uninitialised Arrays? Why??
+  my $in = Ctypes::_make_arrayref(@_);
+}
 
 package Ctypes::Type::Field;
 use Ctypes::Type;
