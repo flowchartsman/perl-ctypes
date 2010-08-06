@@ -140,7 +140,6 @@ sub STORE {
       }
     }
   }
-  no warnings;
   $owner->{_as_param_} = pack( $typecode, $arg );
   $$self = $arg;
   return $$self;
@@ -331,7 +330,7 @@ for my $k (keys %$_types) {
 }
 our @_allnames = keys %_defined;
 
-package Ctypes::Array;
+package Ctypes::Type::Array;
 use strict;
 use warnings;
 use Ctypes;  # which uses Ctypes::Type?

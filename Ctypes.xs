@@ -659,7 +659,6 @@ CODE:
     case 'C':
     /* We want the real value, not implicit conversion */
       if( !SvPOKp(arg_sv) ) break;
-    /* ??? What about UTF8? */
       if( sv_len(arg_sv) != 1 ) break;
       RETVAL = 1; break;
     case 's':
@@ -746,6 +745,7 @@ _cast(arg_sv,type)
   SV* arg_sv;
   char type;
 CODE:
+  debug_warn("#[%s:%i] _cast: got type %c", __FILE__, __LINE__, type);
   void *retval = NULL;
 #ifdef HAS_LONG_DOUBLE
   Newxc(retval, 1, long double, long double);
@@ -754,25 +754,41 @@ CODE:
 #endif
   if(retval == NULL) croak("Ctypes::_cast: Out of memory!");
   STRLEN len = 1; 
-  RETVAL = NULL;
+  RETVAL = &PL_sv_undef;
   switch (type) {
     case 'c':
-      if(SvPOK(arg_sv)) {
-        retval = SvPV(arg_sv, len);
-      } else {
-        *(signed char*) retval = (signed char)SvNV(arg_sv);
+      debug_warn("Case 'c'");
+      if(SvIOK(arg_sv)) {
+        debug_warn("\targ was SvIOK");
+        *(unsigned char*) retval = (unsigned char)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        debug_warn("\targ was SvNOK");
+        *(unsigned char*) retval = (unsigned char)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        debug_warn("\targ was SvPOK");
+        *(unsigned char*) retval = (unsigned char)*SvPV_nolen(arg_sv);
       }
-      if(*(signed char*)retval)
-        RETVAL = newSVpv((signed char*)retval, len);
+      if(*(unsigned char*)retval) {
+        debug_warn("\tretval is %c", *(unsigned char*)retval);
+        RETVAL = newSVpv((unsigned char*)retval, len);
+      }
       break;
     case 'C':
-      if(SvPOK(arg_sv)) {
-        retval = SvPV(arg_sv, len);
-      } else {
+      debug_warn("Case 'C'");
+      if(SvIOK(arg_sv)) {
+        debug_warn("\targ was SvIOK");
+        *(unsigned char*) retval = (unsigned char)SvIV(arg_sv);
+      } else if(SvNOK(arg_sv)) {
+        debug_warn("\targ was SvNOK");
         *(unsigned char*) retval = (unsigned char)SvNV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        debug_warn("\targ was SvPOK");
+        *(unsigned char*) retval = (unsigned char)*SvPV_nolen(arg_sv);
       }
-      if(*(unsigned char*)retval)
+      if(*(unsigned char*)retval) {
+        debug_warn("\tretval is %c", *(unsigned char*)retval);
         RETVAL = newSVpv((unsigned char*)retval, len);
+      }
       break;
     case 's':
       if(SvIOK(arg_sv)) {
@@ -799,14 +815,19 @@ CODE:
       }
       break;
     case 'i':
+      debug_warn("Case 'i'");
       if(SvIOK(arg_sv)) {
+        debug_warn("\targ was SvIOK");
         *(int*) retval = (int)SvIV(arg_sv);
       } else if(SvNOK(arg_sv)) {
+        debug_warn("\targ was SvNOK");
         *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
+        debug_warn("\targ was SvPOK");
         *(int*)retval = (int)*(SvPV_nolen(arg_sv));
       }
       if(*(int*)retval) {
+        debug_warn("\tretval is %i", *(int*)retval);
         RETVAL = newSViv(*(int*)retval);
       }
       break;

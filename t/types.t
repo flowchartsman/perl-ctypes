@@ -6,6 +6,7 @@ use Ctypes::Function;
 
 my $number_seven = c_int(7);
 ok( defined $number_seven, 'c_int returned object');
+# XXX Py ctypes has this behaviour: valuable?
 # don't know if c_int will default to different type on 
 # this system so do inspecific check:
 like( ref($number_seven), qr/Ctypes::Type/, 'c_int created Type object' );
