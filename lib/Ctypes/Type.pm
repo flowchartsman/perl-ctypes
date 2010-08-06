@@ -264,15 +264,15 @@ sub val : lvalue {
 # Accessor generation
 #
 my %access = ( 
-  _data             => ['_as_param_',undef],
+  _data             => ['_as_param_'],
   typecode          => ['_typecode_',\&Ctypes::sizeof],
   allow_overflow =>
     [ 'allow_overflow',
-      sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} } ],
-  alignment         => ['alignment',undef],
-  name              => ['name',undef],
-# Users ~could~ modify size, but only of they delight in the meaningless.
-  size              => ['size',undef],
+      sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
+      1 ], # <--- this makes overflow settable
+  alignment         => ['alignment'],
+  name              => ['name'],
+  size              => ['size'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -287,8 +287,10 @@ for my $func (keys(%access)) {
         croak("Invalid argument for $key method: $@");
       }
     }
-    $self->{$key} = $arg if $arg;
-    $self->{$key};
+    if($access{$func}[2] and defined($arg)) {
+      $self->{$key} = $arg if $arg;
+    }
+    return $self->{$key};
   }
 }
 
@@ -335,12 +337,74 @@ package Ctypes::Type::Array;
 use strict;
 use warnings;
 use Ctypes;  # which uses Ctypes::Type?
-
-sub new {
-  my $class = shift;
-  return undef unless $_[0]; # TODO: Uninitialised Arrays? Why??
-  my $in = Ctypes::_make_arrayref(@_);
-}
+#
+#sub new {
+#  my $class = shift;
+#  return undef unless $_[0]; # TODO: Uninitialised Arrays? Why??
+#  # Specified array type in 1st pos, members in arrayref in 2nd
+#  my( $deftype, $in );
+#  if( $_[0] and ref($_[1] eq 'ARRAY') ) {
+#    $deftype = shift;
+#    croak("Array type must be specified as Ctypes Type or similar object")
+#      unless ref($deftype);
+#    _check_invalid_types( [ $deftype ] );
+#    $in = shift;
+#  } else {  # no specification of array type, guess reasonable defaults
+#    $in = Ctypes::_make_arrayref(@_);
+#  }
+#
+#  my $members;
+#  my $newval;
+#
+## Scenario A: We've been told what type to make the array
+##   Cast all inputs to that type.
+#  if( $deftype ) {
+#    if( ref($deftype) eq 'Ctypes::Type::Simple' ) {
+#      for(my $i = 0; $i <= $#$in; $i++) {
+#        if( !ref($$in[$i]) ) {
+#          $members->[$i] =
+#            Ctypes::Type::Simple->new(
+#              $deftype->{_typecode_},
+#              $$in[$i] );
+#          next;
+#        }
+#        if( $$in[$i]->{_typecode_} eq $deftype->{_typecode_} ) {
+#          $members->[$i] = $$in[$i];
+#        } else {
+#          $members->[$i] = Ctypes::Type::Simple->new(
+#            $deftype->{_typecode_}, $$in[$i]); # XXX Hail Mary...
+#        }
+#      }
+#    } else {
+#    # If it's a non-type object, we can't do casting: just make sure
+#    # they're all the same type, err if not
+#      for(my $i = 0; $i <= $#$in; $i++) {
+#        croak("Input at $i is not of user-defined type $objtype")
+#          if ref($$in[$i]) ne $objtype;
+#      }
+#    }
+#  } else {    # it's a typecode or Type object...
+#      $deftype = ref($deftype) ? $deftype->{_typecode_} : $deftype;
+#      for(my $i = 0; $i <= $#$in; $i++) {
+#        my $newval;
+#        if(ref($$in[$i]) {
+#          if
+#        }croak("Array input at $i is not of specified type '$deftype'")
+#          unless (ref($$in[$i]) ? $$in[$i]->{_typecode_} : $$in[$i] ) 
+#          eq $deftype;
+#        $members->
+#      }
+#    }
+#  }
+## Scenario
+#
+#  my $hcd;    # 'Highest Common Demoninator'
+# The logic here is not to be super clever, just to handle simple
+# arrays of Perl natives transparently. We check size of numbers
+#  for my $arg(@$in) {
+#    if(ref) {}
+#  }
+#}
 
 package Ctypes::Type::Field;
 use Ctypes::Type;

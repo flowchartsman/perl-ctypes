@@ -593,8 +593,8 @@ sub new {
   }
   $$restype = 'i' unless defined $$restype;
   $$argtypes = Ctypes::_make_arrayref($$argtypes) if defined($$argtypes);
-  my $errpos =  Ctypes::_check_invalid_types($$argtypes);
-  croak("Invalid argtype at position $errpos: " . $$argtypes[$errpos] )
+  my $errpos = Ctypes::_check_invalid_types($$argtypes);
+  croak("Invalid argtype at position $errpos: " . $$argtypes->[$errpos] )
     if $errpos;
 
   if (!$$func) {

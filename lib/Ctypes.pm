@@ -121,12 +121,12 @@ sub _check_invalid_types ($) {
     # Check objects fulfil all the requirements...
     if( ref($_) ) {
       if( !Scalar::Util::blessed($_) ) {
-        carp("No unblessed references as argtypes!");
+        carp("No unblessed references as types");
         return $i;
       } else {
         if( !$_->can("_as_param_")
             and not defined($_->{_as_param_}) ) {
-          carp("argtypes must have _as_param_ method or attribute");
+          carp("types must have _as_param_ method or attribute");
           return $i;
         }
         # try for attribute first
@@ -135,7 +135,7 @@ sub _check_invalid_types ($) {
           if( $_->can("_typecode_") ) {
             $typecode = $_->_typecode_;
           } else {
-            carp("argtypes must have _typecode_ method or attribute");
+            carp("types must have _typecode_ method or attribute");
             return $i;
           }
         }
@@ -148,7 +148,7 @@ sub _check_invalid_types ($) {
     } else {
     # Not a ref; make sure it's a valid 1-char typecode...
       if( length($_) > 1 ) {
-carp("argtypes must be valid objects or 1-char typecodes (perldoc Ctypes)");
+carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
         return $i;
       }
       eval{ Ctypes::sizeof($_); };

@@ -31,13 +31,10 @@ $number_seven--;
 is( $number_seven->val, 17, '$obj -= <num>' );
 
 is( $number_seven->typecode, 'i', "->typecode getter" );
-is( $number_seven->typecode('p'), 'p', "->typecode(x) setter" );
+is( $number_seven->typecode('p'), 'i', "typecode cannot be set" );
 
-# The ->val is there to do necessary type checking and all the
-# pack()ing malarky for you, storing the result in _data.
-# You should NEVER access a Type's _data directly. But you can.
 is( $number_seven->_data, pack('i', 17), "->_data getter" );
-is( $number_seven->_data(pack('i', 19)), pack('i', 19), "->_data setter" );
+is( $number_seven->_data(pack('i', 19)), pack('i', 17), "_data cannot be set" );
 
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');
