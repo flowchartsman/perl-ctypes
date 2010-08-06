@@ -753,7 +753,8 @@ CODE:
   Newxc(retval, 1, double, double);
 #endif
   if(retval == NULL) croak("Ctypes::_cast: Out of memory!");
-  STRLEN len = 1; 
+  STRLEN len = 1;
+  STRLEN utf8retlen = 0;
   RETVAL = &PL_sv_undef;
   switch (type) {
     case 'c':
@@ -824,7 +825,15 @@ CODE:
         *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
         debug_warn("\targ was SvPOK");
-        *(int*)retval = (int)*(SvPV_nolen(arg_sv));
+        if(SvUTF8(arg_sv)) {
+          debug_warn("\tThis is utf8!");
+          *(int*)retval =
+            (int)utf8_to_uvchr((SvPVutf8_nolen(arg_sv)), &utf8retlen);
+        }
+        else {
+          debug_warn("\tThis is Not utf8");
+          *(int*)retval = (int)*(SvPV_nolen(arg_sv));
+        }
       }
       if(*(int*)retval) {
         debug_warn("\tretval is %i", *(int*)retval);

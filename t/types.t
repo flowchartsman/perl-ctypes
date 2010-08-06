@@ -1,8 +1,9 @@
 #!perl
 
-use Test::More tests => 20;
+use Test::More tests => 21;
 use Ctypes;
 use Ctypes::Function;
+use utf8;
 
 my $number_seven = c_int(7);
 ok( defined $number_seven, 'c_int returned object');
@@ -32,6 +33,9 @@ is( $number_seven->val, 17, '$obj -= <num>' );
 is( $number_seven->typecode, 'i', "->typecode getter" );
 is( $number_seven->typecode('p'), 'p', "->typecode(x) setter" );
 
+# The ->val is there to do necessary type checking and all the
+# pack()ing malarky for you, storing the result in _data.
+# You should NEVER access a Type's _data directly. But you can.
 is( $number_seven->_data, pack('i', 17), "->_data getter" );
 is( $number_seven->_data(pack('i', 19)), pack('i', 19), "->_data setter" );
 
@@ -42,8 +46,12 @@ my $no_value = c_int;
 ok( ref($no_value) =~ /Ctypes::Type/, 'Created object without initializer' );
 is( $no_value, 0, 'Default initialization to 0' );
 
-my $letter_y = c_int('y');
-is( $letter_y, 121, 'Initialised c_int with ASCII character' );
+my $number_y = c_int('y');
+is( $number_y, 121, 'c_int casts from non-numeric ASCII character' );
+
+my $number_ryu = c_int('龍');
+is( $number_ryu->val, 40845, 'c_int converts from UTF-8 character' );
+# TODO: implement this for other numeric types!
 
 # Exceeding range on _signed_ variables is undefined in the standard,
 # so these tests can't really be any better.
@@ -53,4 +61,5 @@ $overflower->(-2147483649);
 isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' );
 
 my $ret_as_char = c_char(89);
-is( $ret_as_char->val, 'Y', 'c_char converts from number types' );
+is( $ret_as_char->val, 'Y', 'c_char converts from numbers' );
+# TODO: define behaviour for numbers > 255!
