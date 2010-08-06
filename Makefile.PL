@@ -23,11 +23,7 @@ WriteMakefile(
       AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
      : () ),
     LIBS              => $^O eq 'MSWin32' ? ['-Lwin32 -lffi'] : [ '-Llibffi -lffi' ],
-    INC               => '-I. -I./include',
-    #DEFINE            => '-DCTYPES_DEBUG',
-    #OPTIMIZE         => '-ggdb3 -O0',
-    #LDDLFLAGS        => '-shared -L/usr/local/lib -fstack-protector',
-    #NEEDS_LINKING     => 1,
+    INC               => '-I. -I./include -I./src',
 );
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,

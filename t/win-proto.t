@@ -6,7 +6,7 @@ if ( $^O !~ /(MSWin32|cygwin)/ ) {
 } else {
 
   TODO: {
-    local $TODO = "Type objects not yet done!";
+    local $TODO = "Windows-specific Type objects not yet done!";
     
     require Ctypes; import Ctypes qw(c_int POINTER WINFUNCTYPE WinDLL WinError);
     require Ctypes::WinTypes; import Ctypes::WinTypes qw(BOOL HWND RECT LPCSTR UINT);

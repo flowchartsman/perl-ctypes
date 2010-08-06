@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use Ctypes;
 use overload '&{}' => \&_call_overload;
+use Scalar::Util qw|blessed looks_like_number|;
+use Carp;
 
 # Public functions defined in POD order
 sub new;
@@ -58,7 +60,13 @@ sub _call;
 sub _call_overload;
 sub _form_sig;
 sub _get_args;
-sub _to_packstyle; # TODO
+sub _make_types_arrayref; 
+
+BEGIN {
+sub PF_IN () { 1; }
+sub PF_OUT () { 2; }
+sub PF_INDEF0 () { 4; }
+}
 
 # For which members will AUTOLOAD provide mutators?
 my $_setable = { name => 1, sig => 1, abi => 1, 
@@ -94,18 +102,248 @@ sub AUTOLOAD {
   }
 }
 
-sub _call {
+sub _build_callargs ($\@\$\$\$) {
   my $self = shift;
-  my @args = @_;
-  my $retval;
-  my $sig = $self->_form_sig;
-  $retval = Ctypes::call( $self->func, $sig, @args );
-  return $retval;
+  my $inargs = shift;
+  my $outmask = shift;
+  my $inoutmask = shift;
+  my $numretvals = shift;
+  my( $actual_args );
+  if( !defined $self->{argtypes} or !defined $self->{paramflags} or
+      $#{$self->{argtypes}} == 0 ) {
+    return @$inargs;
+  }
+  my $inargs_index = 0;
+  my $len = $#{$self->{argtypes}} + 1;
+
+  my @callargs;
+  for(my $i = 0; $i < $len; $i++) {
+    my $item = $self->{paramflags}->[$i];
+    my( $ob, $flag, $name, $defval );
+
+    $flag = $item->[0];
+    $name = $item->[1] ? $item->[1] : '';
+    $defval = $item->[2] ? $item->[2] : '';
+# "i|zO" is in _validate_paramflags - need to do this, but when?"w
+# paramflags flag values:
+# 1 = input param
+# 2 = output param
+# 4 = input param defaulting to 0
+    SWITCH: {
+      if( $flag & (PF_IN | PF_INDEF0) ) { 
+# /* ['in', 'lcid'] parameter.  Always taken from defval,
+#    if given, else the integer 0. */
+        if( !$defval ) {
+          $defval = Ctypes::Type::c_int(0);
+        }
+        $callargs[$i] = $defval;
+        last SWITCH;
+      }
+      if( $flag & (PF_IN | PF_OUT) ) {
+        $inoutmask |= ( 1 << $i ); # mark as inout arg
+        $numretvals++;
+      } # fall through ...
+      if( $flag == 0 or $flag & PF_IN ) {
+      # Py calls out to a _get_arg func here, but it's only used once
+      # and we'd have less logic in ours (no kwds), so just inlined it
+        if($inargs_index <= scalar @$inargs) {
+          ++$inargs_index;
+          $ob = @$inargs[$inargs_index]; 
+        } elsif( $defval ) {
+          $ob = $defval;
+        } elsif( $name ) {
+          croak("Required argument '", $name, "' is missing");
+        } else {
+          croak("Not enough arguments");
+        }
+        $callargs[$i] = $ob;
+        last SWITCH;
+      }
+      if( $flag & PF_OUT ) {
+        if( $defval ) {
+          $callargs[$i] = $defval;
+          $outmask |= ( 1 << $i ); # mark as out arg
+          $numretvals++;
+          last SWITCH; 
+        }
+        $ob = $self->{argtypes}[$i];
+        if( $ob->{proto} ) {
+          # XXX don't understand this logic yet..
+          # Means $ob is a Pointer/Array type? So what?
+          croak( ref($ob) .
+            " 'out' parameter must be passed as default value");
+        }
+        # XXX This probably needs changed when Array objects worked out
+        if( ref($ob) =~ /Ctypes::Type::Array/ ) {
+          # Calling the array itself? Wonder what this returns...
+          # Will be annoying to do in C space.
+          $ob = $ob->();
+        } else {
+          # /* Create an instance of the pointed-to type */
+          # ob = PyObject_CallObject(dict->proto, NULL);
+          $ob = $ob->proto->();
+        }
+        unless( $ob ) {
+          croak("Could not create type of Array / Pointer object (I think...)");
+        }
+        $callargs[$i] = $ob;
+        $outmask |= ( 1 << $i ); # mark as out arg
+        $numretvals++;
+        last SWITCH;
+      }
+      croak("paramflag ", $flag, " not yet implemented");
+    }
+  }
+  $actual_args = scalar @$inargs; # already added in %kwds
+  if( $actual_args != $inargs_index) {
+    # /* When we have default values or named parameters, this error
+    # message is misleading.  See unittests/test_paramflags.py
+    # ^ The above might not apply to us, since we add in %kwds early?
+    croak("call takes ", $inargs_index, "arguments (", $actual_args, " given)... or maybe a different error");
+  }
+  return @callargs;
+}
+
+sub _build_result (\$\@\$\$\$) {
+  my($result, $callargs, $outmask, $inoutmask, $numretvals)
+    = @_;
+  my( $i, $index, $bit, @ret );
+
+  if( scalar @$callargs == 0 ) {
+    return $$result;
+  }
+
+  # XXX This looks like a fishy translation from C...
+  if( !$$result || $$numretvals == 0 ) {
+    @$callargs = ();
+    undef @$callargs;
+    return $$result;
+  }
+
+  my @results if $$numretvals > 1;
+
+  $index = 0;
+  for( $bit = 1, $i = 0; $i < 32; $i++, $bit <<= 1) {
+    my $v;
+    if( $bit & $inoutmask ) {
+      $v = $$callargs[$i];
+      return $v if $numretvals == 1;
+      $results[$i] = $v;
+      $index++;
+    } elsif( $bit & $outmask ) {
+      $v = $callargs->[$i];
+      $v->__ctypes_from_outparam__ if $v->can("__ctypes_from_outparam__");
+    # XXX Why return v if NULL? This could happen at any point in the
+    # @results building process
+      if( !$v || $numretvals == 1 ) {
+        return $v;
+      }
+      $results[$i] = $v;
+      $index++;
+    }
+    last if $index == $$numretvals;
+  }
+  return @results;
+}
+
+sub call {
+  my $self = shift;
+  my @inargs = @_;
+  my %kwds = (); # 'keywords': hash of named arguments
+  if( ref($inargs[$#inargs]) eq 'HASH' )
+    { %kwds = %{pop @inargs}; }
+  my( $outmask, $inoutmask );
+  my $numretvals = 0;
+
+  # If paramflags mark an arg as OUT or INOUT, they should be taken
+  # as a reference rather than by value
+  if( $self->{paramflags} && defined $self->{paramflags}[0] ) {
+    for(my $i = 0; $i <= $#inargs; $i++){
+      next if $inargs[$i] == undef;
+      next if $self->{paramflags}[$i] == undef;
+      if( $self->{paramflags}[$i][0] & PF_OUT ) {
+        $inargs[$i] = \$_[$i];
+      }
+    }
+  }
+
+  # Put keyword arguments where they ought to be in @inargs...
+  if( keys(%kwds) ) {
+    if( !$self->{paramflags} ) {
+      croak("Keywords used without specification; set your paramflags!");
+    } else {
+      KEYLOOP:
+      for(keys(%kwds)) {
+        my $key = $_;
+        for(my $i=0; $i<=$#{$self->{paramflags}}; $i++) {
+          if($self->{paramflags}[$i] = $key) {
+            if(exists $inargs[$i]) {
+              croak("Argument supplied both named and by position");
+            } else {
+              if( $self->{paramflags}[$i][0] & PF_OUT ) {
+                $inargs[$i] = \$kwds{$key};
+              } else {
+                $inargs[$i] = $kwds{$key};
+              }
+              next KEYLOOP;
+        } } }
+        croak("Named argument not found in paramflags: $key");
+      }
+    }
+  }
+
+  my @callargs = _build_callargs( $self,
+                                  @inargs,
+                                  $outmask,
+                                  $inoutmask,
+                                  $numretvals);
+
+# /* For cdecl functions, we allow more actual arguments
+#    than the length of the argtypes tuple.               */
+# XXX Not sure yet if above logic allows this behaviour
+# Py checks it by number of converters? (_ctypes.c:3334-3360) 
+
+#ctypes-1.0.2/source/ctypes.h:238
+# Currently, CFuncPtr types have 'converters' and 'checker'
+# entries in their type dict.  They are only used to cache
+# attributes from other entries, which is wrong.
+
+# Do conversions of args we can't understand...
+  for(@callargs) {
+    my $converted;
+    if( ref($_) and blessed($_) and ref($_) !~ /Ctypes::Type/ ) {
+      if( $_->can("_as_param_") ) {
+        $converted = $_->_as_param_();
+        if( ref($converted) and ref($converted) !~ /Ctypes::Type/ ) {
+          croak("_as_param_() must return a Ctypes::Type or simple scalar");
+        }
+      } elsif( $_->{_as_param_} ) {
+        $converted = $_->{_as_param_};
+        if( ref($converted) and ref($converted) !~ /Ctypes::Type/ ) {
+          croak("_as_param_() must be a Ctypes::Type or simple scalar");
+        }
+      } else {
+        croak("_as_param function or property needed for non-Ctypes::Type " .
+              "object argument");
+      }
+    }
+  }
+
+# Py's StgDictObject's int 'flags' field holds ABI info and
+# FUNCFLAG_PYTHONAPI
+
+# callargs should be changed in place?
+  my $result = _call($self, @callargs);
+
+# XXX <insert errcheck protocol here>
+
+  return _build_result($result, @callargs, $outmask,
+                       $inoutmask, $numretvals);
 }
 
 sub _call_overload {
   my $self = shift;
-  return sub { _call($self, @_) };
+  return sub { call($self, @_) };
 }
 
 # Put Ctypes::_call style sig string together from $self's attributes
@@ -114,19 +352,28 @@ sub _form_sig {
   my $self = shift;
   my @sig_parts;
   $sig_parts[0] = $self->{abi} or abi_default();
-  $sig_parts[1] = $self->{restype} or 
-    die("Return type not defined (even void must be defined with '_')");
+  if( ref($self->{restype}) ) {
+    if( ref($self->{restype}) =~ /Ctypes::Type/ ) {
+      $sig_parts[1] = $self->{restype}->{_typecode_};
+    } else {
+      return undef; # Can't take typecodes for non Type objects
+    }
+  } else {
+    $sig_parts[1] = $self->{restype} or 
+      die("Return type not defined (even void must be defined with '_')");
+  }
   if(defined $self->{argtypes}) {
-    my @argtypes;
-    my $argtypes = $self->{argtypes};
-    if (!ref($argtypes)) { # string
-      @argtypes = split //, $argtypes if length $argtypes; 
-    }
-    else { # ARRAYREF or Ctypes::Type
-      @argtypes = _to_packstyle($argtypes);
-    }
-    for(my $i = 0; $i<=$#argtypes ; $i++) {
-      $sig_parts[$i+2] = $argtypes[$i];
+    for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
+      if( ref($self->{argtypes}[$i]) ) {
+        if( ref($self->{argtypes}[$i]) ) {
+          $sig_parts[$i+2] = $self->{argtypes}[$i]->{typecode};
+        }
+        # Can't represent non-Type objects as typecodes!
+        return undef;
+      }
+      # Don't know how this would happen, but...
+      return undef if length $self->{argtypes}[$i] > 1;
+      $sig_parts[$i+2] = $self->{argtypes}[$i];
     }
   }
   return join('',@sig_parts);
@@ -152,19 +399,11 @@ sub _get_args (\@\@) {
   return $ret;
 }
 
-# Interpret Ctypes type objects to pack-style notation (unimplemented)
-# Takes ARRAY ref, returns list
-sub _to_packstyle ($) {
-  my $arg = shift;
-  if(!$arg->[0]->isa("Ctypes::Type")) { return @{$arg}; }
-  else { die("_to_packstyle: C type objects unimplemented!") }; #TODO!
-}
-
 ################################
 #       PUBLIC FUNCTIONS       #
 ################################
 
-=head1 PUBLIC SUBROUTINES/METHODS
+=head1 METHODS
 
 Ctypes::Function's methods are designed for flexibility.
 
@@ -244,8 +483,9 @@ characters denote argument types: <abi><restype><argtypes>. B<Note> that a
 
 Alternatively, more in the style of L<C::DynaLib> and Python's ctypes,
 it can be an (anonymous) list reference of the functions argument types.
-Types can be specified in Perl's L<pack> notation ('i', 'd', etc.) or
-with Ctypes's C type objects (c_uint, c_double, etc.).
+Types can be specified using single-letter codes, similar (but different)
+to Perl's L<pack> notation ('i', 'd', etc.) or with Ctypes's Type objects
+(c_uint, c_double, etc.).
 
 This is a convenience for positional parameter passing (as they're simply
 assigned to the C<argtypes> attribute internally). These alternatives
@@ -274,7 +514,7 @@ The return type of the function can be represented as
 
 =over
 
-=item a single character (pack-style), using the same notation as L<Ctypes::call>,
+=item a single character type-code, using the same notation as L<Ctypes::call>,
 
 =item a Ctype::Type definition, or
 
@@ -292,10 +532,10 @@ and UNIX64 architectures, not yet on 64bit libraries.
 
 =item argtypes
 
-A pack-style string of the argument types, or a list reference of the
-types of arguments the function takes. These can be specified in
-Perl's L<pack> notation ('i', 'd', etc.)  or with L<Ctypes>'s C type
-objects (c_int, c_double, etc.).
+A string of the type-code characters, or a list reference of the types
+of arguments the function takes. These can be specified as type-codes 
+('i', 'd', etc.)  or with L<Ctypes>'s Type objects (c_int, c_double,
+etc.).
 
 =item func
 
@@ -346,16 +586,16 @@ sub new {
 
   if (!$$func && !$$name) { die( "Need function ref or name" ); }
 
-  if(defined $$sig) {
-    if(ref($$sig) eq 'ARRAY') {
-      $$argtypes = [ _to_packstyle($$sig) ] unless $$argtypes;
-    } else {
+  if(defined $$sig and ref($$sig) ne 'ARRAY' ) {
       $$abi = substr($$sig, 0, 1) unless $$abi;
       $$restype = substr($$sig, 1, 1) unless $$restype;
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
-    }
   }
-  $$restype = 'i' unless $$restype;
+  $$restype = 'i' unless defined $$restype;
+  $$argtypes = Ctypes::_make_arrayref($$argtypes) if defined($$argtypes);
+  my $errpos =  Ctypes::_check_invalid_types($$argtypes);
+  croak("Invalid argtype at position $errpos: " . $$argtypes[$errpos] )
+    if $errpos;
 
   if (!$$func) {
     $$lib = '-lc' unless $$lib; #default libc
@@ -408,35 +648,72 @@ sub update {
   return $self;
 }
 
-=head2 sig([ 'cii' | $arrayref ]);
+=head2 sig('cii')
 
 A self-explanatory get/set method, only listed here to point out that
 it will also change the C<abi>, C<restype> and C<argtypes> attributes,
-depending on what you give it. See the C<sig> attribute of L</"new">.
+depending on what you give it.
+
+Don't try to set the argtypes with it by passing an array ref, like
+you can in new(). Use argtypes() instead.
 
 =cut
-
+ 
 sub sig {
-  my($self, $arg) = @_;
+  my $self = shift;
+  my $arg = shift;
+  die("Too many arguments") if @_;
+  die("Object method") if ref($self) ne 'Ctypes::Function';
   if(defined $arg) {
-    if(ref($arg) eq 'ARRAY') {
-      $self->argtypes = [ _to_packstyle($arg) ];
-      $self->{sig} = $self->_form_sig;
-    } else {
-      $self->abi = substr($arg, 0, 1);
-      $self->restype = substr($arg, 1, 1);
-      $self->argtypes = [ split(//, substr($arg, 2)) ];
-      $self->{sig} = $arg;
-    }
+    $self->{abi} = substr($arg, 0, 1);
+    $self->{restype} = substr($arg, 1, 1);
+    $self->{argtypes} = [ split(//, substr($arg, 2)) ];
+    $self->{sig} = $arg;
   }
   if(!$self->{sig}) {
     $self->{sig} = $self->{abi} . $self->{restype} .
-                   (defined $self->{argtypes} ? $self->{argtypes} : '');
+      (defined $self->{argtypes} ? join('',@{$self->{argtypes}}) : '');
   }
   return $self->{sig};
 }
 
-=head2 abi_default( [ 'c' | $^O ] );
+=head2 argtypes( I<LIST> )
+
+Or: argtypes( $arrayref [ offset ] )
+
+# $obj->argtypes returns qw()'able string of arg types
+# argtypes (\$;@) works like substr;
+
+=cut
+
+sub argtypes : lvalue {
+  my $self = shift;
+  die("Object method") if ref($self) ne 'Ctypes::Function';
+  my $new_argtypes;
+  if(@_) {
+    # if we got an offset...
+    if(looks_like_number($_[1])) {
+      croak("Usage: argtypes( \$arrayref, <offset> )") if exists $_[2];
+      croak("Usage: argtypes( \$arrayref, <offset> )")
+        if ref($_[0]) ne 'HASH';
+      $new_argtypes = shift;
+      my $offset = shift;
+      if($self->{argtypes}) {
+        splice(@{$self->{argtypes}},$offset,$#$new_argtypes,@$new_argtypes);
+      } else {
+        carp("Offset received but there were no pre-existing argtypes");
+        $self->{argtypes} = $new_argtypes; 
+      }
+    } else {
+      $self->{argtypes} = _make_types_arrayref( @_ );
+    }
+  }
+  return $self->{argtypes};
+}
+
+
+
+=head2 abi_default( [ 'c' | $^O ] )
 
 Also hash-style: abi_default( [ { abi => <char> | os => $^O } ] )
 

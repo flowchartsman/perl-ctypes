@@ -31,13 +31,6 @@ my $arg = pack('i*', @array);
 $qsort->(\$arg, $#array+1, Ctypes::sizeof('i'), $cb->ptr);
 
 my @res = unpack( 'i*', $arg  );
-note( "Result array: ", join(", ", @res) );
+my $arrstring = join(", ", @res);
 
-my $same = 1;
-for(my $i = 0; $i<5; $i++) {
-  if( $res[$i] != ($i+1) ) {
-    $same = 0; last;
-  }
-}
-
-ok($same == 1, 'Array reordered' );
+is($arrstring, "1, 2, 3, 4, 5" , "Array reordered: $arrstring" );

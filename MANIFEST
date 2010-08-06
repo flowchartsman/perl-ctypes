@@ -3,6 +3,7 @@ Changes
 const-xs.inc
 Ctypes.xs
 ignore.txt
+LICENSES
 Makefile.PL
 MANIFEST
 MANIFEST.SKIP
@@ -18,6 +19,8 @@ lib/Ctypes/FuncProto.pm
 lib/Ctypes/Function.pm
 lib/Ctypes/Type.pm
 lib/Ctypes/WinTypes.pm
+src/obj_util.c
+src/util.c
 t/000-load.t
 t/001-_call.t
 t/002-Function.t
@@ -27,4 +30,5 @@ t/library.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
+t/types.t
 t/win-proto.t

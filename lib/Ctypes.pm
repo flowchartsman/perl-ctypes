@@ -2,11 +2,6 @@ package Ctypes;
 
 use strict;
 use warnings;
-use Carp;
-use DynaLoader;
-use Scalar::Util;
-use File::Spec;
-use Config;
 
 =head1 NAME
 
@@ -20,9 +15,15 @@ Version 0.002
 
 our $VERSION = '0.002';
 
-use Ctypes::Type;
-require Exporter;
 use AutoLoader;
+use Carp;
+use Config;
+use Ctypes::Type;
+use DynaLoader;
+use File::Spec;
+use Scalar::Util;
+
+require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
@@ -70,6 +71,96 @@ datamangler who wants to quickly script together a couple of functions
 from different native libraries as for the Perl module author who wants
 to expose the full functionality of a large C/C++ project.
 
+=cut
+
+################################
+#   PRIVATE FUNCTIONS & DATA   #
+################################
+
+# Take input of:
+#   ARRAY ref
+#   or list
+#   or typecode string
+# ... and interpret into an array ref
+sub _make_arrayref {
+  my @inputs = @_;
+  my $output = [];
+  # Turn single arg or LIST into arrayref...
+  if( ref($inputs[0]) ne 'ARRAY' ) {
+    if( $#inputs > 0 ) {      # there is a list of inputs 
+      for(@inputs) {
+        push @{$output}, $_;
+      }    
+    } else {   # there is only one input 
+      if( !ref($inputs[0]) ) {
+      # We can make list of argtypes from string of type codes...
+        $output = [ split(//,$inputs[0]) ];
+      } else {
+        push @{$output}, $inputs[0];
+      }
+    }
+  } else {  # first arg is an ARRAY ref, must be the only arg
+    croak( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
+    $output = $inputs[0];
+  }
+  return $output;
+}
+
+# Take an arrayref (see _make_arrayref) and makes sure all contents are
+#   valid typecodes
+#   Type objects
+#   Objects implementing _as_param_ attribute or method
+# Returns UNDEF on SUCCESS
+# Returns the index of the failing thingy on failure
+sub _check_invalid_types ($) {
+  my $typesref = shift;
+  # Now check supplied args are valid...
+  my $typecode;
+  for( my $i=0; $i<=$#{$typesref}; $i++ ) {
+    $_ = $typesref->[$i];
+    # Check objects fulfil all the requirements...
+    if( ref($_) ) {
+      if( !Scalar::Util::blessed($_) ) {
+        carp("No unblessed references as argtypes!");
+        return $i;
+      } else {
+        if( !$_->can("_as_param_")
+            and not defined($_->{_as_param_}) ) {
+          carp("argtypes must have _as_param_ method or attribute");
+          return $i;
+        }
+        # try for attribute first
+        $typecode = $_->{_typecode_};
+        if( not defined($typecode) ) {
+          if( $_->can("_typecode_") ) {
+            $typecode = $_->_typecode_;
+          } else {
+            carp("argtypes must have _typecode_ method or attribute");
+            return $i;
+          }
+        }
+        eval{ Ctypes::sizeof($typecode) };
+        if( $@ ) { 
+          carp( @_ );
+          return $i;
+        }
+      } 
+    } else {
+    # Not a ref; make sure it's a valid 1-char typecode...
+      if( length($_) > 1 ) {
+carp("argtypes must be valid objects or 1-char typecodes (perldoc Ctypes)");
+        return $i;
+      }
+      eval{ Ctypes::sizeof($_); };
+      if( $@ ) { 
+        carp( @_ );
+        return $i;
+      }
+    }
+  }
+  return undef;
+}
+
 =head1 SUBROUTINES
 
 =over
@@ -82,8 +173,9 @@ Return a value as specified by the second character in sig.
 
 B<sig> is the signature string. The first character specifies the
 calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
-The second character specifies the pack-style return type, 
-the subsequent characters specify the pack-style argument types.
+The second character specifies the type-code for the return type, 
+the subsequent characters specify the argument types in type-code
+characters.
 
 B<addr> is the function address, the return value of L<find_function> or
 L<DynaLoader::dl_find_symbol>.
@@ -91,7 +183,9 @@ L<DynaLoader::dl_find_symbol>.
 B<args> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Currently supported signature characters - Perl L<pack|perlfunc/pack>-style:
+Currently supported signature type-code characters - similar to Perl's
+L<pack|perlfunc/pack> notation, although slightly different (v), and may
+change:
 
   'v': void
   'c': signed char
@@ -299,21 +393,23 @@ sub PERLFUNCTYPE {
   return Ctypes::FuncProto::Perl->new( @_ );
 }
 
-=item callback (sig, perlfunc) (NYI)
+=item callback (<perlfunc>, <restype>, <argtypes>)
 
 Creates a callable, an external function which calls back into perl,
 specified by the signature and a reference to a perl sub.
 
-B<sig> is the signature string. The first character specifies the
-calling-convention, B<s> for C<stdcall>, B<c> for C<cdecl> (or 64-bit fastcall). 
-The second character specifies the pack-style return type, 
-the subsequent characters specify the pack-style argument types.
+B<perlfunc> is a named (or anonymous?) subroutine reference. B<restype>
+is a single character string representing the return type, and
+B<argtypes> is a multi-character string representing the argument
+types the function will receive from C. All types are represented
+in typecode format.
 
-B<perlfunc> is a Perl subref.
+B<Note> that the interface for Callback->new() will be updated
+to be more consistent with Function->new().
 
 =cut
 
-sub callback($$) { # TODO ffi_prep_closure
+sub callback($$$) {
   return Ctypes::Callback->new( @_ );
 }
 
@@ -348,6 +444,8 @@ or called directly.
 =cut
 
 package Ctypes::DLL;
+use strict;
+use warnings;
 use Ctypes;
 use Ctypes::Function;
 use Carp;
@@ -477,6 +575,8 @@ Windows only.
 =cut
 
 package Ctypes::CDLL;
+use strict;
+use warnings;
 use Ctypes;
 our @ISA = qw(Ctypes::DLL);
 use Carp;
@@ -502,6 +602,8 @@ sub new {
 #}
 
 package Ctypes::WinDLL;
+use strict;
+use warnings;
 our @ISA = qw(Ctypes::DLL);
 
 sub new {
@@ -515,6 +617,8 @@ sub new {
 }
 
 package Ctypes::OleDLL;
+use strict;
+use warnings;
 use Ctypes;
 our @ISA = qw(Ctypes::DLL);
 
@@ -529,6 +633,8 @@ sub new {
 }
 
 package Ctypes::PerlDLL;
+use strict;
+use warnings;
 our @ISA = qw(Ctypes::DLL);
 
 sub new {
@@ -544,6 +650,8 @@ sub new {
 }
 
 package Ctypes::Util;
+use strict;
+use warnings;
 
 =head1 Utility Functions
 
@@ -719,7 +827,10 @@ construction is a lot faster.
 This function is similar to the cast operator in C. It returns a new
 instance of type which points to the same memory block as obj. type
 must be a pointer type, and obj must be an object that can be
-interpreted as a pointer.  create_string_buffer(init_or_size[, size])
+interpreted as a pointer.
+
+=item create_string_buffer(init_or_size[, size])
+
 This function creates a mutable character buffer. The returned object
 is a ctypes array of c_char.
 
@@ -915,7 +1026,7 @@ and Shlomi Fish for giving me the opportunity to work on the project.
 Copyright 2010 Ryan Jendoubi.
 
 This program is free software; you can redistribute it and/or modify it
-under the terms of the Artistic License.
+under the terms of the Artistic License 2.0.
 
 See http://dev.perl.org/licenses/ for more information.
 
