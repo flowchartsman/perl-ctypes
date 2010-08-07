@@ -1,8 +1,7 @@
 #!perl
 
-use Test::More tests => 21;
+use Test::More tests => 22;
 use Ctypes;
-use Ctypes::Function;
 use utf8;
 
 my $number_seven = c_int(7);
@@ -53,9 +52,26 @@ is( $number_ryu->val, 40845, 'c_int converts from UTF-8 character' );
 # Exceeding range on _signed_ variables is undefined in the standard,
 # so these tests can't really be any better.
 my $overflower = c_int(2147483648);
-isnt( $overflower, 2147483648, 'Cannot exceed INT_MAX' );
-$overflower->(-2147483649);
-isnt( $overflower,-2147483649, 'Cannot go below INT_MIN' );
+subtest 'Overflows' => sub {
+  plan tests => 6;
+  is(ref $overflower, 'Ctypes::Type::Simple');
+  isnt( $overflower, 2147483648);
+  ok( $overflower <= Ctypes::constant('PERL_INT_MAX'),
+      'Cannot exceed INT_MAX');
+  $overflower->(-2147483649);
+  is(ref $overflower, 'Ctypes::Type::Simple');
+  isnt( $overflower,-2147483649);
+  ok( $overflower >= Ctypes::constant('PERL_INT_MIN'),
+      'Cannot go below INT_MIN');
+};
+$overflower->(5);
+$overflower->allow_overflow(0);
+$overflower->(2147483648);
+is($overflower, 5, 'Disallow overflow per-object');
+$overflower->allow_overflow(1);
+Ctypes::Type::allow_overflow_all(0);
+$overflower = c_int(2147483648);
+is($overflower, undef, 'Can (dis)allow_overflow_all');
 
 my $ret_as_char = c_char(89);
 is( $ret_as_char->val, 'Y', 'c_char converts from numbers' );

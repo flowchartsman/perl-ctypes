@@ -30,12 +30,16 @@ if  (eval {require ExtUtils::Constant; 1}) {
   # you will need to use the generated const-c.inc and const-xs.inc
   # files to replace their "fallback" counterparts before distributing your
   # changes.
-  my @names = (qw(FFI_LONG_LONG_MAX FFI_SIZEOF_ARG FFI_SIZEOF_JAVA_RAW
+  my @names = (qw|FFI_LONG_LONG_MAX FFI_SIZEOF_ARG FFI_SIZEOF_JAVA_RAW
 		 FFI_TYPE_DOUBLE FFI_TYPE_FLOAT FFI_TYPE_INT FFI_TYPE_LAST
 		 FFI_TYPE_LONGDOUBLE FFI_TYPE_POINTER FFI_TYPE_SINT16
 		 FFI_TYPE_SINT32 FFI_TYPE_SINT64 FFI_TYPE_SINT8 FFI_TYPE_STRUCT
 		 FFI_TYPE_UINT16 FFI_TYPE_UINT32 FFI_TYPE_UINT64 FFI_TYPE_UINT8
-		 FFI_TYPE_VOID),
+		 FFI_TYPE_VOID PERL_SHORT_MIN PERL_SHORT_MAX PERL_USHORT_MIN
+                 PERL_USHORT_MAX PERL_INT_MIN PERL_INT_MAX PERL_UINT_MIN
+                 PERL_UINT_MAX PERL_LONG_MIN PERL_LONG_MAX PERL_ULONG_MIN
+                 PERL_ULONG_MAX DBL_MIN DBL_MAX FLT_MIN FLT_MAX LDBL_MIN
+                 LDBL_MAX|,
               {name=>"FFI_BAD_ABI", macro=>"1"},
               {name=>"FFI_BAD_TYPEDEF", macro=>"1"},
               {name=>"FFI_OK", macro=>"1"});
@@ -44,6 +48,7 @@ if  (eval {require ExtUtils::Constant; 1}) {
                                      NAMES        => \@names,
                                      C_FILE       => 'const-c.inc',
                                      XS_FILE      => 'const-xs.inc',
+                                     DEFAULT_TYPE => 'NV',
                                   );
 
 }

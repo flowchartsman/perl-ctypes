@@ -18,6 +18,7 @@ lib/Ctypes/Callback.pm
 lib/Ctypes/FuncProto.pm
 lib/Ctypes/Function.pm
 lib/Ctypes/Type.pm
+lib/Ctypes/Type/Array.pm
 lib/Ctypes/WinTypes.pm
 src/obj_util.c
 src/util.c

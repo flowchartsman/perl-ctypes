@@ -25,10 +25,10 @@ use Scalar::Util;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = ( qw(CDLL WinDLL OleDLL PerlDLL 
+our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError
-                  ), @Ctypes::Type::_allnames );
+                  |, @Ctypes::Type::_allnames );
 
 require XSLoader;
 XSLoader::load('Ctypes', $VERSION);

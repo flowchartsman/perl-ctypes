@@ -9,7 +9,7 @@ require Exporter;
 our @ISA = ("Exporter");
 use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
-
+use Ctypes::Type::Array;
 our @EXPORT_OK = qw|&_types|;
 
 our $_perltypes = 
@@ -57,7 +57,7 @@ our $_pytypes =
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
-our $allow_overflow_all = 0;
+sub allow_overflow_all;
 
 # http://docs.python.org/library/ctypes.html
 # #ctypes-fundamental-data-types-2:
@@ -78,7 +78,7 @@ use strict;
 use warnings;
 use Carp;
 
-my $owner;
+my $_owner;
 
 sub protect ($) {
   ref shift or return undef;
@@ -92,7 +92,7 @@ sub protect ($) {
  
 sub TIESCALAR {
   my $class = shift;
-  $owner = shift;
+  $_owner = shift;
   return bless \my $self => $class;
 }
 
@@ -113,35 +113,34 @@ sub STORE {
       } else {
   # ??? Would you ever want to store an object/reference as the value
   # of a type? What would get pack()ed in the end?
-        croak("Can only store native types or Ctypes compatible objects");
+        croak("Ctypes Types can only be made from native types or " . 
+              "Ctypes compatible objects");
       }
     }
   }
-  my $typecode = $owner->{_typecode_};
+  my $typecode = $_owner->{_typecode_};
   croak("Simple Types can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   if( $is_valid < 1 ) {
     no strict 'refs';
     if( ($is_valid == -1)
-        and not ( $owner->allow_overflow
-        || $owner->allow_overflow_class
-        || $Ctypes::Type::allow_overflow_all ) ) {
-      croak( "Value out of range for " . $owner->{name} . ": $arg");
+        and ( $_owner->allow_overflow == 0
+        or Ctypes::Type::allow_overflow_all == 0 ) ) {
+      carp( "Value out of range for " . $_owner->{name} . ": $arg");
+      return undef;
     } else {
       my $temp = Ctypes::_cast($arg,$typecode);
       if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
-        if( $is_valid == -1 ) {
-          carp("Argument $arg overflows for type " . $owner->{name}
-                . ". Value now " . $temp );
-        }
         $arg = $temp;
       } else {
-        croak("Unreconcilable argument for type '$typecode': $arg");
+        carp("Unreconcilable argument for type " . $_owner->{name} .
+              ": $arg");
+        return undef;
       }
     }
   }
-  $owner->{_as_param_} = pack( $typecode, $arg );
+  $_owner->{_as_param_} = pack( $typecode, $arg );
   $$self = $arg;
   return $$self;
 }
@@ -169,20 +168,7 @@ use overload '0+'  => \&_num_overload,
              # TODO Multiplication will have to be overridden
              # to implement Python's Array contruction with "type * x"???
 
-{
-  my $allow_overflow_class = 1;
-  sub allow_overflow_class {
-# ??? This could be improved; could still be called as a class method
-# with an object instead of a 1 or 0 and user would not be notified
-    my $self = shift if ref($_[0]);
-    my $arg = shift;
-    if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
-      croak("Usage: allow_overflow_class(x) (1 or 0)");
-    }
-    $allow_overflow_class = $arg if $arg;
-    return $allow_overflow_class;
-  }
-}
+
 
 sub _num_overload { return shift->{val}; }
 
@@ -215,7 +201,7 @@ sub _subtract_overload {
 sub _hash_overload {
   my($cpack, $cfile) = caller(0);
   if( $cpack !~ /^Ctypes/
-      or $cfile !~ /Ctypes\// ) {
+      or $cfile !~ /Ctypes/ ) {
     carp("Unauthorized direct Type attribute access!");
     return {};
   }
@@ -236,16 +222,17 @@ sub new {
                val             => 0,
                address         => undef,
                name            => $_types->{$typecode},
-               size            => 0,
+               size            => Ctypes::sizeof($typecode),
                alignment       => 0,
-               allow_overflow  => 0,
+               allow_overflow  => 1,
              };
   bless $self => $class;
-  $self->{size} = Ctypes::sizeof($self->{_typecode_});
-  $arg = 0 unless $arg;
-  tie $self->{val}, "Ctypes::Type::Simple::value", $self;
+  $arg = 0 unless defined $arg;
+  tie $self->{val}, 'Ctypes::Type::Simple::value', $self;
   $self->{val} = $arg;
-# XXX Unimplemented! Must come after setting val;
+  return undef if not defined $self->{val};
+# XXX Unimplemented! How will 'address' this work?
+# Is it relevant in our Perl-based model?
 #  $self->{address} = Ctypes::addressof($self);
   return $self;
 }
@@ -265,7 +252,7 @@ sub val : lvalue {
 #
 my %access = ( 
   _data             => ['_as_param_'],
-  typecode          => ['_typecode_',\&Ctypes::sizeof],
+  typecode          => ['_typecode_'],
   allow_overflow =>
     [ 'allow_overflow',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
@@ -288,7 +275,7 @@ for my $func (keys(%access)) {
       }
     }
     if($access{$func}[2] and defined($arg)) {
-      $self->{$key} = $arg if $arg;
+      $self->{$key} = $arg;
     }
     return $self->{$key};
   }
@@ -297,23 +284,97 @@ for my $func (keys(%access)) {
 
 package Ctypes::Type;
 
-=head1 METHODS
+=head1 INSTANTIATION
 
 =over
 
-=item new Ctypes::Type (type-code, c_type-name) 
+=item c_X<lt>typeX<gt>(x)
 
-Create a simple Ctypes::Type instance. This is almost always 
-called by the global c_X<lt>typeX<gt> functions.
+=back
 
-A Ctypes::Type object holds information about simple and aggregate types, 
-i.e. unions and structs, but also about actual external values, e.g. 
-function arguments and return values.
+The basic Ctypes::Type objects are almost always created with the
+correspondingly named functions exported by default from Ctypes.
+All basic types are objects of type Ctypes::Type::Simple. You could
+call the class constructor directly if you liked, passing a typecode
+as the first argument followed by any initialisers, but the named
+functions put in the appropriate typecode for you and are normally
+more convenient.
 
-Each type is defined as function returning a c_type object.
+A Ctypes::Type object represents a variable of a certain C type. If
+uninitialised, the value defaults to zero. You can use uninitialised
+instances to find out information about the various types (see list of
+accessor methods below).
 
-Each c_type object holds the type-code char, the c name, the size, 
-the alignment and the address if used.
+After creation, you can manipulate the value stored in a Type object
+in any of the following ways:
+
+=over
+
+=item $obj->val = 100;
+
+=item $obj->val(100);
+
+=item $obj->(100);
+
+=back
+
+The actual data which will be passed to C is held in
+L<packed|perlfunc/"pack"> string form in an internal attribute called
+C<{_data}>. Note the underscore! The methods above do all the necessary
+validation of values assigned to the object for you, as well as packing
+the data into a format C understands. You cannot set C<{_data}> directly
+(although you can examine it through its accessor should you ever feel
+like looking at some unintelligible gibberish).
+
+=head1 METHODS
+
+Apart from its value, each Ctypes::Type object holds various pieces of
+information about itself, which you can access via the methods below.
+Most of these are 'getters' only (changing the 'size' of a particular
+int-type object is meaningless, and may well confuse Functions and other
+internal users of Type objects).
+
+=over
+
+=item _data
+
+Accessor returning the L<pack|perlfunc/"pack">ed value of the object.
+Cannot be set directly (use C<val()>).
+
+=item alignment
+
+Accessor returning the alignment of the data in the object. This feature
+is NOT YET IMPLEMENTED. I imagine though that alignment will be something
+you're most likely to want to tinker with for aggregate data structures
+(Array, Struct, Union). I'm not sure if there's cause to make it settable
+on an object by object basis. You can be sure it will default to the
+sensible choice for your system though.
+
+=item allow_overflow
+
+B<Mutator> setting and/or returning a flag (1 or 0) indicating whether
+this particular object is allowed to overflow. Defaults to 1. Note that
+overflows can also be prevented by $Ctypes::Type::allow_overflow_all
+being set to 0 (see the class method L</allow_overflow_all>).
+
+=item name
+
+Accessor returning the 'name' of the Type instance (c_int, c_double, etc.).
+Since all basic types are Ctypes::Type::Simple objects, this is how you
+find out what kind of type you actually have.
+
+=item size
+
+Accessor returning the size in bytes on your system of C type represented
+by the Type object (I<not> the size of the Perl Type object itself).
+
+=item typecode
+
+Accessor returning the 'typecode' of Type instance. A typecode is a
+1-character string used internally for representing different C types,
+which might be useful for various things.
+
+=back
 
 =cut
 
@@ -333,78 +394,48 @@ for my $k (keys %$_types) {
 }
 our @_allnames = keys %_defined;
 
-package Ctypes::Type::Array;
-use strict;
-use warnings;
-use Ctypes;  # which uses Ctypes::Type?
-#
-#sub new {
-#  my $class = shift;
-#  return undef unless $_[0]; # TODO: Uninitialised Arrays? Why??
-#  # Specified array type in 1st pos, members in arrayref in 2nd
-#  my( $deftype, $in );
-#  if( $_[0] and ref($_[1] eq 'ARRAY') ) {
-#    $deftype = shift;
-#    croak("Array type must be specified as Ctypes Type or similar object")
-#      unless ref($deftype);
-#    _check_invalid_types( [ $deftype ] );
-#    $in = shift;
-#  } else {  # no specification of array type, guess reasonable defaults
-#    $in = Ctypes::_make_arrayref(@_);
-#  }
-#
-#  my $members;
-#  my $newval;
-#
-## Scenario A: We've been told what type to make the array
-##   Cast all inputs to that type.
-#  if( $deftype ) {
-#    if( ref($deftype) eq 'Ctypes::Type::Simple' ) {
-#      for(my $i = 0; $i <= $#$in; $i++) {
-#        if( !ref($$in[$i]) ) {
-#          $members->[$i] =
-#            Ctypes::Type::Simple->new(
-#              $deftype->{_typecode_},
-#              $$in[$i] );
-#          next;
-#        }
-#        if( $$in[$i]->{_typecode_} eq $deftype->{_typecode_} ) {
-#          $members->[$i] = $$in[$i];
-#        } else {
-#          $members->[$i] = Ctypes::Type::Simple->new(
-#            $deftype->{_typecode_}, $$in[$i]); # XXX Hail Mary...
-#        }
-#      }
-#    } else {
-#    # If it's a non-type object, we can't do casting: just make sure
-#    # they're all the same type, err if not
-#      for(my $i = 0; $i <= $#$in; $i++) {
-#        croak("Input at $i is not of user-defined type $objtype")
-#          if ref($$in[$i]) ne $objtype;
-#      }
-#    }
-#  } else {    # it's a typecode or Type object...
-#      $deftype = ref($deftype) ? $deftype->{_typecode_} : $deftype;
-#      for(my $i = 0; $i <= $#$in; $i++) {
-#        my $newval;
-#        if(ref($$in[$i]) {
-#          if
-#        }croak("Array input at $i is not of specified type '$deftype'")
-#          unless (ref($$in[$i]) ? $$in[$i]->{_typecode_} : $$in[$i] ) 
-#          eq $deftype;
-#        $members->
-#      }
-#    }
-#  }
-## Scenario
-#
-#  my $hcd;    # 'Highest Common Demoninator'
-# The logic here is not to be super clever, just to handle simple
-# arrays of Perl natives transparently. We check size of numbers
-#  for my $arg(@$in) {
-#    if(ref) {}
-#  }
-#}
+=head1 CLASS FUNCTIONS
+
+=over
+
+=item Array ( I<LIST> ) or new Array( TYPE, ARRAYREF )
+
+Create a L<Ctypes::Type::Array> object. See the relevant documentation
+for more information.
+
+=cut
+
+sub Array {
+  return Ctypes::Type::Array->new(@_);
+}
+{
+no strict 'refs';
+*{"Ctypes::Array"} = \&Ctypes::Type::Array;
+}
+push @_allnames, 'Array';
+
+=item allow_overflow_all
+
+This class method can put a stop to all overflowing for all Type
+objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
+
+=back
+
+=cut
+
+{
+  my $allow_overflow_all = 1;
+  sub allow_overflow_all {
+# ??? This could be improved; could still be called as a class method
+# with an object instead of a 1 or 0 and user would not be notified
+    my $arg = shift;
+    if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
+      croak("Usage: allow_overflow_all(x) (1 or 0)");
+    }
+    $allow_overflow_all = $arg if defined $arg;
+    return $allow_overflow_all;
+  }
+}
 
 package Ctypes::Type::Field;
 use Ctypes::Type;
@@ -415,7 +446,8 @@ use Ctypes::Type;
 our @ISA = qw(Ctypes::Type);
 
 sub new {
-  my ($class, $fields) = @_;
+  
+my ($class, $fields) = @_;
   my $size = 0;
   for (@$fields) {
     # XXX convert fields to ctypes
@@ -442,6 +474,4 @@ sub new {
   return bless { fields => $fields, size => $size, address => 0 }, $class;
 }
 
-=back
-=cut
 1;
