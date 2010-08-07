@@ -20,7 +20,7 @@
 #include "src/obj_util.c"
 #include "src/util.c"
 
-//#include "const-c.inc"
+#include "const-c.inc"
 
 int
 ConvArg(SV* obj, char type_got, char type_expected,
@@ -281,7 +281,7 @@ callback; expected %c", __LINE__, sig[0] );
     
 MODULE = Ctypes		PACKAGE = Ctypes
 
-# INCLUDE: const-xs.inc
+INCLUDE: const-xs.inc
 
 #define strictchar char
 
@@ -709,22 +709,22 @@ CODE:
     /* ??? Is NV, usually double, alright to use here?
        Also, any Perl vars to use instead of stdlib ones? */
       arg_nv = SvNV(arg_sv);
-      if( arg_nv < FLT_MIN || arg_nv > FLT_MAX ) {
+      if( ( FLT_MIN - arg_nv) > FLT_EPSILON || (arg_nv - FLT_MAX) > FLT_EPSILON ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'd':
       if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
-      if( arg_nv < DBL_MIN || arg_nv > DBL_MAX ) {
-        RETVAL = -1; break;
+      if( (DBL_MIN - arg_nv) > DBL_EPSILON || (arg_nv - DBL_MAX) > DBL_EPSILON ) {
+        RETVAL = -1; break;  /* XXX Wtf... what's going wrong here??? */
       }
       RETVAL = 1; break;
 #ifdef HAS_LONG_DOUBLE
     case 'D':
       if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
-      if( arg_nv < LDBL_MIN || arg_nv > LDBL_MAX ) {
+      if( (LDBL_MIN - arg_nv) > LDBL_EPSILON || (arg_nv - LDBL_MAX) > LDBL_EPSILON ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
