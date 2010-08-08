@@ -33,8 +33,8 @@ my $qsort = Ctypes::Function->new
       name   => 'qsort',
       argtypes => 'piip',
       restype  => 'v' } );
-my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
-$array = Array(c_int, [2, 4, 5, 1, 3] );
-$qsort->($array, $#$array+1, Ctypes::sizeof('i'), $cb->ptr);
+my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ss' );
+$array = Array( 2, 4, 5, 1, 3 );
+$qsort->($array, $#$array+1, Ctypes::sizeof('s'), $cb->ptr);
 my $arrstring = join(", ", @$array);
-is($arrstring, "1, 2, 3, 4, 5" , "Array reordered: $arrstring" );
+is($arrstring, "1, 2, 3, 4, 5" , '_as_param_ working' );

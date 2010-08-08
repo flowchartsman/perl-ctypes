@@ -1,6 +1,6 @@
 #!perl
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 use Ctypes::Function;
 use Ctypes::Callback;
 
@@ -20,17 +20,24 @@ my $qsort = Ctypes::Function->new
 $qsort->abi('c');
 ok( defined $qsort, 'created function $qsort' );
 
-my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
+my( $cb, $arg, $arrstring, @res );
+
+$cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
 ok( defined $cb, 'created callback $cb' );
 
 my @array = (2, 4, 5, 1, 3);
 note( "Initial array: ", join(", ", @array) );
 
-my $arg = pack('i*', @array);
-
+$arg = pack('i*', @array);
 $qsort->(\$arg, $#array+1, Ctypes::sizeof('i'), $cb->ptr);
+@res = unpack( 'i*', $arg  );
+$arrstring = join(", ", @res);
+is($arrstring, "1, 2, 3, 4, 5" , "Array of int reordered: $arrstring" );
 
-my @res = unpack( 'i*', $arg  );
-my $arrstring = join(", ", @res);
+$cb = Ctypes::Callback->new( \&cb_func, 'i', 'ss' );
+$arg = pack('s*', @array);
+$qsort->(\$arg, $#array+1, Ctypes::sizeof('s'), $cb->ptr);
+@res = unpack( 's*', $arg  );
+$arrstring = join(", ", @res);
+is($arrstring, "1, 2, 3, 4, 5" , "Array of short reordered: $arrstring" );
 
-is($arrstring, "1, 2, 3, 4, 5" , "Array reordered: $arrstring" );

@@ -138,7 +138,7 @@ ConvArg(SV* obj, char type_got, char type_expected,
         : (intptr_t)SvPVX(arg);
     }
     debug_warn("#    first in argvalues[%i]: %i", index,
-                *(int*)(*(intptr_t*)argvalues[index])
+                *(short*)(*(intptr_t*)argvalues[index])
               );
     break;
   /* should never happen here */
@@ -179,7 +179,10 @@ _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
           case 'c': 
           case 'C': XPUSHs(sv_2mortal(newSViv(*(int*)*(void**)args[i])));   break;
           case 's': 
-          case 'S': XPUSHs(sv_2mortal(newSVpv((char*)*(void**)args[i], 0)));   break;
+          case 'S':
+              debug_warn( "#    Have type %c, pushing %i to stack...",
+                          type, *(short*)*(void**)args[i] );
+              XPUSHs(sv_2mortal(newSViv(*(short*)*(void**)args[i])));   break;
           case 'i':
               debug_warn( "#    Have type %c, pushing %i to stack...",
                           type, *(int*)*(void**)args[i] );
@@ -551,7 +554,7 @@ _call(self, ...)
         }
 
         debug_warn("#    Checking type_got...");
-        type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
+        type_got = sv_isobject(this_arg) && Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
           ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"_typecode_"),tc_len)
           : '\0';
         debug_warn("#    type_got: %c", type_got);
@@ -571,7 +574,7 @@ _call(self, ...)
         }
 
         /* err not used yet, ConvArg croaks a lot */
-        debug_warn("    calling ConvArg...");
+        debug_warn("#    calling ConvArg...");
         err = ConvArg( this_arg,
                  type_got,
                  type_expected,
@@ -603,6 +606,8 @@ _call(self, ...)
     debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
     debug_warn( "#    ffi_call returned!");
+    debug_warn( "#    First in argvalues[0]: %i",
+                 *(short*)(*(intptr_t*)argvalues[0]) );
     debug_warn( "#[%s:%i] Pushing retvals to Perl stack...", __FILE__, __LINE__ );
     switch (rtypechar)
     {
