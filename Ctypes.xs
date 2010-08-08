@@ -137,6 +137,9 @@ ConvArg(SV* obj, char type_got, char type_expected,
         ? (intptr_t)*(intptr_t*)SvPVX(arg)
         : (intptr_t)SvPVX(arg);
     }
+    debug_warn("#    first in argvalues[%i]: %i", index,
+                *(int*)(*(intptr_t*)argvalues[index])
+              );
     break;
   /* should never happen here */
   default: croak( "ConvArg error: Unrecognised type '%c' (line %i)",
@@ -520,9 +523,9 @@ _call(self, ...)
           self_argtypes == NULL;
         }
       }
-      debug_warn("    num_args is %i", num_args);
+      debug_warn("#    num_args is %i", num_args);
       for (i = 0; i < num_args; ++i) {
-        debug_warn("    i is %i", i);
+        debug_warn("#    i is %i", i);
         SV* this_arg = ST(i+1);
         SV *this_argtype, **fetched_argtype;
         if( self_argtypes ) {
@@ -547,13 +550,25 @@ _call(self, ...)
           this_arg = tmp;
         }
 
-        debug_warn("    Checking type_got...");
+        debug_warn("#    Checking type_got...");
         type_got = Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
           ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"_typecode_"),tc_len)
-
           : '\0';
+        debug_warn("#    type_got: %c", type_got);
 
-        debug_warn("    type_got: %c", type_got);
+        if( sv_isobject(this_arg) && !type_got ) {
+          SV* tmp = Ct_HVObj_GET_ATTR_KEY(this_arg, "_as_param_");
+          if( tmp == NULL || !SvOK(tmp) ) {
+            AV* args = NULL;
+            tmp = Ct_CallPerlObjMethod(this_arg, "_as_param_", args);
+            if(SvROK(tmp))
+              tmp = SvRV(tmp);
+          }
+          if( tmp == NULL )
+            croak("Funtion::_call: couldn't get _as_param_ data from arg %i", i);
+          debug_warn("_as_param_ gave: %i", (((int*)SvPV_nolen(tmp))[2]));
+          this_arg = tmp;
+        }
 
         /* err not used yet, ConvArg croaks a lot */
         debug_warn("    calling ConvArg...");

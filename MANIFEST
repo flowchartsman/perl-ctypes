@@ -9,6 +9,7 @@ MANIFEST
 MANIFEST.SKIP
 README
 typemap
+include/Ctypes.h
 include/ppport.h
 include/ffi_common.h
 include/ffi.h
@@ -25,6 +26,7 @@ src/util.c
 t/000-load.t
 t/001-_call.t
 t/002-Function.t
+t/Array.t
 t/callbacks.t
 t/func-access.t
 t/library.t

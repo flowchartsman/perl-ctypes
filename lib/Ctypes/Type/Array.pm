@@ -266,7 +266,8 @@ sub _as_param_ {
   return $self->{_as_param_} if defined $self->{_as_param_};
 # TODO This is where a check for an endianness property would come in.
   if( $self->{endianness} ne 'b' ) {
-    return $self->{_as_param_} = pack($self->{_typecode_}.'*',@_members); 
+    $self->{_as_param_} = pack($self->{_typecode_}.'*',@_members);
+    return \$self->{_as_param_};
   } else {
   # <insert code for other / swapped endianness here>
   }

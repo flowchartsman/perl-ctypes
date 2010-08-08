@@ -16,35 +16,35 @@
 
 SV*
 Ct_HVObj_GET_ATTR_KEY(SV* obj, const char* key) {
-debug_warn("# In Ct_HVObj_GET_ATTR_KEY...");
-debug_warn("#    key is %s", key);
+debug_warn("#\t\tIn Ct_HVObj_GET_ATTR_KEY...");
+debug_warn("#\t\t    key is %s", key);
   SV **tmp, *res = NULL;
   int klen = strlen(key);
   if( sv_isobject(obj)
       && (SvTYPE(SvRV(obj)) == SVt_PVHV)
       && hv_exists((HV*)SvRV(obj), key, klen) ) {
-    debug_warn("#    Obj checks out, getting %s attribute...", key);
+    debug_warn("#\t\t    Obj checks out, getting %s attribute...", key);
     tmp = hv_fetch((HV*)SvRV(obj), key, klen, 0);
     if( tmp != NULL )
       res = SvREFCNT_inc(*tmp);
     else
-      debug_warn("Eek! Couldn't find that attribute!");
+      debug_warn("\t\tEek! Couldn't find that attribute!");
   } else {
-      debug_warn("Object wasn't what you thought!");
+      debug_warn("\t\tObject wasn't a hash!");
   }
   return res;
 }
 
 int
 Ct_Obj_IsDeriv(SV* var, const char* type) {
-debug_warn("# In Ct_Obj_IsDeriv...");
-debug_warn("#    type is %s", type);
+debug_warn("#\t\tIn Ct_Obj_IsDeriv...");
+debug_warn("#\t\t    type is %s", type);
   if( sv_isobject(var)
          && ( sv_isa(var, type)
               || sv_derived_from(var, type)
             )
     ) {
-    debug_warn("#    returning True!");
+    debug_warn("#\t\t    returning True!");
     return 1;
   }
   else {
@@ -122,12 +122,12 @@ Ct_CallPerlFunction(SV* callable, AV* args) {
   int i, n, count;
   dSP;
 
+  n = av_len(args);
   EXTEND(SP,n);
   ENTER;
   SAVETMPS;
 
   PUSHMARK(SP);
-  n = av_len(args);
   for( i = 0; i <= n; ++i ) {
     fetched = av_fetch(args,i,0);
     if( fetched != NULL )
@@ -196,6 +196,74 @@ Ct_CallPerlFunctionSVArgs(SV* callable, ...) {
   SvREFCNT_dec(args);
 
   return tmp;
+}
+
+SV*
+Ct_CallPerlObjMethod(SV* obj, char *method, AV* args) {
+  debug_warn("[%s:%i] In CallPerlObjMethod - hold on to your hats...",
+              __FILE__, __LINE__);
+  if( !sv_isobject(obj) )
+    croak("Ct_CallPerlObjMethod: arg 1 not an object");
+  
+  SV *result, *tmp, **fetched;
+  int i, count, n = 0;
+  dSP;
+  
+  if(args) {
+    n = av_len(args) + 1;
+    EXTEND(SP,n);
+  }
+  ENTER;
+  SAVETMPS;
+
+  PUSHMARK(SP);
+  PUSHs(obj);
+  for( i = 0; i < n; ++i ) {
+    fetched = av_fetch(args,i,0);
+    if( fetched != NULL )
+      PUSHs(sv_2mortal(newSVsv(*fetched)));
+    else
+      croak("Ct_CallPerlObjMethod:%i error: couldn't get arg from AV",
+            __LINE__);
+  }
+  PUTBACK;
+    
+  count = call_method(method, G_ARRAY);
+
+  if( count == 0 ) {
+    result = NULL;
+  } else if ( count == 1 ) {
+    SPAGAIN;
+    result = SvREFCNT_inc(POPs);
+  } else {
+    SPAGAIN;
+    AV* ary = newAV();
+    if( ary != NULL ) {
+      SV** stored;
+      int i, fail = 0;
+      for( i = 0; i < n; ++i ) {
+        tmp = POPs;
+        stored = av_store(ary,i,tmp); /* XXX need to REFCNT_inc here?? */
+        if( stored == NULL ) {
+          fail = 1;
+          SvREFCNT_dec(tmp);
+        }
+      }
+      if( !fail ) {
+        result = newRV_noinc((SV*)ary);
+      } else {
+        result = NULL;
+      }
+    } else {
+      result == NULL;
+    }
+  }
+
+  PUTBACK;
+  FREETMPS;
+  LEAVE;
+
+  return result;
 }
 
 #endif  /* _INC_OBJ_UTILS_C */
