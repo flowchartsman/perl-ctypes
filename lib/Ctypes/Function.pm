@@ -54,13 +54,12 @@ See L<Ctypes::DLL>.
 #   PRIVATE FUNCTIONS & DATA   #
 ################################
 
-# Public functions defined alphabetically
+# Private functions defined alphabetically
 sub AUTOLOAD;
-sub _call;
+sub _call;             # XS
 sub _call_overload;
 sub _form_sig;
 sub _get_args;
-sub _make_types_arrayref; 
 
 BEGIN {
 sub PF_IN () { 1; }
@@ -335,7 +334,7 @@ sub call {
 # callargs should be changed in place?
   my $result = _call($self, @callargs);
 
-# XXX <insert errcheck protocol here>
+# XXX <insert 'errcheck protocol' here>
 
   return _build_result($result, @callargs, $outmask,
                        $inoutmask, $numretvals);

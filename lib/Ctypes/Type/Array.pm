@@ -4,6 +4,8 @@ use warnings;
 use Carp;
 use Ctypes;  # which uses Ctypes::Type?
 use Scalar::Util qw|looks_like_number|;
+use overload '@{}'    => \&_array_overload,
+             fallback => 'TRUE';
 
 =head1 NAME
 
@@ -26,8 +28,6 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 ##########################################
 # TYPE::ARRAY : PRIVATE FUNCTIONS & DATA #
 ##########################################
-
-my @_members;  # Can't be anonymous hashref value because needs tie'ing
 
 sub _arg_to_type {
   my( $arg, $type ) = @_;
@@ -167,6 +167,13 @@ sub _get_members_untyped {
   return $members;
 }
 
+{   # rein in @_members
+my @_members;  # Can't be anonymous hashref value because needs tie'ing
+
+sub _array_overload {
+  return \@_members;
+}
+
 
 ##########################################
 # TYPE::ARRAY : PUBLIC FUNCTIONS & DATA  #
@@ -191,30 +198,35 @@ sub new {
     $in = Ctypes::_make_arrayref(@_);
   }
 
-  bless $self => $class;
-  tie @_members, 'Ctypes::Type::Array::members', $self;
-
-  $self->{members} = defined $deftype ?
+  my $inputs_typed = defined $deftype ?
     _get_members_typed($deftype, $in) :
     _get_members_untyped( $in );
 
-  $deftype = Ctypes::Type::Simple->new($self->{members}[0]{_typecode_})
-    if not defined $deftype;
+  $deftype = $inputs_typed->[0] if not defined $deftype;
 
-  $self->{type} = $deftype->{name};
-  $self->{_typecode_} = $deftype->{_typecode_};
-  $self->{size} = $deftype->{size} * ($#{$self->{members}} + 1);
-  $self->{can_resize} = 1;
-  $self->{_endianness} = undef;
+  $self = { typeobj     => $deftype,
+            type        => $deftype->{name},
+            _typecode_  => $deftype->{_typecode_},
+            size        => $deftype->{size} * ($#$in + 1),
+            can_resize  => 1,
+            endianness  => '',
+            _as_param_  => '',
+            'length'    => $#$in,
+          };
 
+  bless $self => $class;
+
+  tie @_members, 'Ctypes::Type::Array::members', $self;
+  my @arr =  @{$inputs_typed};
+  @_members = @arr;
   return $self;
 }
 
 #
 # Accessor generation
 #
-my %access = ( 
-  _data             => ['_as_param_'],
+my %access = (
+  'length'          => ['length'],
   typecode          => ['_typecode_'],
   can_resize =>
     [ 'can_resize',
@@ -245,6 +257,21 @@ for my $func (keys(%access)) {
   }
 }
 
+sub _data { &_as_param_(@_); }
+
+sub _as_param_ {
+  my $self = shift;
+  # STORE will will always undef _as_param_
+  $self->{_datasafe} = 0; # used by FETCH
+  return $self->{_as_param_} if defined $self->{_as_param_};
+# TODO This is where a check for an endianness property would come in.
+  if( $self->{endianness} ne 'b' ) {
+    return $self->{_as_param_} = pack($self->{_typecode_}.'*',@_members); 
+  } else {
+  # <insert code for other / swapped endianness here>
+  }
+}
+} # rein in @_members
 package Ctypes::Type::Array::members;
 use strict;
 use warnings;
@@ -254,34 +281,22 @@ use Tie::Array;
 
 our @ISA = ('Tie::StdArray');
 
-sub protect ($) {
-  ref shift or return undef;
-  my($cpack, $cfile, $cline, $csub) = caller(0);
-  if( $cpack ne __PACKAGE__ 
-      or $cfile ne __FILE__ ) {
-    return undef;
-  }
-  return 1;
-}
- 
+{  # rein in vars
 my( $_owner, $_type, $_typecode, $_can_resize, $_data, $_endianness );
-
 
 sub TIEARRAY {
   my $class = shift;
   $_owner = shift;
-  $_type       = $_owner->type;
-  $_typecode   = $_owner->typecode;
-  $_can_resize = $_owner->can_resize;
-  $_data       = \$_owner->_data; # not sure about this one
+  $_type       = $_owner->{typeobj};
+  $_typecode   = $_owner->{_typecode_};
+  $_can_resize = $_owner->{can_resize};
+  $_data       = \$_owner->{_as_param_}; # not sure about this one
+  $_endianness = 0;
   return bless [] => $class;
 }
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
-  protect $self
-    or carp("Unauthorised access of val attribute") && return undef;
-
   # Deal with being assigned other Type objects and the like...
   my $val = Ctypes::Type::Array::_arg_to_type($arg,$_type)
     if( defined $arg );
@@ -295,15 +310,15 @@ sub STORE {
     return undef;
   }
 
-# XXX This is where a check for an endianness property would come in.
-  if( $_endianness ne 'b' ) {  # It ne anything at the moment. Very TODO.
-    my $bits = Ctypes::sizeof($_typecode) * 8;
-    # XXX use $_owner->{_as_param_} directly?
-    vec($_data,$index,$bits) = pack($_typecode,$val);
-  } else {
-  # TODO insert code for other / swapped endianness here
-  }
+# XXX Simple types pack() every time they're assigned to.
+# That's hassle. How about only producing the pack()'d data when
+# asked for it? Can then cache it in _as_param_.
 
+  # This check is because FETCH must repopulate self if _as_param_ exists
+  # (since it may have been manipulated by a C lib)
+  if( caller ne 'Ctypes::Type::Array::members' ) {
+    $_owner->{_as_param_} = undef;  # cache no longer up to date
+  }
   $$self[$index] = $val;
 
   return 1; # success
@@ -311,6 +326,12 @@ sub STORE {
 
 sub FETCH {
   my($self, $index) = @_;
+  if( defined $_owner->{_as_param_} and $_owner->{_datasafe} == 0 ) {
+    @$self = unpack($_typecode.'*', $_owner->{_as_param_});
+    $_owner->{_datasafe} = 1;
+  }
   return $$self[$index];
 }
+}  # rein in vars
+
 1;

@@ -5,6 +5,7 @@ use Ctypes;
 use Ctypes::Function;
 use Ctypes::Callback;
 use Data::Dumper;
+use Devel::Peek;
 
 my $array = Array( 1, 2, 3, 4, 5 );
 is( ref($array), 'Ctypes::Type::Array', 'Array created from list');
@@ -14,6 +15,12 @@ is( ref($array), 'Ctypes::Type::Array', 'Array created from arrayref');
 
 my $double_array = Array( c_double, [11, 12, 13, 14, 15] );
 is( $double_array->type, 'c_double', 'Array type specified');
+
+is($#$double_array, 4, '$# for highest index');
+
+is($double_array->_data, pack('d*',11,12,13,14,15), 'packed data looks right');
+
+is($double_array->[2], 13, '$obj[x] dereferencing');
 
 sub cb_func {
   my( $ay, $bee ) = @_;
@@ -27,20 +34,18 @@ my $qsort = Ctypes::Function->new
       name   => 'qsort',
       argtypes => 'piip',
       restype  => 'v' } );
-$qsort->abi('c');
-ok( defined $qsort, 'created function $qsort' );
 
 my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ii' );
-ok( defined $cb, 'created callback $cb' );
 
-my @array = (2, 4, 5, 1, 3);
-note( "Initial array: ", join(", ", @array) );
+$array = Array(2, 4, 5, 1, 3);
+#diag( "Before call:" );
+#diag( Dump($array) );
 
-my $arg = pack('i*', @array);
+$qsort->(\$array, $#$array+1, Ctypes::sizeof('i'), $cb->ptr);
+#diag( "After call:" );
+#diag( Dump($array) );
 
-$qsort->(\$arg, $#array+1, Ctypes::sizeof('i'), $cb->ptr);
-
-my @res = unpack( 'i*', $arg  );
-my $arrstring = join(", ", @res);
+# my @res = unpack( 'i*', $arg  );
+my $arrstring = $array[0];
 
 is($arrstring, "1, 2, 3, 4, 5" , "Array reordered: $arrstring" );
