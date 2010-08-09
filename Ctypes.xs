@@ -539,8 +539,8 @@ _call(self, ...)
               ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"_typecode_"),tc_len)
               : (char)*SvPV(this_argtype,tc_len);
           } else {
-            croak("Ctypes::_call:%i error: Couldn't get argtype from array",
-                  __LINE__);
+  croak("[%s:%i] Function::_call error: Can't grok argtype at position %i",
+                  __FILE__, __LINE__, i);
           }
         } else {
           this_argtype = NULL;
@@ -606,8 +606,14 @@ _call(self, ...)
     debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
     debug_warn( "#    ffi_call returned!");
-    debug_warn( "#    First in argvalues[0]: %i",
-                 *(short*)(*(intptr_t*)argvalues[0]) );
+
+    int array[] = {1, 2, 3, 4, 5};
+    int *ptr;
+    ptr = &array[2];    /*   *ptr is now 3     */
+    debug_warn("int ptr points to: %i", *ptr);
+    array[2] = 11707;   /*   *ptr is now 11707 */
+    debug_warn("int ptr now points to: %i", *ptr);
+
     debug_warn( "#[%s:%i] Pushing retvals to Perl stack...", __FILE__, __LINE__ );
     switch (rtypechar)
     {

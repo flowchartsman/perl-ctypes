@@ -80,16 +80,6 @@ use Carp;
 
 my $_owner;
 
-sub protect ($) {
-  ref shift or return undef;
-  my($cpack, $cfile, $cline, $csub) = caller(0);
-  if( $cpack ne __PACKAGE__ 
-      or $cfile ne __FILE__ ) {
-    return undef;
-  }
-  return 1;
-}
- 
 sub TIESCALAR {
   my $class = shift;
   $_owner = shift;
@@ -98,8 +88,6 @@ sub TIESCALAR {
 
 sub STORE {
   my $self = shift;
-  protect $self
-    or carp("Unauthorised access of val attribute") && return undef;
   my $arg = shift;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
@@ -159,11 +147,7 @@ use Carp;
 our @ISA = qw|Ctypes::Type|;
 use fields qw|alignment name _typecode_ size
               allow_overflow val _as_param_|;
-use overload '0+'  => \&_num_overload,
-             '+'   => \&_add_overload,
-             '-'   => \&_subtract_overload,
-             '&{}' => \&_code_overload,
-             '%{}' => \&_hash_overload,
+use overload '${}' => \&_scalar_overload,
              fallback => 'TRUE';
              # TODO Multiplication will have to be overridden
              # to implement Python's Array contruction with "type * x"???
@@ -179,7 +163,7 @@ sub _add_overload {
     if( !$swap ) { $ret = $x->{val} + $y; }
     else { $ret = $y->{val} + $x; }
   } else {           # += etc.
-    $x->val($x->{val} + $y);
+    $x->{val} = $x->{val} + $y;
     $ret = $x;
   }
   return $ret;
@@ -192,25 +176,14 @@ sub _subtract_overload {
     if( !$swap ) { $ret = $x->{val} - $y; }
     else { $ret = $x - $y->{val}; }
   } else {           # -= etc.
-    $x->val($x->{val} - $y);
+    $x->{val} = $x->{val} - $y;
     $ret = $x;
   }
   return $ret;
 }
 
-sub _hash_overload {
-  my($cpack, $cfile) = caller(0);
-  if( $cpack !~ /^Ctypes/
-      or $cfile !~ /Ctypes/ ) {
-    carp("Unauthorized direct Type attribute access!");
-    return {};
-  }
-  return shift;
-}
-
-sub _code_overload { 
-  my $self = shift;
-  return sub { val($self, @_) };
+sub _scalar_overload {
+  return \shift->{val};
 }
 
 sub new {
@@ -219,7 +192,7 @@ sub new {
   my $arg = shift;
   my $self = { _as_param_      => '',
                _typecode_      => $typecode,
-               val             => 0,
+               val             => undef,
                address         => undef,
                name            => $_types->{$typecode},
                size            => Ctypes::sizeof($typecode),
@@ -235,16 +208,6 @@ sub new {
 # Is it relevant in our Perl-based model?
 #  $self->{address} = Ctypes::addressof($self);
   return $self;
-}
-
-# val can't go in the loop below simply because
-# it's an lvalue. To make them all lvalue would
-# require more tie'ing for validity checks.
-sub val : lvalue {
-  my $self = shift;
-  my $arg = shift;
-  $self->{val} = $arg if $arg;
-  $self->{val};
 }
 
 #

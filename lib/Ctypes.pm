@@ -27,7 +27,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
-                   POINTER WinError
+                   POINTER WinError byref
                   |, @Ctypes::Type::_allnames );
 
 require XSLoader;
@@ -115,7 +115,7 @@ sub _make_arrayref {
 sub _check_invalid_types ($) {
   my $typesref = shift;
   # Now check supplied args are valid...
-  my $typecode;
+  my $typecode = undef;
   for( my $i=0; $i<=$#{$typesref}; $i++ ) {
     $_ = $typesref->[$i];
     # Check objects fulfil all the requirements...
@@ -821,6 +821,12 @@ Returns a light-weight pointer to obj, which must be an instance of a
 ctypes type. The returned object can only be used as a foreign
 function call parameter. It behaves similar to pointer(obj), but the
 construction is a lot faster.
+
+=cut
+
+sub byref {
+  return \$_[0];  
+}
 
 =item cast(obj, type)
 

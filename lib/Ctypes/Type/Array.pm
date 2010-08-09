@@ -30,8 +30,9 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 ##########################################
 
 sub _arg_to_type {
+  # print "In _arg_to_type, called by ", (caller(1))[3], "\n";
   my( $arg, $type ) = @_;
-  $type = $type->{_typecode_} if ref($type);
+  $type = $type->{_typecode_} if ref($type); # take typecode or obj
   my $out = undef;
   if( !ref($arg) ) {     # Perl native type
     # new() will handle casting and blow up if inappropriate
@@ -64,27 +65,38 @@ sub _arg_to_type {
 # We need to look at the _values_ of all args to see what kind
 # of array to make. This function gets all the values out for us.
 sub _get_values ($;\@) {
+  # print "In _get_values, called by ", (caller(1))[3], "\n";
   my $in = shift;
   my $which_kind = shift;
   my @values;
-  for(my $i = 0; defined($_ = $$in[$i]); $i++) {
+  for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
     if( !ref ) { 
       $values[$i] = $_;
       $which_kind->[$i] = 1;
     }
     elsif( ref eq 'Ctypes::Type::Simple' ) {
-      $values[$i] = $_->val;
+      $values[$i] = $_->{val};
       $which_kind->[$i] = 2;
     }
     else {
       my $valid = Ctypes::_check_invalid_types( [ $_ ] );
-      if( $valid ) {
-        $values[$i] = $_->{_as_param_} ?
-          unpack($_->_typecode_, $_->{_as_param_}) :
-          unpack($_->_typecode_, $_->_as_param_); 
+      if( not defined $valid ) {
+        my $tc = $_->{_typecode_} ?
+          $_->{_typecode_} : $_->typecode;
+        if( $tc ne 'p' ) {
+          $values[$i] = $_->{_as_param_} ?
+            $_->{_typecode_} ?
+              unpack($_->{_typecode_}, $_->{_as_param_}) :
+              unpack($_->_typecode_, $_->{_as_param_}) :
+            $_->{_typecode_} ?
+              unpack($_->{_typecode_}, $_->_as_param_) :
+              unpack($_->_typecode_, $_->_as_param_); 
+        } else {
+          return -1;
+        } 
       $which_kind->[$i] = 3;
       } else {
-  carp("Cannot discern value of object at position $i");
+  carp("Cannot discern value of object at position $valid");
   return undef;
       }
     }
@@ -101,7 +113,7 @@ sub _get_members_typed {
   my $newval;
   # A.a) Required type is a Ctypes Type
   if( ref($deftype) eq 'Ctypes::Type::Simple' ) {
-    for(my $i = 0; defined($_ = $$in[$i]); $i++) {
+    for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
     $newval = _arg_to_type( $_, $deftype );
     if( defined $newval ) {
       $members->[$i] = $newval;
@@ -136,6 +148,12 @@ sub _get_members_untyped {
   my @which_kind;
 
   @values = _get_values($in, @which_kind);
+  # Check for errors...
+#  if( $#which_kind < $#$in ) {
+#    if( $values[0] == -1 ) { # found 'p' value... all must be p!
+#      for( 
+#    }
+#  }
 
 # Now, check for non-numerics...
   my $found_string = undef;
@@ -147,19 +165,19 @@ sub _get_members_untyped {
   # Determine smallest type suitable for holding all numbers...
   # XXX This needs changed when we support more typecodes
     my $low = 0;  # index into 
-    for(my $i = 0; defined( $_ = $values[$i]); $i++ ) {
+    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
       $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
       $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
       $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
       last if $low == 3;
     }
     # Now create type objects for all members...
-    for(my $i = 0; defined( $_ = $values[$i]); $i++ ) {
+    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
       $members->[$i] =
         Ctypes::Type::Simple->new($numtypes[$low], $values[$i]);
     }
   } else { # $found_string = 1 (got non-numerics)...
-    for(my $i = 0; defined( $_ = $values[$i]); $i++ ) {
+    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
       $members->[$i] =
         Ctypes::Type::Simple->new('p', $values[$i]);
     }
@@ -167,13 +185,9 @@ sub _get_members_untyped {
   return $members;
 }
 
-{   # rein in @_members
-my @_members;  # Can't be anonymous hashref value because needs tie'ing
-
 sub _array_overload {
-  return \@_members;
+  return shift->{_members};
 }
-
 
 ##########################################
 # TYPE::ARRAY : PUBLIC FUNCTIONS & DATA  #
@@ -204,9 +218,9 @@ sub new {
 
   $deftype = $inputs_typed->[0] if not defined $deftype;
 
-  $self = { typeobj     => $deftype,
-            type        => $deftype->{name},
-            _typecode_  => $deftype->{_typecode_},
+  $self = { type        => $deftype,
+            name        => $deftype->{name} . ' Array',
+            _typecode_  => 'p',
             size        => $deftype->{size} * ($#$in + 1),
             can_resize  => 1,
             endianness  => '',
@@ -216,9 +230,12 @@ sub new {
 
   bless $self => $class;
 
-  tie @_members, 'Ctypes::Type::Array::members', $self;
+  $self->{_rawmembers} =
+    tie @{$self->{_members}}, 'Ctypes::Type::Array::members', $self;
   my @arr =  @{$inputs_typed};
-  @_members = @arr;
+  @{$self->{_members}} = @arr;
+  print $$self[2], "\n";
+  print $self->{_members}->[2], "\n";
   return $self;
 }
 
@@ -266,13 +283,14 @@ sub _as_param_ {
   return $self->{_as_param_} if defined $self->{_as_param_};
 # TODO This is where a check for an endianness property would come in.
   if( $self->{endianness} ne 'b' ) {
-    $self->{_as_param_} = pack($self->{_typecode_}.'*',@_members);
+    $self->{_as_param_} =
+      pack($self->{type}->{_typecode_}.'*',@{$self->{_members}});
     return \$self->{_as_param_};
   } else {
   # <insert code for other / swapped endianness here>
   }
 }
-} # rein in @_members
+
 package Ctypes::Type::Array::members;
 use strict;
 use warnings;
@@ -288,17 +306,23 @@ my( $_owner, $_type, $_typecode, $_can_resize, $_data, $_endianness );
 sub TIEARRAY {
   my $class = shift;
   $_owner = shift;
-  $_type       = $_owner->{typeobj};
-  $_typecode   = $_owner->{_typecode_};
+  $_type       = $_owner->{type};
+  $_typecode   = $_type->{_typecode_};
   $_can_resize = $_owner->{can_resize};
   $_data       = \$_owner->{_as_param_}; # not sure about this one
-  $_endianness = 0;
+  $_endianness = $_owner->{endianness};
   return bless [] => $class;
 }
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
   # Deal with being assigned other Type objects and the like...
+
+  if( $index > $#$self and $_can_resize = 0 ) {
+    carp("Max index ", $#$self,"; not allowed to resize!");
+    return undef;
+  }
+
   my $val = Ctypes::Type::Array::_arg_to_type($arg,$_type)
     if( defined $arg );
   if( not defined $val ) {
@@ -306,32 +330,29 @@ sub STORE {
     return undef;
   }
 
-  if( $index > $#$self and $_can_resize = 0 ) {
-    carp("Max index ", $#$self,"; not allowed to resize!");
-    return undef;
-  }
-
 # XXX Simple types pack() every time they're assigned to.
 # That's hassle. How about only producing the pack()'d data when
 # asked for it? Can then cache it in _as_param_.
 
-  # This check is because FETCH must repopulate self if _as_param_ exists
+  # This check is because FETCH must repopulate $self if _as_param_ exists
   # (since it may have been manipulated by a C lib)
   if( caller ne 'Ctypes::Type::Array::members' ) {
     $_owner->{_as_param_} = undef;  # cache no longer up to date
   }
   $$self[$index] = $val;
-
   return 1; # success
 }
 
 sub FETCH {
   my($self, $index) = @_;
   if( defined $_owner->{_as_param_} and $_owner->{_datasafe} == 0 ) {
-    @$self = unpack($_typecode.'*', $_owner->{_as_param_});
+    my @renew = unpack($_typecode.'*', $_owner->{_as_param_});
+    for(my $i=0;defined(local $_=$renew[$i]);$i++) {
+      $$self[$i] = Ctypes::Type::Simple->new($_typecode,$_);
+    }
     $_owner->{_datasafe} = 1;
   }
-  return $$self[$index];
+  return ${$$self[$index]};
 }
 }  # rein in vars
 
