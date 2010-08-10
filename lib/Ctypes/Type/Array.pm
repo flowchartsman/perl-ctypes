@@ -5,6 +5,7 @@ use Carp;
 use Ctypes;  # which uses Ctypes::Type?
 use Scalar::Util qw|looks_like_number|;
 use overload '@{}'    => \&_array_overload,
+             '${}'    => \&_scalar_overload,
              fallback => 'TRUE';
 
 =head1 NAME
@@ -30,7 +31,6 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 ##########################################
 
 sub _arg_to_type {
-  # print "In _arg_to_type, called by ", (caller(1))[3], "\n";
   my( $arg, $type ) = @_;
   $type = $type->{_typecode_} if ref($type); # take typecode or obj
   my $out = undef;
@@ -65,7 +65,6 @@ sub _arg_to_type {
 # We need to look at the _values_ of all args to see what kind
 # of array to make. This function gets all the values out for us.
 sub _get_values ($;\@) {
-  # print "In _get_values, called by ", (caller(1))[3], "\n";
   my $in = shift;
   my $which_kind = shift;
   my @values;
@@ -79,8 +78,8 @@ sub _get_values ($;\@) {
       $which_kind->[$i] = 2;
     }
     else {
-      my $valid = Ctypes::_check_invalid_types( [ $_ ] );
-      if( not defined $valid ) {
+      my $invalid = Ctypes::_check_invalid_types( [ $_ ] );
+      if( not $invalid ) {
         my $tc = $_->{_typecode_} ?
           $_->{_typecode_} : $_->typecode;
         if( $tc ne 'p' ) {
@@ -96,7 +95,7 @@ sub _get_values ($;\@) {
         } 
       $which_kind->[$i] = 3;
       } else {
-  carp("Cannot discern value of object at position $valid");
+  carp("Cannot discern value of object at position $invalid");
   return undef;
       }
     }
@@ -144,49 +143,75 @@ sub _get_members_typed {
 sub _get_members_untyped {
   my $in = shift;
   my $members = [];
-  my @values;
-  my @which_kind;
 
-  @values = _get_values($in, @which_kind);
-  # Check for errors...
-#  if( $#which_kind < $#$in ) {
-#    if( $values[0] == -1 ) { # found 'p' value... all must be p!
-#      for( 
-#    }
-#  }
+  my( $found_type, $invalid, $found_string) = undef;
+
+  for(my $i=0;defined(local $_ = $$in[$i]);$i++) {
+    if( defined $found_type ) {
+      if( ref ne $found_type ) {
+        carp("Arrays must be all of the same type: "
+             . " new type found at position $i");
+        return undef;
+      } else {
+        next;
+      }
+    }
+    if( ref ) {
+      if( $i > 0 ) {
+        carp("Arrays must be all of the same type: "
+           . " new type found at position $i");
+        return undef;
+      }
+      if( ref ne 'Ctypes::Type::Simple' ) {
+      $invalid = Ctypes::_check_invalid_types( [ $_ ] );
+        if( not $invalid ) {
+          $found_type = ref;
+        } else {
+          carp("Arrays can only store Ctypes compatible objects:"
+               . " type " . ref() . " is not valid");
+          return undef;
+        }
+      }
+    }
+    if( not looks_like_number($_) ) { $found_string = 1 };
+  }
+
+  if( $found_type ) {
+    return $in;
+  }
 
 # Now, check for non-numerics...
-  my $found_string = undef;
   my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
-  for(@values) {
-    $found_string = 1 if not looks_like_number($_);
-  }
   if(not $found_string) {
   # Determine smallest type suitable for holding all numbers...
   # XXX This needs changed when we support more typecodes
-    my $low = 0;  # index into 
-    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
+    my $low = 0;  # index into @numtypes
+    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
       $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
       $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
       $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
       last if $low == 3;
     }
     # Now create type objects for all members...
-    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
+    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
       $members->[$i] =
-        Ctypes::Type::Simple->new($numtypes[$low], $values[$i]);
+        Ctypes::Type::Simple->new($numtypes[$low], $$in[$i]);
     }
   } else { # $found_string = 1 (got non-numerics)...
-    for(my $i = 0; defined( local $_ = $values[$i]); $i++ ) {
+    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
       $members->[$i] =
-        Ctypes::Type::Simple->new('p', $values[$i]);
+        Ctypes::Type::Simple->new('p', $$in[$i]);
     }
   }
   return $members;
 }
 
 sub _array_overload {
-  return shift->{_members};
+  return shift->{members};
+}
+
+sub _scalar_overload {
+  return \shift;
 }
 
 ##########################################
@@ -216,6 +241,10 @@ sub new {
     _get_members_typed($deftype, $in) :
     _get_members_untyped( $in );
 
+  if( not defined @{$inputs_typed} ) {
+    croak("Could not create Array from arguments supplied: see warnings");
+  }
+
   $deftype = $inputs_typed->[0] if not defined $deftype;
 
   $self = { type        => $deftype,
@@ -226,16 +255,15 @@ sub new {
             endianness  => '',
             _as_param_  => '',
             'length'    => $#$in,
+            _datasafe   => 1,
           };
 
   bless $self => $class;
 
   $self->{_rawmembers} =
-    tie @{$self->{_members}}, 'Ctypes::Type::Array::members', $self;
+    tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
   my @arr =  @{$inputs_typed};
-  @{$self->{_members}} = @arr;
-  print $$self[2], "\n";
-  print $self->{_members}->[2], "\n";
+  @{$self->{members}} = @arr;
   return $self;
 }
 
@@ -278,17 +306,49 @@ sub _data { &_as_param_(@_); }
 
 sub _as_param_ {
   my $self = shift;
-  # STORE will will always undef _as_param_
+  # STORE will always undef _as_param_
   $self->{_datasafe} = 0; # used by FETCH
   return $self->{_as_param_} if defined $self->{_as_param_};
 # TODO This is where a check for an endianness property would come in.
   if( $self->{endianness} ne 'b' ) {
-    $self->{_as_param_} =
-      pack($self->{type}->{_typecode_}.'*',@{$self->{_members}});
+    my @data;
+    for(my $i=0;defined(local $_ = $self->{_rawmembers}{DATA}[$i]);$i++) {
+      $data[$i] = $_->{_as_param_} ?
+        $_->{_as_param_} :
+        ${$_->_as_param_};
+    }
+    my $string;
+    for(@data) { $string .= $_ }
+    $self->{_as_param_} = join('',@data);
     return \$self->{_as_param_};
   } else {
   # <insert code for other / swapped endianness here>
   }
+}
+
+sub _update_ {
+  my($self, $arg) = @_;
+  return undef unless $arg;
+
+  my $num_members = scalar @{$self->{_rawmembers}{DATA}};
+  my $chunk_size = length($self->{_as_param_}) / $num_members;
+  my @renew;
+  my $temp;
+  for( 0..$num_members-1 ) {
+    $renew[$_] = substr( $self->{_as_param_},
+                         ($_ * $chunk_size),
+                         $chunk_size
+                       );
+  }
+  my $success;
+  for(my $i=0;defined(local $_=$renew[$i]);$i++) {
+    $success = $self->{_rawmembers}{DATA}[$i]->_update_($renew[$i]);
+    if(!$success) {
+      croak("Error updating member at position $i");
+    }
+  }
+  $self->{_datasafe} = 1;
+  return 1;
 }
 
 package Ctypes::Type::Array::members;
@@ -298,35 +358,45 @@ use Carp;
 use Ctypes::Type::Array;
 use Tie::Array;
 
-our @ISA = ('Tie::StdArray');
-
-{  # rein in vars
-my( $_owner, $_type, $_typecode, $_can_resize, $_data, $_endianness );
+# our @ISA = ('Tie::StdArray');
 
 sub TIEARRAY {
   my $class = shift;
-  $_owner = shift;
-  $_type       = $_owner->{type};
-  $_typecode   = $_type->{_typecode_};
-  $_can_resize = $_owner->{can_resize};
-  $_data       = \$_owner->{_as_param_}; # not sure about this one
-  $_endianness = $_owner->{endianness};
-  return bless [] => $class;
+  my $owner = shift;
+  my $self = { owner    => $owner,
+               DATA     => [],
+             };
+  return bless $self => $class;
 }
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
   # Deal with being assigned other Type objects and the like...
 
-  if( $index > $#$self and $_can_resize = 0 ) {
+  if( $index > $#{$self->{DATA}} and $self->{owner}{can_resize} = 0 ) {
     carp("Max index ", $#$self,"; not allowed to resize!");
     return undef;
   }
 
-  my $val = Ctypes::Type::Array::_arg_to_type($arg,$_type)
-    if( defined $arg );
-  if( not defined $val ) {
-    carp($arg," could not be stored in Array of type ", $_type);
+  my $val;
+  if( !ref($arg) ) {
+    $val = Ctypes::Type::Array::_arg_to_type($arg,$self->{owner}{type});
+    if( not defined $val ) {
+      carp("Could not create " . $self->{owner}{name}
+           . " type from argument '$arg'");
+      return undef;
+    }
+  } else {
+    $val = $arg;
+  }
+
+  if( ref($val) eq 'ARRAY' ) {
+    $val = new Ctypes::Type::Array( $val );
+  }
+
+  if( $val->{_typecode_} ne $self->{owner}{type}{_typecode_} ) {
+    carp( "Cannot put " . ref($val) . " type object into "
+          . ref($self->{owner}{type}) . " Array");
     return undef;
   }
 
@@ -337,23 +407,30 @@ sub STORE {
   # This check is because FETCH must repopulate $self if _as_param_ exists
   # (since it may have been manipulated by a C lib)
   if( caller ne 'Ctypes::Type::Array::members' ) {
-    $_owner->{_as_param_} = undef;  # cache no longer up to date
+    $self->{owner}{_as_param_} = undef;  # cache no longer up to date
   }
-  $$self[$index] = $val;
-  return 1; # success
+  $self->{DATA}[$index] = $val;
+  return $self->{DATA}[$index]; # success
 }
 
 sub FETCH {
   my($self, $index) = @_;
-  if( defined $_owner->{_as_param_} and $_owner->{_datasafe} == 0 ) {
-    my @renew = unpack($_typecode.'*', $_owner->{_as_param_});
-    for(my $i=0;defined(local $_=$renew[$i]);$i++) {
-      $$self[$i] = Ctypes::Type::Simple->new($_typecode,$_);
-    }
-    $_owner->{_datasafe} = 1;
+  if( defined $self->{owner}{_as_param_}
+      and $self->{owner}{_datasafe} == 0 ) {
+    $self->{owner}->_update_($self->{owner}{_as_param_});
   }
-  return ${$$self[$index]};
+  croak("Error updating values!") if $self->{owner}{_datasafe} != 1;
+  if( ref($self->{DATA}[$index]) eq 'Ctypes::Type::Simple' ) {
+    return ${$self->{DATA}[$index]};
+#  } elsif ( ref($$self[$index]) eq 'Ctypes::Type::Array' ) {
+#    return @{$$self[$index]};
+  } else {
+    return $self->{DATA}[$index];
+  }
 }
-}  # rein in vars
+
+sub CLEAR { $_[0]->{DATA} = [] }
+sub EXTEND { }
+sub FETCHSIZE { scalar @{$_[0]->{DATA}} }
 
 1;

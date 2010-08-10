@@ -78,12 +78,13 @@ use strict;
 use warnings;
 use Carp;
 
-my $_owner;
-
 sub TIESCALAR {
   my $class = shift;
-  $_owner = shift;
-  return bless \my $self => $class;
+  my $owner = shift;
+  my $self = { owner  => $owner,
+               DATA   => undef,
+             };
+  return bless $self => $class;
 }
 
 sub STORE {
@@ -106,36 +107,43 @@ sub STORE {
       }
     }
   }
-  my $typecode = $_owner->{_typecode_};
+  my $typecode = $self->{owner}{_typecode_};
   croak("Simple Types can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   if( $is_valid < 1 ) {
     no strict 'refs';
     if( ($is_valid == -1)
-        and ( $_owner->allow_overflow == 0
+        and ( $self->{owner}->allow_overflow == 0
         or Ctypes::Type::allow_overflow_all == 0 ) ) {
-      carp( "Value out of range for " . $_owner->{name} . ": $arg");
+      carp( "Value out of range for " . $self->{owner}{name} . ": $arg");
       return undef;
     } else {
       my $temp = Ctypes::_cast($arg,$typecode);
       if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
         $arg = $temp;
       } else {
-        carp("Unreconcilable argument for type " . $_owner->{name} .
+        carp("Unreconcilable argument for type " . $self->{owner}{name} .
               ": $arg");
         return undef;
       }
     }
   }
-  $_owner->{_as_param_} = pack( $typecode, $arg );
-  $$self = $arg;
-  return $$self;
+  if( caller ne 'Ctypes::Type::Simple::value' ) {
+    $self->{owner}{_as_param_} = undef;  # cache no longer up to date
+  }
+  $self->{DATA} = $arg;
+  return $self->{DATA};
 }
 
 sub FETCH {
   my $self = shift;
-  return $$self;
+  if ( defined $self->{owner}{_as_param_}
+       and $self->{owner}{_datasafe} == 0 ) {
+    $self->{owner}->_update_($self->{owner}{_as_param_});
+  }
+  croak("Error updating value!") if $self->{owner}{_datasafe} != 1;
+  return $self->{DATA};
 }
 
 
@@ -148,6 +156,8 @@ our @ISA = qw|Ctypes::Type|;
 use fields qw|alignment name _typecode_ size
               allow_overflow val _as_param_|;
 use overload '${}' => \&_scalar_overload,
+             '0+'  => \&_scalar_overload,
+             '""'  => \&_scalar_overload,
              fallback => 'TRUE';
              # TODO Multiplication will have to be overridden
              # to implement Python's Array contruction with "type * x"???
@@ -198,10 +208,11 @@ sub new {
                size            => Ctypes::sizeof($typecode),
                alignment       => 0,
                allow_overflow  => 1,
+               _datasafe       => 1,
              };
   bless $self => $class;
   $arg = 0 unless defined $arg;
-  tie $self->{val}, 'Ctypes::Type::Simple::value', $self;
+  $self->{_rawval} = tie $self->{val}, 'Ctypes::Type::Simple::value', $self;
   $self->{val} = $arg;
   return undef if not defined $self->{val};
 # XXX Unimplemented! How will 'address' this work?
@@ -214,7 +225,6 @@ sub new {
 # Accessor generation
 #
 my %access = ( 
-  _data             => ['_as_param_'],
   typecode          => ['_typecode_'],
   allow_overflow =>
     [ 'allow_overflow',
@@ -242,6 +252,27 @@ for my $func (keys(%access)) {
     }
     return $self->{$key};
   }
+}
+
+sub _data { &_as_param_(@_) }
+
+sub _as_param_ {
+  my $self = shift;
+  # STORE will always undef _as_param_
+  $self->{_datasafe} = 0;  # used by FETCH
+  return $self->{_as_param_} if defined $self->{_as_param_};
+  $self->{_as_param_} =
+    pack( $self->{_typecode_}, $self->{_rawval}{DATA} );
+  return \$self->{_as_param_};
+}
+
+sub _update_ {
+  my( $self, $arg ) = @_;
+  return undef unless $arg;
+
+  $self->{_rawval}{DATA} = unpack($self->{_typecode_},$arg);
+  $self->{_datasafe} = 1;
+  return 1; 
 }
 
 

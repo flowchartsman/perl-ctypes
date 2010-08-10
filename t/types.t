@@ -1,6 +1,8 @@
 #!perl
 
-use Test::More tests => 20;
+use strict;
+use warnings;
+use Test::More tests => 19;
 use Ctypes;
 use utf8;
 
@@ -28,8 +30,7 @@ is( $$number_seven, 17, '$obj -= <num>' );
 is( $number_seven->typecode, 'i', "->typecode getter" );
 is( $number_seven->typecode('p'), 'i', "typecode cannot be set" );
 
-is( $number_seven->_data, pack('i', 17), "->_data getter" );
-is( $number_seven->_data(pack('i', 19)), pack('i', 17), "_data cannot be set" );
+is( ${$number_seven->_data}, pack('i', 17), "->_data getter" );
 
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');

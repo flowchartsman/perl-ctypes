@@ -1,11 +1,12 @@
 #!perl
 
-use Test::More tests => 8;
+use Test::More tests => 9;
 use Ctypes;
 use Ctypes::Function;
 use Ctypes::Callback;
 use Data::Dumper;
 use Devel::Peek;
+use Scalar::Util qw|looks_like_number|;
 
 my $array = Array( 1, 2, 3, 4, 5 );
 is( ref($array), 'Ctypes::Type::Array', 'Array created from list');
@@ -21,6 +22,7 @@ is($#$double_array, 4, '$# for highest index');
 is(${$double_array->_data}, pack('d*',11,12,13,14,15), 'packed data looks right');
 
 is($double_array->[2], 13, '$obj[x] dereferencing');
+
 is( scalar @$double_array, 5, 'scalar @$array = $#$array+1' );
 
 # As function arguments
@@ -37,16 +39,19 @@ my $qsort = Ctypes::Function->new
       argtypes => 'piip',
       restype  => 'v' } );
 my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ss' );
-$array = Array( 2, 4, 5, 1, 3 );
-$qsort->($array, $#$array+1, Ctypes::sizeof('s'), $cb->ptr);
-my $arrstring = join(", ", @$array);
-is($arrstring, "1, 2, 3, 4, 5" , '_as_param_ working' );
-
-diag( "really, it's working" );
-my $ref = \$$array[2];
-$$array[2] = c_int(117);
-diag( $$ref );
+my $disarray = Array( 2, 4, 5, 1, 3 );
+$qsort->($disarray, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
+# $array->_update_($array->{_as_param_});
+my $arrstring = join(", ", @$disarray);
+is($arrstring, "1, 2, 3, 4, 5" , '_as_param_ and _update_ working' );
 
 # Multidimensional
 
-my $multiarray = Array( $array, $array, $array );
+my $multi = Array( $array, $array2, $double_array );
+
+subtest 'Multidimensional' => sub {
+  plan tests => 3;
+  is( $$multi[0][0], 1 );
+  is( $$multi[1][2], 8 );
+  is( $$multi[2][4], 15 );
+};
