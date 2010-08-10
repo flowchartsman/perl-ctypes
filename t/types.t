@@ -27,8 +27,8 @@ is( $$number_seven, 18, '$obj += <num>' );
 $$number_seven--;
 is( $$number_seven, 17, '$obj -= <num>' );
 
-is( $number_seven->typecode, 'i', "->typecode getter" );
-is( $number_seven->typecode('p'), 'i', "typecode cannot be set" );
+is( $number_seven->_typecode_, 'i', "->typecode getter" );
+is( $number_seven->_typecode_('p'), 'i', "typecode cannot be set" );
 
 is( ${$number_seven->_data}, pack('i', 17), "->_data getter" );
 

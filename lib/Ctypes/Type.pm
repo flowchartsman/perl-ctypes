@@ -225,8 +225,8 @@ sub new {
 # Accessor generation
 #
 my %access = ( 
-  typecode          => ['_typecode_'],
-  allow_overflow =>
+  _typecode_        => ['_typecode_'],
+  allow_overflow    =>
     [ 'allow_overflow',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes overflow settable

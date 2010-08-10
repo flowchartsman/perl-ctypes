@@ -2,7 +2,7 @@ package Ctypes::Type::Array;
 use strict;
 use warnings;
 use Carp;
-use Ctypes;  # which uses Ctypes::Type?
+use Ctypes;
 use Scalar::Util qw|looks_like_number|;
 use overload '@{}'    => \&_array_overload,
              '${}'    => \&_scalar_overload,

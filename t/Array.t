@@ -4,9 +4,6 @@ use Test::More tests => 9;
 use Ctypes;
 use Ctypes::Function;
 use Ctypes::Callback;
-use Data::Dumper;
-use Devel::Peek;
-use Scalar::Util qw|looks_like_number|;
 
 my $array = Array( 1, 2, 3, 4, 5 );
 is( ref($array), 'Ctypes::Type::Array', 'Array created from list');
