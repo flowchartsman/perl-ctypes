@@ -247,13 +247,16 @@ sub new {
 
   $deftype = $inputs_typed->[0] if not defined $deftype;
 
-  $self = { type        => $deftype,
-            name        => $deftype->{name} . ' Array',
+  $self = { type        => $deftype->_typecode_,
+            name        => $deftype->{name}
+                             ? $deftype->{name} . '_Array'
+                             : ref($deftype) . '_Array',
             _typecode_  => 'p',
-            size        => $deftype->{size} * ($#$in + 1),
+            size        =>
+              Ctypes::sizeof($deftype->_typecode_) * ($#$in + 1),
             can_resize  => 1,
             endianness  => '',
-            _as_param_  => '',
+            _as_param_  => undef,
             'length'    => $#$in,
             _datasafe   => 1,
           };
@@ -272,12 +275,13 @@ sub new {
 #
 my %access = (
   'length'          => ['length'],
-  typecode          => ['_typecode_'],
-  can_resize =>
+  _typecode_        => ['_typecode_'],
+  can_resize        =>
     [ 'can_resize',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes 'flexible' settable
   alignment         => ['alignment'],
+  name              => ['name'],
   type              => ['type'],
   size              => ['size'],
   endianness        => ['_endianness'],
@@ -308,7 +312,9 @@ sub _as_param_ {
   my $self = shift;
   # STORE will always undef _as_param_
   $self->{_datasafe} = 0; # used by FETCH
-  return $self->{_as_param_} if defined $self->{_as_param_};
+  if( defined $self->{_as_param_} ) {
+    return \$self->{_as_param_};
+  }
 # TODO This is where a check for an endianness property would come in.
   if( $self->{endianness} ne 'b' ) {
     my @data;
@@ -331,7 +337,7 @@ sub _update_ {
   return undef unless $arg;
 
   my $num_members = scalar @{$self->{_rawmembers}{DATA}};
-  my $chunk_size = length($self->{_as_param_}) / $num_members;
+  my $chunk_size = length(${$self->_as_param_}) / $num_members;
   my @renew;
   my $temp;
   for( 0..$num_members-1 ) {
@@ -341,10 +347,13 @@ sub _update_ {
                        );
   }
   my $success;
-  for(my $i=0;defined(local $_=$renew[$i]);$i++) {
+# XXX perlbug? The next line would die silently when it was:
+# for(my $i=0;defined(local $_=$renew[$i]);$i++) {
+# The removing the local() cured it...
+  for(my $i=0;$i <= $#renew;$i++) {
     $success = $self->{_rawmembers}{DATA}[$i]->_update_($renew[$i]);
     if(!$success) {
-      croak("Error updating member at position $i");
+      croak($self->{name}, ": Error updating member at position $i");
     }
   }
   $self->{_datasafe} = 1;
@@ -394,21 +403,13 @@ sub STORE {
     $val = new Ctypes::Type::Array( $val );
   }
 
-  if( $val->{_typecode_} ne $self->{owner}{type}{_typecode_} ) {
+  if( $val->{_typecode_} ne $self->{owner}{type} ) {
     carp( "Cannot put " . ref($val) . " type object into "
-          . ref($self->{owner}{type}) . " Array");
+          . $self->{owner}{name} );
     return undef;
   }
 
-# XXX Simple types pack() every time they're assigned to.
-# That's hassle. How about only producing the pack()'d data when
-# asked for it? Can then cache it in _as_param_.
-
-  # This check is because FETCH must repopulate $self if _as_param_ exists
-  # (since it may have been manipulated by a C lib)
-  if( caller ne 'Ctypes::Type::Array::members' ) {
-    $self->{owner}{_as_param_} = undef;  # cache no longer up to date
-  }
+  $self->{owner}{_as_param_} = undef;  # cache no longer up to date
   $self->{DATA}[$index] = $val;
   return $self->{DATA}[$index]; # success
 }
@@ -422,8 +423,6 @@ sub FETCH {
   croak("Error updating values!") if $self->{owner}{_datasafe} != 1;
   if( ref($self->{DATA}[$index]) eq 'Ctypes::Type::Simple' ) {
     return ${$self->{DATA}[$index]};
-#  } elsif ( ref($$self[$index]) eq 'Ctypes::Type::Array' ) {
-#    return @{$$self[$index]};
   } else {
     return $self->{DATA}[$index];
   }

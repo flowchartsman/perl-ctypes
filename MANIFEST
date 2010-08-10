@@ -33,5 +33,6 @@ t/library.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
+t/Pointer.t
 t/types.t
 t/win-proto.t

@@ -10,6 +10,7 @@ our @ISA = ("Exporter");
 use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
 use Ctypes::Type::Array;
+use Ctypes::Type::Pointer;
 our @EXPORT_OK = qw|&_types|;
 
 our $_perltypes = 
@@ -72,79 +73,6 @@ sub allow_overflow_all;
 # will receive an instance of this subclass from the function call.
 # Of course, you can get the value of the pointer by accessing the
 # value attribute.
-
-package Ctypes::Type::Simple::value;
-use strict;
-use warnings;
-use Carp;
-
-sub TIESCALAR {
-  my $class = shift;
-  my $owner = shift;
-  my $self = { owner  => $owner,
-               DATA   => undef,
-             };
-  return bless $self => $class;
-}
-
-sub STORE {
-  my $self = shift;
-  my $arg = shift;
-  # Deal with being assigned other Type objects and the like...
-  if(my $ref = ref($arg)) {
-    if($ref =~ /^Ctypes::Type::/) {
-      $arg = $arg->{_as_param_};
-    } else {
-      if($arg->can("_as_param_")) {
-        $arg = $arg->_as_param_;
-      } elsif($arg->{_as_param_}) {
-        $arg = $arg->{_as_param_};
-      } else {
-  # ??? Would you ever want to store an object/reference as the value
-  # of a type? What would get pack()ed in the end?
-        croak("Ctypes Types can only be made from native types or " . 
-              "Ctypes compatible objects");
-      }
-    }
-  }
-  my $typecode = $self->{owner}{_typecode_};
-  croak("Simple Types can only be assigned a single value") if @_;
-  # return 1 on success, 0 on fail, -1 if (numeric but) out of range
-  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  if( $is_valid < 1 ) {
-    no strict 'refs';
-    if( ($is_valid == -1)
-        and ( $self->{owner}->allow_overflow == 0
-        or Ctypes::Type::allow_overflow_all == 0 ) ) {
-      carp( "Value out of range for " . $self->{owner}{name} . ": $arg");
-      return undef;
-    } else {
-      my $temp = Ctypes::_cast($arg,$typecode);
-      if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
-        $arg = $temp;
-      } else {
-        carp("Unreconcilable argument for type " . $self->{owner}{name} .
-              ": $arg");
-        return undef;
-      }
-    }
-  }
-  if( caller ne 'Ctypes::Type::Simple::value' ) {
-    $self->{owner}{_as_param_} = undef;  # cache no longer up to date
-  }
-  $self->{DATA} = $arg;
-  return $self->{DATA};
-}
-
-sub FETCH {
-  my $self = shift;
-  if ( defined $self->{owner}{_as_param_}
-       and $self->{owner}{_datasafe} == 0 ) {
-    $self->{owner}->_update_($self->{owner}{_as_param_});
-  }
-  croak("Error updating value!") if $self->{owner}{_datasafe} != 1;
-  return $self->{DATA};
-}
 
 
 package Ctypes::Type::Simple;
@@ -260,7 +188,9 @@ sub _as_param_ {
   my $self = shift;
   # STORE will always undef _as_param_
   $self->{_datasafe} = 0;  # used by FETCH
-  return $self->{_as_param_} if defined $self->{_as_param_};
+  if( defined $self->{_as_param_} ) {
+    return \$self->{_as_param_};
+  }
   $self->{_as_param_} =
     pack( $self->{_typecode_}, $self->{_rawval}{DATA} );
   return \$self->{_as_param_};
@@ -273,6 +203,77 @@ sub _update_ {
   $self->{_rawval}{DATA} = unpack($self->{_typecode_},$arg);
   $self->{_datasafe} = 1;
   return 1; 
+}
+
+package Ctypes::Type::Simple::value;
+use strict;
+use warnings;
+use Carp;
+
+sub TIESCALAR {
+  my $class = shift;
+  my $owner = shift;
+  my $self = { owner  => $owner,
+               DATA   => undef,
+             };
+  return bless $self => $class;
+}
+
+sub STORE {
+  my $self = shift;
+  my $arg = shift;
+  # Deal with being assigned other Type objects and the like...
+  if(my $ref = ref($arg)) {
+    if($ref =~ /^Ctypes::Type::/) {
+      $arg = $arg->{_as_param_};
+    } else {
+      if($arg->can("_as_param_")) {
+        $arg = $arg->_as_param_;
+      } elsif($arg->{_as_param_}) {
+        $arg = $arg->{_as_param_};
+      } else {
+  # ??? Would you ever want to store an object/reference as the value
+  # of a type? What would get pack()ed in the end?
+        croak("Ctypes Types can only be made from native types or " . 
+              "Ctypes compatible objects");
+      }
+    }
+  }
+  my $typecode = $self->{owner}{_typecode_};
+  croak("Simple Types can only be assigned a single value") if @_;
+  # return 1 on success, 0 on fail, -1 if (numeric but) out of range
+  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
+  if( $is_valid < 1 ) {
+    no strict 'refs';
+    if( ($is_valid == -1)
+        and ( $self->{owner}->allow_overflow == 0
+        or Ctypes::Type::allow_overflow_all == 0 ) ) {
+      carp( "Value out of range for " . $self->{owner}{name} . ": $arg");
+      return undef;
+    } else {
+      my $temp = Ctypes::_cast($arg,$typecode);
+      if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
+        $arg = $temp;
+      } else {
+        carp("Unreconcilable argument for type " . $self->{owner}{name} .
+              ": $arg");
+        return undef;
+      }
+    }
+  }
+  $self->{owner}{_as_param_} = undef;  # cache no longer up to date
+  $self->{DATA} = $arg;
+  return $self->{DATA};
+}
+
+sub FETCH {
+  my $self = shift;
+  if ( defined $self->{owner}{_as_param_}
+       and $self->{owner}{_datasafe} == 0 ) {
+    $self->{owner}->_update_($self->{owner}{_as_param_});
+  }
+  croak("Error updating value!") if $self->{owner}{_datasafe} != 1;
+  return $self->{DATA};
 }
 
 
@@ -402,11 +403,16 @@ for more information.
 sub Array {
   return Ctypes::Type::Array->new(@_);
 }
+sub Pointer {
+  return Ctypes::Type::Pointer->new(@_);
+}
 {
 no strict 'refs';
 *{"Ctypes::Array"} = \&Ctypes::Type::Array;
+*{"Ctypes::Pointer"} = \&Ctypes::Type::Pointer;
 }
-push @_allnames, 'Array';
+
+push @_allnames, qw|Array Pointer|;
 
 =item allow_overflow_all
 

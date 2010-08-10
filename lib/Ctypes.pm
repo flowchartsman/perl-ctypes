@@ -27,7 +27,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
-                   POINTER WinError byref
+                   POINTER WinError byref is_ctypes_compat
                   |, @Ctypes::Type::_allnames );
 
 require XSLoader;
@@ -826,6 +826,29 @@ construction is a lot faster.
 
 sub byref {
   return \$_[0];  
+}
+
+=item is_ctypes_compat($obj)
+
+Returns 1 if object is Ctypes compatible - that is, it has a
+_as_param_, _update_ and _typecode_ methods, and the value returned
+by _typecode_ is valid. Returns undef otherwise.
+
+=cut
+
+sub is_ctypes_compat (\$) {
+  if( Scalar::Util::blessed($_[0]),
+      and $_[0]->can('_as_param_')
+      and $_[0]->can('_update_')
+      and $_[0]->can('_typecode_')
+    ) {
+    $@ = undef;
+    eval{ sizeof($_[0]->_typecode_) };
+    if( !$@ ) {
+      return 1;
+    }
+  }
+  return undef;
 }
 
 =item cast(obj, type)
