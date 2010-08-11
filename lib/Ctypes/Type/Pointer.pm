@@ -187,8 +187,12 @@ sub TIESCALAR {
 sub STORE {
   my( $self, $arg ) = @_;
   print "In ", $self->{owner}{name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  croak("Pointers are to Ctypes compatible objects only")
-    if not Ctypes::is_ctypes_compat($arg);
+  if( not Ctypes::is_ctypes_compat($arg) ) {                              
+    if ( $arg =~ /^\d*$/ ) {                                              
+croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
+    }                                                                     
+  croak("Pointers are to Ctypes compatible objects only")                 
+  }          
   $self->{owner}{_as_param_} = undef;
   $self->{owner}{offset} = 0; # makes sense to reset offset
   print "  ", $self->{owner}{name}, "'s content STORE returning ok...\n" if $Debug == 1;
