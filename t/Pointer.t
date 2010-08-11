@@ -1,8 +1,11 @@
 #!perl
 
-use Test::More tests => 18;
+use warnings;
+use strict;
+use Test::More tests => 20;
 use Ctypes;
 use Ctypes::Callback;
+use Ctypes::Function;
 use Data::Dumper;
 
 #
@@ -65,4 +68,37 @@ is( ${$ushortp->_as_param_}, pack('S*',1,2,3,4,5),
 $$ushortp[2] = 20;
 is( $$ushortp[2], 20, '$$ptr[x] assignment again' );
 is( $$array[2], 20, '$$array[x] = $$ptr[x]: array manipulated via $ptr' );
+
+note( "Now for Functions..." );
+
+sub cb_func {
+  my( $ay, $bee ) = @_;
+  if( ($ay+0) < ($bee+0) ) { return -1; }
+  if( ($ay+0) == ($bee+0) ) { return 0; }
+  if( ($ay+0) > ($bee+0) ) { return 1; }
+}
+my $qsort = Ctypes::Function->new
+  ( { lib    => 'c',
+      name   => 'qsort',
+      argtypes => 'piip',
+      restype  => 'v' } );
+my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ss' );
+my $disarray = Array( 2, 4, 5, 1, 3 );
+
+my $arrptr = Pointer( $disarray );
+
+$qsort->($arrptr, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
+$arrptr->_update_;
+my $arrstring = join(", ", @$disarray);
+is($arrstring, "1, 2, 3, 4, 5" , 'Passing pointer to array' );
+
+$disarray = Array( 2, 4, 5, 1, 3 );
+$arrptr = Pointer( $disarray );
+my $arrptr2 = Pointer( $arrptr );
+
+$qsort->($arrptr2, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
+$arrptr2->_update_; # Ctypes has the hooks for doing this
+                    # automatically, through paramflags
+$arrstring = join(", ", @$disarray);
+is($arrstring, "1, 2, 3, 4, 5" , 'Double indirection' );
 

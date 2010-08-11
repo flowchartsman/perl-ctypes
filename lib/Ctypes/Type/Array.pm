@@ -8,6 +8,8 @@ use overload '@{}'    => \&_array_overload,
              '${}'    => \&_scalar_overload,
              fallback => 'TRUE';
 
+my $Debug = 0;
+
 =head1 NAME
 
 Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
@@ -311,21 +313,25 @@ sub _data { &_as_param_(@_); }
 sub _as_param_ {
   my $self = shift;
   # STORE will always undef _as_param_
+  print "In ", $self->{name}, "'s _AS_PARAM_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   $self->{_datasafe} = 0; # used by FETCH
-  if( defined $self->{_as_param_} ) {
-    return \$self->{_as_param_};
-  }
+#  if( defined $self->{_as_param_} ) {
+#    print "    asparam already defined\n" if $Debug == 1;
+#    print "    returning ", unpack('b*',$self->{_as_param_}), "\n" if $Debug == 1;
+#    return \$self->{_as_param_};
+#  }
 # TODO This is where a check for an endianness property would come in.
   if( $self->{endianness} ne 'b' ) {
     my @data;
     for(my $i=0;defined(local $_ = $self->{_rawmembers}{DATA}[$i]);$i++) {
-      $data[$i] = $_->{_as_param_} ?
-        $_->{_as_param_} :
+      $data[$i] = # $_->{_as_param_} ?
+  #      $_->{_as_param_} :
         ${$_->_as_param_};
     }
     my $string;
     for(@data) { $string .= $_ }
     $self->{_as_param_} = join('',@data);
+    print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
     return \$self->{_as_param_};
   } else {
   # <insert code for other / swapped endianness here>
@@ -334,28 +340,40 @@ sub _as_param_ {
 
 sub _update_ {
   my($self, $arg) = @_;
-  return undef unless $arg;
+  print "In ", $self->{name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "  self is ", $self, "\n" if $Debug == 1;
+  print "  arg is $arg\n" if $Debug == 1;
+  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
+  $arg = $self->{_as_param_} unless $arg;
 
   my $num_members = scalar @{$self->{_rawmembers}{DATA}};
-  my $chunk_size = length(${$self->_as_param_}) / $num_members;
+  my $chunk_size = length($self->{_as_param_}) / $num_members;
+  print "  My num_members is $num_members\n" if $Debug == 1;
+  print "  My chunk_size is $chunk_size\n" if $Debug == 1;
   my @renew;
   my $temp;
   for( 0..$num_members-1 ) {
-    $renew[$_] = substr( $self->{_as_param_},
+    $renew[$_] = substr( $arg,
                          ($_ * $chunk_size),
                          $chunk_size
                        );
+  }
+  print "  Ok, my new values are:\n" if $Debug == 1;
+  for(0..$#renew) {
+    print "\t$_: ", unpack('b*', $renew[$_] ), "\n" if $Debug == 1;
   }
   my $success;
 # XXX perlbug? The next line would die silently when it was:
 # for(my $i=0;defined(local $_=$renew[$i]);$i++) {
 # The removing the local() cured it...
   for(my $i=0;$i <= $#renew;$i++) {
+    print "  Now putting ", unpack('b*', $renew[$i] ), "\n" if $Debug == 1;
     $success = $self->{_rawmembers}{DATA}[$i]->_update_($renew[$i]);
     if(!$success) {
       croak($self->{name}, ": Error updating member at position $i");
     }
   }
+  print "  So far... so good?\n" if $Debug == 1;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -418,11 +436,13 @@ sub FETCH {
   my($self, $index) = @_;
   if( defined $self->{owner}{_as_param_}
       and $self->{owner}{_datasafe} == 0 ) {
-    $self->{owner}->_update_($self->{owner}{_as_param_});
+    $self->{owner}->_update_(${$self->{owner}->_as_param_});
   }
   croak("Error updating values!") if $self->{owner}{_datasafe} != 1;
   if( ref($self->{DATA}[$index]) eq 'Ctypes::Type::Simple' ) {
     return ${$self->{DATA}[$index]};
+#  } elsif ( ref($$self[$index]) eq 'Ctypes::Type::Array' ) {
+#    return @{$$self[$index]};
   } else {
     return $self->{DATA}[$index];
   }

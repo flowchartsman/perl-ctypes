@@ -11,6 +11,8 @@ use overload
   '@{}'    => \&_array_overload,
   fallback => 'TRUE';
 
+my $Debug = 0;
+
 =head1 NAME
 
 Ctypes::Type::Pointer - What's that over there?
@@ -39,10 +41,12 @@ sub _add_overload {
 }
 
 sub _array_overload {
+  print ". . .._wearemany_.. . .\n" if $Debug == 1;
   return shift->{bytes};
 }
 
 sub _scalar_overload {
+  print "We are One ^_^\n" if $Debug == 1;
   return \shift->{contents}; 
 }
 
@@ -99,28 +103,37 @@ sub deref () : method {
 
 sub _as_param_ {
   my $self = shift;
-  $self->{_datasafe} = 0;  # used by FETCH
-  if( defined $self->{_as_param_} ) {
-#    print "already have _as_param_:\n";
-#    print "  ", $self->{_as_param_}, "\n";
-#    print "   ", unpack('b*', $self->{_as_param_}), "\n";
+  print "In ", $self->{name}, "'s _As_param_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  if( defined $self->{_as_param_} 
+      and $self->{_datasafe} == 1 ) {
+    print "already have _as_param_:\n" if $Debug == 1;
+    print "  ", $self->{_as_param_}, "\n" if $Debug == 1;
+    print "   ", unpack('b*', $self->{_as_param_}), "\n" if $Debug == 1;
     return \$self->{_as_param_} 
   }
 # Can't use $self->{contents} as FETCH will bork at _datasafe
 # use $self->{_raw}{DATA} instead
   $self->{_as_param_} =
     ${$self->{_rawcontents}{DATA}->_as_param_};
+  print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
+  $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_as_param_};
 }
 
 sub _update_ {
   my( $self, $arg ) = @_;
-  return undef unless $arg;
+  print "In ", $self->{name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "  self is ", $self, "\n" if $Debug == 1;
+  print "  arg is $arg\n" if $Debug == 1;
+  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
+  $arg = $self->{_as_param_} unless $arg;
 
   my $success = $self->{_rawcontents}{DATA}->_update_($arg);
   if(!$success) {
     croak($self->{name}, ": Error updating contents!");
   }
+# 
+#  $self->{_as_param_} = $self->_as_param_;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -173,25 +186,27 @@ sub TIESCALAR {
 
 sub STORE {
   my( $self, $arg ) = @_;
-  if( not Ctypes::is_ctypes_compat($arg) ) {
-    if ( $arg =~ /^\d*$/ ) {
-croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
-    }
+  print "In ", $self->{owner}{name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   croak("Pointers are to Ctypes compatible objects only")
-  }
+    if not Ctypes::is_ctypes_compat($arg);
   $self->{owner}{_as_param_} = undef;
   $self->{owner}{offset} = 0; # makes sense to reset offset
+  print "  ", $self->{owner}{name}, "'s content STORE returning ok...\n" if $Debug == 1;
   return $self->{DATA} = $arg;
 }
 
 sub FETCH {
   my $self = shift;
+  print "In ", $self->{owner}{name}, "'s content FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   if( defined $self->{owner}{_as_param_}
       and $self->{owner}{_datasafe} == 0 ) {
-    my $success = $self->{owner}->_update_($self->{owner}{_as_param_});
+    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_as_param_}),"\n" if $Debug == 1;
+    my $success = $self->{owner}->_update_(${$self->{owner}->_as_param_});
     croak($self->{name},": Could not update contents!") if not $success;
   }
   croak("Error! Data not safe!") if $self->{owner}{_datasafe} != 1;
+  print "  ", $self->{owner}{name}, "'s content FETCH returning ok...\n" if $Debug == 1;
+  print "  Returning ", ${$self->{DATA}}, "\n" if $Debug == 1;
   return $self->{DATA};
 }
 
@@ -212,12 +227,14 @@ sub TIEARRAY {
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
+  print "In ", $self->{owner}{name}, "'s Bytes STORE, from ", (caller(0))[0..3], "\n" if $Debug == 1;
   if( ref($arg) ) {
     carp("Only store simple scalar data through subscripted Pointers");
     return undef;
   }
 
   my $data = $self->{owner}{contents}->_as_param_;
+  print "\tdata is $$data\n" if $Debug == 1;
   my $each = Ctypes::sizeof($self->{owner}{orig_type});
 
   my $offset = $index + $self->{owner}{offset};
@@ -230,22 +247,40 @@ sub STORE {
     carp("Pointer cannot store past end of data");
   }
 
+  print "\teach is $each\n" if $Debug == 1;
+  print "\tdata length is ", length($$data), "\n" if $Debug == 1;
   my $insert = pack($self->{owner}{orig_type},$arg);
+  print "insert is ", unpack('b*',$insert), "\n" if $Debug == 1;
   if( length($insert) != Ctypes::sizeof($self->{owner}{orig_type}) ) {
     carp("You're about to break something...");
 # ??? What would be useful feedback here? Aside from just not doing it..
   }
+  print "\tdata before and after insert:\n" if $Debug == 1;
+  print unpack('b*',$$data), "\n" if $Debug == 1;
   substr( $$data,
           $each * $offset,
           Ctypes::sizeof($self->{owner}{orig_type}),
         ) =  $insert;
+  print unpack('b*',$$data), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $insert;  # don't think this can be used
+  $self->{owner}{contents}->_update_($$data);
+  print "  ", $self->{owner}{name}, "'s Bytes STORE returning ok...\n" if $Debug == 1;
   return $insert;
 }
 
 sub FETCH {
   my( $self, $index ) = @_;
+  print "In ", $self->{owner}{name}, "'s Bytes FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+
+  my $type = $self->{owner}{orig_type};
+  if( $type =~ /[pv]/ ) {
+    carp("Pointer is to type ", $type,
+         "; can't know how to dereference data");
+    return undef;
+  }
+
   my $data = $self->{owner}{contents}->_as_param_;
+  print "\tdata is $$data\n" if $Debug == 1;
   my $each = Ctypes::sizeof($self->{owner}{orig_type});
 
   my $offset = $index + $self->{owner}{offset};
@@ -259,17 +294,24 @@ sub FETCH {
     return undef;
   }
 
+  print "\teach is $each\n" if $Debug == 1;
+  print "\tdata length is ", length($$data), "\n" if $Debug == 1;
   my $chunk = substr( $$data,
                       $each * $offset,
                       Ctypes::sizeof($self->{owner}{orig_type})
                     );
+  print "\tchunk: ", unpack('b*',$chunk), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $chunk;
+  print "\torig_type: ", $self->{owner}{orig_type}, "\n" if $Debug == 1;
+  print "  ", $self->{owner}{name}, "'s Bytes FETCH returning ok...\n" if $Debug == 1;
   return unpack($self->{owner}{orig_type},$chunk);
 }
 
 sub FETCHSIZE {
-  my $data = $_[0]->{owner}{contents}->_as_param_;
-  return length($data);
+  my $data = $_[0]->{owner}{contents}{_as_param_}
+  ? $_[0]->{owner}{contents}{_as_param_}
+  : $_[0]->{owner}{contents}->_as_param_;
+  return length($data) / Ctypes::sizeof($_[0]->{owner}{orig_type});
 }
 
 1;

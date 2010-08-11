@@ -13,6 +13,8 @@ use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 our @EXPORT_OK = qw|&_types|;
 
+my $Debug = 0;
+
 our $_perltypes = 
 { 
   v =>  "c_void",
@@ -89,9 +91,6 @@ use overload '${}' => \&_scalar_overload,
              fallback => 'TRUE';
              # TODO Multiplication will have to be overridden
              # to implement Python's Array contruction with "type * x"???
-
-
-
 sub _num_overload { return shift->{val}; }
 
 sub _add_overload {
@@ -186,21 +185,28 @@ sub _data { &_as_param_(@_) }
 
 sub _as_param_ {
   my $self = shift;
+  print "In ", $self->{_typecode_}, " Type's _AS_PARAM_...\n" if $Debug == 1;
   # STORE will always undef _as_param_
-  $self->{_datasafe} = 0;  # used by FETCH
-  if( defined $self->{_as_param_} ) {
+  if( defined $self->{_as_param_}
+      and $self->{_datasafe} == 1 ) {
+    print "    asparam already defined\n" if $Debug == 1;
+    print "    returning ", unpack('b*',$self->{_as_param_}), "\n" if $Debug == 1;
     return \$self->{_as_param_};
   }
   $self->{_as_param_} =
     pack( $self->{_typecode_}, $self->{_rawval}{DATA} );
+  print "    returning ", unpack('b*',$self->{_as_param_}), "\n" if $Debug == 1;
+  $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_as_param_};
 }
 
 sub _update_ {
   my( $self, $arg ) = @_;
-  return undef unless $arg;
+  print "In ", $self->{_typecode_}, " Type's _UPDATE_...\n" if $Debug == 1;
+  $arg = $self->{_as_param_} unless $arg;
 
   $self->{_rawval}{DATA} = unpack($self->{_typecode_},$arg);
+  $self->{_as_param_} = $arg;
   $self->{_datasafe} = 1;
   return 1; 
 }
@@ -222,6 +228,7 @@ sub TIESCALAR {
 sub STORE {
   my $self = shift;
   my $arg = shift;
+  print "In ", $self->{owner}{name}, "'s STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
     if($ref =~ /^Ctypes::Type::/) {
@@ -263,16 +270,20 @@ sub STORE {
   }
   $self->{owner}{_as_param_} = undef;  # cache no longer up to date
   $self->{DATA} = $arg;
+  print "  Returning ok...\n" if $Debug == 1;
   return $self->{DATA};
 }
 
 sub FETCH {
   my $self = shift;
+  print "In ", $self->{owner}{name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   if ( defined $self->{owner}{_as_param_}
        and $self->{owner}{_datasafe} == 0 ) {
+    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_as_param_}),"\n" if $Debug == 1;
     $self->{owner}->_update_($self->{owner}{_as_param_});
   }
   croak("Error updating value!") if $self->{owner}{_datasafe} != 1;
+  print "  Returning ok...\n" if $Debug == 1;
   return $self->{DATA};
 }
 

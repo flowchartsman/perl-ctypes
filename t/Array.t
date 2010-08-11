@@ -22,7 +22,7 @@ is($double_array->[2], 13, '$obj[x] dereferencing');
 
 is( scalar @$double_array, 5, 'scalar @$array = $#$array+1' );
 
-# As function arguments
+note( "As function arguments" );
 
 sub cb_func {
   my( $ay, $bee ) = @_;
@@ -38,7 +38,8 @@ my $qsort = Ctypes::Function->new
 my $cb = Ctypes::Callback->new( \&cb_func, 'i', 'ss' );
 my $disarray = Array( 2, 4, 5, 1, 3 );
 $qsort->($disarray, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
-# $array->_update_($array->{_as_param_});
+$disarray->_update_;  # Ctypes has the hooks for doing this
+                      # automatically, through paramflags
 my $arrstring = join(", ", @$disarray);
 is($arrstring, "1, 2, 3, 4, 5" , '_as_param_ and _update_ working' );
 
