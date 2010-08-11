@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 20;
+use Test::More tests => 23;
 use Ctypes;
 use Ctypes::Callback;
 use Ctypes::Function;
@@ -42,6 +42,12 @@ is( $ushortp->deref, 25, 'Get object value with $ptr->deref' );
 is( ${$ushortp->_as_param_}, pack('S',25), '_as_param_ returns object\'s data' );
 is( $ushortp->type, 'S', 'Get type of object with $ptr->type');
 
+my $double = c_double(1);
+my $intp = Pointer( c_int, $double );
+is( $intp->type, 'i', 'Specify Pointer type with Pointer( <type> <obj> )' );
+my $longp = Pointer( 'l', $double );
+is( $intp->type, 'i', 'Specify Pointer type with Pointer( <typecode> <obj> )' );
+
 is( $$ushortp[0], 25, 'Get value with $$ptr[0]' );
 $$ushortp[0] = 30;
 is( $$ushort, 30, 'Modify val of original object via $$ptr[x] = y' );
@@ -57,8 +63,28 @@ subtest 'Wrongly sized deref' => sub {
 is( $ushortp->offset, 1, 'offset getter' );
 is( $ushortp->offset(5), 5, 'offset setter, but...' );
 is( $$ushortp[0], undef, '...you can\'t read random memory' );
+subtest 'Set -ve offset and index forwards' => sub {
+  plan tests => 2;
+  is( $ushortp->offset(-5), -5, 'Can set -ve indices on object');
+  is( $$ushortp[6], 1, 'Subscript retrieves correct value' );
+};
 
-note( "A more complex example" );
+($!, $@) = undef;
+# for(-20..10) {
+# }
+
+TODO: {
+  note("The following few lines are TODO...");
+  local $TODO = "Weird quirk in Test::More? See comments";
+# Why does Test::More's diag() make this blow up but print() doesn't?
+# In any case, 
+  $ushortp->offset(5);
+  print "# from print:", $$ushortp[-4], "\n";
+  eval { diag( "# from diag: ", $$ushortp[-4] ); };
+  diag( $@ ) if $@;
+}
+
+note( "Now, a more complex example" );
 
 my $array = Array( c_ushort, [ 1, 2, 3, 4, 5 ] );
 $$ushortp = $array;
@@ -91,6 +117,8 @@ $qsort->($arrptr, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
 $arrptr->_update_;
 my $arrstring = join(", ", @$disarray);
 is($arrstring, "1, 2, 3, 4, 5" , 'Passing pointer to array' );
+
+note( "Multiple indirection..." );
 
 $disarray = Array( 2, 4, 5, 1, 3 );
 $arrptr = Pointer( $disarray );

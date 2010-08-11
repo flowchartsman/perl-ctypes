@@ -69,18 +69,27 @@ sub _subtract_overload {
 
 sub new {
   my $class = shift;
-  my $contents = shift;
-  return undef unless defined($contents);  # No null pointers plz :)
+  my( $type, $contents );
+#  return undef unless defined($contents);  # No null pointers plz :)
+
+  if( scalar @_ == 1 ) {
+    $type = $contents = shift;
+  } elsif( scalar @_ > 1 ) {
+    $type = shift;
+    $contents = shift;
+  }
+
+  carp("Useage: Pointer( [type, ] \$object )") if @_;
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
-  my $tc = $contents->_typecode_;
-  my $self = { name        => $tc.'_Pointer',
+  $type = $type->_typecode_ if ref($type);
+  my $self = { name        => $type.'_Pointer',
                size        => Ctypes::sizeof('p'),
                offset      => 0,
-               contents    => $contents,   # \reference?
+               contents    => $contents,
                bytes       => undef,
-               orig_type   => $tc,
+               orig_type   => $type,
                _as_param_  => undef,
                _typecode_  => 'p',
                _datasafe   => 1,
@@ -292,13 +301,17 @@ sub FETCH {
     carp("Pointer cannot look back past start of data");
     return undef;
   }
-  if( $offset >= length($$data)                  # start at end of data
-      or ($offset + $each) > length($$data) ) {  # or will go past it
+  my $start = $offset * $each;
+  # 1-byte types can start on last byte and be fine
+  if( $start + ($each - 1) > length($$data) ) {
     carp("Pointer cannot look past end of data");
     return undef;
   }
 
+  print "\toffset is $offset\n" if $Debug == 1;
   print "\teach is $each\n" if $Debug == 1;
+  print "\tstart is $start\n" if $Debug == 1;
+  print "\torig_type: ", $self->{owner}{orig_type}, "\n" if $Debug == 1;
   print "\tdata length is ", length($$data), "\n" if $Debug == 1;
   my $chunk = substr( $$data,
                       $each * $offset,
@@ -306,7 +319,6 @@ sub FETCH {
                     );
   print "\tchunk: ", unpack('b*',$chunk), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $chunk;
-  print "\torig_type: ", $self->{owner}{orig_type}, "\n" if $Debug == 1;
   print "  ", $self->{owner}{name}, "'s Bytes FETCH returning ok...\n" if $Debug == 1;
   return unpack($self->{owner}{orig_type},$chunk);
 }
