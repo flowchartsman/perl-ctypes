@@ -8,6 +8,7 @@ use overload '@{}'    => \&_array_overload,
              '${}'    => \&_scalar_overload,
              fallback => 'TRUE';
 
+our @ISA = qw|Ctypes::Type|;
 my $Debug = 0;
 
 =head1 NAME
@@ -51,8 +52,8 @@ sub _arg_to_type {
   if( ref($arg) and ref($arg) ne 'Ctypes::Type::Simple') {
   # This is the long shot: some other kind of object.
   # In theory it Should work. TODO: a good test for this!
-    my $datum = $arg->{_as_param_} ?
-      $arg->{_as_param_} :
+    my $datum = $arg->{_data} ?
+      $arg->{_data} :
       $arg->can("_as_param_") ? $arg->_as_param_ : undef;
     carp("Object typecode differs but, you asked for it...")
       if $arg->{_typecode_} ne $type;
@@ -85,10 +86,10 @@ sub _get_values ($;\@) {
         my $tc = $_->{_typecode_} ?
           $_->{_typecode_} : $_->typecode;
         if( $tc ne 'p' ) {
-          $values[$i] = $_->{_as_param_} ?
+          $values[$i] = $_->{_data} ?
             $_->{_typecode_} ?
-              unpack($_->{_typecode_}, $_->{_as_param_}) :
-              unpack($_->_typecode_, $_->{_as_param_}) :
+              unpack($_->{_typecode_}, $_->{_data}) :
+              unpack($_->_typecode_, $_->{_data}) :
             $_->{_typecode_} ?
               unpack($_->{_typecode_}, $_->_as_param_) :
               unpack($_->_typecode_, $_->_as_param_); 
@@ -221,8 +222,7 @@ sub _scalar_overload {
 ##########################################
 
 sub new {
-  my $class = shift;
-  my $self = {};
+  my $class = ref($_[0]) || $_[0]; shift;
   return undef unless defined($_[0]); # TODO: Uninitialised Arrays? Why??
   # Specified array type in 1st pos, members in arrayref in 2nd
   my( $deftype, $in );
@@ -249,22 +249,21 @@ sub new {
 
   $deftype = $inputs_typed->[0] if not defined $deftype;
 
-  $self = { type        => $deftype->_typecode_,
-            name        => $deftype->{name}
-                             ? $deftype->{name} . '_Array'
-                             : ref($deftype) . '_Array',
-            _typecode_  => 'p',
-            size        =>
-              Ctypes::sizeof($deftype->_typecode_) * ($#$in + 1),
-            can_resize  => 1,
-            endianness  => '',
-            _as_param_  => undef,
-            'length'    => $#$in,
-            _datasafe   => 1,
-          };
-
+  my $self = $class->SUPER::new;
+  my $attrs = {
+    _type        => $deftype->_typecode_,
+    _name        => $deftype->name
+                     ? $deftype->name . '_Array'
+                     : ref($deftype) . '_Array',
+    _typecode_   => 'p',
+    _can_resize  => 1,
+    _endianness  => '',
+    _length      => $#$in,
+    _datasafe    => 1,
+               };
+  for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
-
+  $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =
     tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
   my @arr =  @{$inputs_typed};
@@ -276,16 +275,16 @@ sub new {
 # Accessor generation
 #
 my %access = (
-  'length'          => ['length'],
+  'length'          => ['_length'],
   _typecode_        => ['_typecode_'],
   can_resize        =>
-    [ 'can_resize',
+    [ '_can_resize',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes 'flexible' settable
-  alignment         => ['alignment'],
-  name              => ['name'],
-  type              => ['type'],
-  size              => ['size'],
+  alignment         => ['_alignment'],
+  name              => ['_name'],
+  type              => ['_type'],
+  size              => ['_size'],
   endianness        => ['_endianness'],
              );
 for my $func (keys(%access)) {
@@ -315,24 +314,24 @@ sub _as_param_ {
   # STORE will always undef _as_param_
   print "In ", $self->{name}, "'s _AS_PARAM_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   $self->{_datasafe} = 0; # used by FETCH
-#  if( defined $self->{_as_param_} ) {
+#  if( defined $self->{_data} ) {
 #    print "    asparam already defined\n" if $Debug == 1;
-#    print "    returning ", unpack('b*',$self->{_as_param_}), "\n" if $Debug == 1;
-#    return \$self->{_as_param_};
+#    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+#    return \$self->{_data};
 #  }
 # TODO This is where a check for an endianness property would come in.
-  if( $self->{endianness} ne 'b' ) {
+  if( $self->{_endianness} ne 'b' ) {
     my @data;
     for(my $i=0;defined(local $_ = $self->{_rawmembers}{DATA}[$i]);$i++) {
-      $data[$i] = # $_->{_as_param_} ?
-  #      $_->{_as_param_} :
+      $data[$i] = # $_->{_data} ?
+  #      $_->{_data} :
         ${$_->_as_param_};
     }
     my $string;
     for(@data) { $string .= $_ }
-    $self->{_as_param_} = join('',@data);
+    $self->{_data} = join('',@data);
     print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
-    return \$self->{_as_param_};
+    return \$self->{_data};
   } else {
   # <insert code for other / swapped endianness here>
   }
@@ -344,10 +343,10 @@ sub _update_ {
   print "  self is ", $self, "\n" if $Debug == 1;
   print "  arg is $arg\n" if $Debug == 1;
   print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
-  $arg = $self->{_as_param_} unless $arg;
+  $arg = $self->{_data} unless $arg;
 
   my $num_members = scalar @{$self->{_rawmembers}{DATA}};
-  my $chunk_size = length($self->{_as_param_}) / $num_members;
+  my $chunk_size = length($self->{_data}) / $num_members;
   print "  My num_members is $num_members\n" if $Debug == 1;
   print "  My chunk_size is $chunk_size\n" if $Debug == 1;
   my @renew;
@@ -421,20 +420,20 @@ sub STORE {
     $val = new Ctypes::Type::Array( $val );
   }
 
-  if( $val->{_typecode_} ne $self->{owner}{type} ) {
+  if( $val->_typecode_ ne $self->{owner}{_type} ) {
     carp( "Cannot put " . ref($val) . " type object into "
           . $self->{owner}{name} );
     return undef;
   }
 
-  $self->{owner}{_as_param_} = undef;  # cache no longer up to date
+  $self->{owner}{_data} = undef;  # cache no longer up to date
   $self->{DATA}[$index] = $val;
   return $self->{DATA}[$index]; # success
 }
 
 sub FETCH {
   my($self, $index) = @_;
-  if( defined $self->{owner}{_as_param_}
+  if( defined $self->{owner}{_data}
       and $self->{owner}{_datasafe} == 0 ) {
     $self->{owner}->_update_(${$self->{owner}->_as_param_});
   }

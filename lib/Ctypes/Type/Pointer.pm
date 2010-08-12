@@ -11,6 +11,7 @@ use overload
   '@{}'    => \&_array_overload,
   fallback => 'TRUE';
 
+our @ISA = qw|Ctypes::Type|;
 my $Debug = 0;
 
 =head1 NAME
@@ -68,7 +69,7 @@ sub _subtract_overload {
 ############################################
 
 sub new {
-  my $class = shift;
+  my $class = ref($_[0]) || $_[0]; shift;
   my( $type, $contents );
 #  return undef unless defined($contents);  # No null pointers plz :)
 
@@ -84,16 +85,22 @@ sub new {
   return undef unless Ctypes::is_ctypes_compat($contents);
 
   $type = $type->_typecode_ if ref($type);
-  my $self = { name        => $type.'_Pointer',
-               size        => Ctypes::sizeof('p'),
-               offset      => 0,
-               contents    => $contents,
-               bytes       => undef,
-               orig_type   => $type,
-               _as_param_  => undef,
-               _typecode_  => 'p',
-               _datasafe   => 1,
-             };
+  if( not Ctypes::sizeof($type) ) {
+    carp("Invalid Array type specified (first position argument)");
+    return undef;
+  }
+  my $self = $class->SUPER::new;
+  my $attrs = {
+     name        => $type.'_Pointer',
+     size        => Ctypes::sizeof('p'),
+     offset      => 0,
+     contents    => $contents,
+     bytes       => undef,
+     orig_type   => $type,
+     _typecode_  => 'p',
+     _datasafe   => 1,
+               };
+  for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
 
   $self->{_rawcontents} =
@@ -113,20 +120,20 @@ sub deref () : method {
 sub _as_param_ {
   my $self = shift;
   print "In ", $self->{name}, "'s _As_param_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-  if( defined $self->{_as_param_} 
+  if( defined $self->{_data} 
       and $self->{_datasafe} == 1 ) {
     print "already have _as_param_:\n" if $Debug == 1;
-    print "  ", $self->{_as_param_}, "\n" if $Debug == 1;
-    print "   ", unpack('b*', $self->{_as_param_}), "\n" if $Debug == 1;
-    return \$self->{_as_param_} 
+    print "  ", $self->{_data}, "\n" if $Debug == 1;
+    print "   ", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
+    return \$self->{_data} 
   }
 # Can't use $self->{contents} as FETCH will bork at _datasafe
 # use $self->{_raw}{DATA} instead
-  $self->{_as_param_} =
+  $self->{_data} =
     ${$self->{_rawcontents}{DATA}->_as_param_};
   print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
   $self->{_datasafe} = 0;  # used by FETCH
-  return \$self->{_as_param_};
+  return \$self->{_data};
 }
 
 sub _update_ {
@@ -135,14 +142,14 @@ sub _update_ {
   print "  self is ", $self, "\n" if $Debug == 1;
   print "  arg is $arg\n" if $Debug == 1;
   print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
-  $arg = $self->{_as_param_} unless $arg;
+  $arg = $self->{_data} unless $arg;
 
   my $success = $self->{_rawcontents}{DATA}->_update_($arg);
   if(!$success) {
     croak($self->{name}, ": Error updating contents!");
   }
 # 
-#  $self->{_as_param_} = $self->_as_param_;
+#  $self->{_data} = $self->_as_param_;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -202,7 +209,7 @@ croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
     }                                                                     
   croak("Pointers are to Ctypes compatible objects only")                 
   }          
-  $self->{owner}{_as_param_} = undef;
+  $self->{owner}{_data} = undef;
   $self->{owner}{offset} = 0; # makes sense to reset offset
   print "  ", $self->{owner}{name}, "'s content STORE returning ok...\n" if $Debug == 1;
   return $self->{DATA} = $arg;
@@ -211,9 +218,9 @@ croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
 sub FETCH {
   my $self = shift;
   print "In ", $self->{owner}{name}, "'s content FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  if( defined $self->{owner}{_as_param_}
+  if( defined $self->{owner}{_data}
       and $self->{owner}{_datasafe} == 0 ) {
-    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_as_param_}),"\n" if $Debug == 1;
+    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_data}),"\n" if $Debug == 1;
     my $success = $self->{owner}->_update_(${$self->{owner}->_as_param_});
     croak($self->{name},": Could not update contents!") if not $success;
   }
@@ -324,8 +331,8 @@ sub FETCH {
 }
 
 sub FETCHSIZE {
-  my $data = $_[0]->{owner}{contents}{_as_param_}
-  ? $_[0]->{owner}{contents}{_as_param_}
+  my $data = $_[0]->{owner}{contents}{_data}
+  ? $_[0]->{owner}{contents}{_data}
   : $_[0]->{owner}{contents}->_as_param_;
   return length($data) / Ctypes::sizeof($_[0]->{owner}{orig_type});
 }
