@@ -1,18 +1,9 @@
-#  use inc::Module::Install;
-#
-#  name     'Ctypes';
-#  all_from 'lib/Ctypes.pm';
-#  author   q{Ryan Jendoubi <ryan.jendoubi@gmail.com>};
-#  license  'artistic';
-#
-#  build_requires 'Test::More';
-#
-#  requires_external_bin 'libffi';
-#
-#  WriteAll;
-
 use 5.010000;
 use ExtUtils::MakeMaker;
+
+use lib qw(inc);
+use Devel::CheckLib;
+check_lib_or_exit( lib => 'ffi', header => 'ffi.h' );
 
 WriteMakefile(
     NAME              => 'Ctypes',
@@ -25,6 +16,7 @@ WriteMakefile(
     LIBS              => $^O eq 'MSWin32' ? ['-Lwin32 -lffi'] : [ '-Llibffi -lffi' ],
     INC               => '-I. -I./include -I./src',
 );
+
 if  (eval {require ExtUtils::Constant; 1}) {
   # If you edit these definitions to change the constants used by this module,
   # you will need to use the generated const-c.inc and const-xs.inc
