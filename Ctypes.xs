@@ -23,14 +23,52 @@
 #include "const-c.inc"
 
 int
-ConvArg(SV* obj, char type_got, char type_expected,
+ConvArg(SV* obj, char type_expected,
         ffi_type **argtypes, void **argvalues, int index)
 {
   debug_warn("#[%s:%i] In ConvArg...", __FILE__, __LINE__);
   debug_warn("#    Type expected: %c",type_expected);
-  debug_warn("#    Type got: %c", type_got);
-  SV* arg;
-  char type;
+  SV *arg, *tmp;
+  char type, type_got = '\0';
+  STRLEN tc_len = 1;
+
+  if(SvROK(obj) && !sv_isobject(obj)) {
+    tmp = SvRV(obj);
+    obj = tmp;
+    tmp = NULL;
+  }
+
+/*
+  while( SvROK(obj) && !sv_isobject(obj) ) {
+    if( SvTYPE(SvRV(obj)) == ( SVt_PVAV || SVt_PVHV || SVt_PVCV ) ) {
+      croak("ConvArg error arg[%i]: Only scalars or objects allowed",
+             index );
+    }
+    tmp = SvRV(obj);
+    obj = tmp;
+  }
+*/
+
+  debug_warn("#    Checking type_got...");
+  if( sv_isobject(obj) ) {
+    type_got = (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(obj,"_typecode_"),tc_len);
+//    tmp = Ct_HVObj_GET_ATTR_KEY(obj, "_as_param_");
+//    if( tmp == NULL || !SvOK(tmp) ) {
+      AV* args = NULL;
+      tmp = Ct_CallPerlObjMethod(obj, "_as_param_", args);
+      if(SvROK(tmp))
+        tmp = SvRV(tmp);
+//    }
+    if( tmp == NULL )
+      croak("ConvArg: couldn't get _as_param_ data from arg %i", index);
+//    debug_warn("_as_param_ gave: %i", (((int*)SvPV_nolen(tmp))[2]));
+   /* {_as_param_} will now exist, straight after calling _as_param_() */
+    obj = tmp;
+  } else {
+    type_got = '\0';
+  }
+  debug_warn("#    type_got: %c", type_got);
+
   if( type_expected )
     type = type_expected;
   else if( type_got )
@@ -47,11 +85,7 @@ ConvArg(SV* obj, char type_got, char type_expected,
   debug_warn( "#  type %i: %c", index+1, type);
   argtypes[index] = get_ffi_type(type);
 
-  if( type_got )
-    arg = Ct_HVObj_GET_ATTR_KEY(obj, "_as_param_");
-
-  else  /* no intrinsic type info: obj is (should be) simple scalar */
-    arg = obj;
+  arg = obj;
 
   switch(type)
   {
@@ -82,8 +116,9 @@ ConvArg(SV* obj, char type_got, char type_expected,
   case 'i':
     Newxc(argvalues[index], 1, int, int);
     *(int*)argvalues[index] = type_got
-      ? *(int*)SvPVX(arg)
+      ? (int)*(intptr_t*)SvPVX(arg)
       : SvIV(arg);
+    debug_warn("    argvalues[%i] is: %i", index,*(int*)argvalues[index]);
     break;
   case 'I':
     Newxc(argvalues[index], 1, unsigned int, unsigned int);
@@ -133,9 +168,7 @@ ConvArg(SV* obj, char type_got, char type_expected,
     } else {
       debug_warn( "#    [%s:%i] Pointer: Not SvIOK: assuming 'pack' value",
                    __func__, __LINE__ );
-      *(intptr_t*)argvalues[index] = type_got
-        ? (intptr_t)*(intptr_t*)SvPVX(arg)
-        : (intptr_t)SvPVX(arg);
+      *(intptr_t*)argvalues[index] = (intptr_t)SvPVX(arg);
     }
     debug_warn("#    first in argvalues[%i]: %i", index,
                 *(short*)(*(intptr_t*)argvalues[index])
@@ -173,6 +206,7 @@ _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
       PUSHMARK(SP);
       for( i = 0; i < cif->nargs; i++ ) {
         type = sig[i+1]; /* sig[0] = return type */
+        debug_warn("This arg type is %c", type);
         switch (type)
         {
           case 'v': break;
@@ -182,10 +216,10 @@ _perl_cb_call( ffi_cif* cif, void* retval, void** args, void* udata )
           case 'S':
               debug_warn( "#    Have type %c, pushing %i to stack...",
                           type, *(short*)*(void**)args[i] );
-              XPUSHs(sv_2mortal(newSViv(*(short*)*(void**)args[i])));   break;
+              XPUSHs(sv_2mortal(newSViv((int)*(short*)*(void**)args[i])));   break;
           case 'i':
-              debug_warn( "#    Have type %c, pushing %i to stack...",
-                          type, *(int*)*(void**)args[i] );
+/*              debug_warn( "#    Have type %c, pushing %i to stack...",
+                          type, *(int*)*(void**)args[i] ); */
               XPUSHs(sv_2mortal(newSViv(*(int*)*(void**)args[i])));   break;
           case 'I': XPUSHs(sv_2mortal(newSVuv(*(unsigned int*)*(void**)args[i])));   break;
           case 'l': XPUSHs(sv_2mortal(newSViv(*(long*)*(void**)args[i])));   break;
@@ -529,7 +563,7 @@ _call(self, ...)
       debug_warn("#    num_args is %i", num_args);
       for (i = 0; i < num_args; ++i) {
         debug_warn("#    i is %i", i);
-        SV* this_arg = ST(i+1);
+        SV *this_arg = ST(i+1);
         SV *this_argtype, **fetched_argtype;
         if( self_argtypes ) {
           fetched_argtype = av_fetch(self_argtypes, i, 0);
@@ -547,36 +581,9 @@ _call(self, ...)
           type_expected = '\0';
         }
 
-        if( SvROK(this_arg) 
-            && !sv_isobject(this_arg) ) {
-          SV* tmp = SvRV(this_arg);
-          this_arg = tmp;
-        }
-
-        debug_warn("#    Checking type_got...");
-        type_got = sv_isobject(this_arg) && Ct_Obj_IsDeriv(this_arg, "Ctypes::Type")
-          ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_arg,"_typecode_"),tc_len)
-          : '\0';
-        debug_warn("#    type_got: %c", type_got);
-
-        if( sv_isobject(this_arg) && !type_got ) {
-          SV* tmp = Ct_HVObj_GET_ATTR_KEY(this_arg, "_as_param_");
-          if( tmp == NULL || !SvOK(tmp) ) {
-            AV* args = NULL;
-            tmp = Ct_CallPerlObjMethod(this_arg, "_as_param_", args);
-            if(SvROK(tmp))
-              tmp = SvRV(tmp);
-          }
-          if( tmp == NULL )
-            croak("Funtion::_call: couldn't get _as_param_ data from arg %i", i);
-          debug_warn("_as_param_ gave: %i", (((int*)SvPV_nolen(tmp))[2]));
-          this_arg = tmp;
-        }
-
         /* err not used yet, ConvArg croaks a lot */
         debug_warn("#    calling ConvArg...");
         err = ConvArg( this_arg,
-                 type_got,
                  type_expected,
                  argtypes,
                  argvalues,
@@ -606,13 +613,6 @@ _call(self, ...)
     debug_warn( "#[%s:%i] Calling ffi_call...", __FILE__, __LINE__ );
     ffi_call(&cif, FFI_FN(addr), rvalue, argvalues);
     debug_warn( "#    ffi_call returned!");
-
-    int array[] = {1, 2, 3, 4, 5};
-    int *ptr;
-    ptr = &array[2];    /*   *ptr is now 3     */
-    debug_warn("int ptr points to: %i", *ptr);
-    array[2] = 11707;   /*   *ptr is now 11707 */
-    debug_warn("int ptr now points to: %i", *ptr);
 
     debug_warn( "#[%s:%i] Pushing retvals to Perl stack...", __FILE__, __LINE__ );
     switch (rtypechar)
