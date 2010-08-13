@@ -56,7 +56,7 @@ XSLoader::load('Ctypes', $VERSION);
 
 =head1 DESCRIPTION
 
-Ctypes is the Perl equivalent to the python ctypes ffi library, using libffi.
+Ctypes is the Perl equivalent to the Python ctypes FFI library, using libffi.
 
 It provides C compatible data types, and allows to call functions in 
 dlls/shared libraries. It can be used to wrap these libraries in pure Perl.

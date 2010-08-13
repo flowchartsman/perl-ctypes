@@ -12,7 +12,7 @@ my $array2 = Array( [6, 7, 8, 9, 10] );
 is( ref($array2), 'Ctypes::Type::Array', 'Array created from arrayref');
 
 my $double_array = Array( c_double, [11, 12, 13, 14, 15] );
-is( $double_array->name, 'c_double_Array', 'Array type specified');
+is( $double_array->name, 'Ctypes_Type_Simple_Array', 'Array type specified');
 
 is($#$double_array, 4, '$# for highest index');
 

@@ -129,4 +129,3 @@ $arrptr2->_update_; # Ctypes has the hooks for doing this
                     # automatically, through paramflags
 $arrstring = join(", ", @$disarray);
 is($arrstring, "1, 2, 3, 4, 5" , 'Double indirection' );
-
