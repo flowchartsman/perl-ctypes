@@ -1,15 +1,19 @@
 #!perl
 
-use Test::More tests => 0;
+BEGIN { unshift @INC, './t' }
+
+use Test::More tests => 2;
 use Ctypes;
+use Data::Dumper;
+my $Debug = 0;
 
-use "ct_POINT.pm";
-use "ct_RECT.pm";
-use "ct_SQUARE.pm";   # isa RECT with extra restrictions & field 'foo'
+use t_POINT;
+use t_Flower;
+# use t_RECT;
+# use t_SQUARE;   # isa RECT with extra restrictions & field 'foo'
 
-my $point = ct_POINT(5, 15);
-isa_ok( $point, qw|POINT Ctypes::Type::Struct|,
-        'point is a POINT and a Struct');
+my $point = new t_POINT(5, 15);
+isa_ok( $point, qw|POINT Ctypes::Type::Struct|,'t_POINT');
 
 # From Python docs:
 
@@ -19,13 +23,14 @@ isa_ok( $point, qw|POINT Ctypes::Type::Struct|,
 #   the second item specifies the type of the field; it can be
 #   any ctypes data type.
 
-is( $point->_fields_, 
-    [ [ 'x', 'Ctypes::Type::Simple' ], [ 'y', 'Ctypes::Type::Simple' ] ],
+ok( $point->fields->[0][0] eq 'x'
+    && $point->fields->[1][1]->type eq 'i',
     '$st->_fields_ returns names and type names' );
 is( $point->y, 15, '$st-><field> returns value' );
-is( ct_POINT->x,
-    { name => x, type => 'l', size => 4, ofs => 0 },
-    'Class methods return field info' );
+
+is_deeply( t_POINT->x,
+   { name => x, type => 'i', size => 4, ofs => 0 },
+   'Class methods return field info' );
 
 #   Integer type fields like c_int, a third optional item can be
 #   given. It must be a small positive integer defining the bit
@@ -38,9 +43,13 @@ is( ct_POINT->x,
 #   is not checked, only one field can be accessed when names are repeated.
 ### Can check this for dynamically made Structs though:
 
-my $struct = Struct( [ 'field', c_int ], [ 'field', c_long ] );
+eval { 
+  my $struct
+    = Struct( _fields_ => [ [ 'field', c_int ], [ 'field', c_long ] ] );
+     };
 # Should carp a warning
-is( $stuct, undef, 'Cannot have two fields with the same name' );
+like( $@, qr/defined more than once/,
+      'Cannot have two fields with the same name' );
 
 ### ??? What about sub-subclasses?
 # Will be seen to be replacing the accessor for the ancestor class I guess
@@ -60,16 +69,12 @@ is( $stuct, undef, 'Cannot have two fields with the same name' );
 #   will raise an AttributeError.
 ### ??? Does this apply to Perl?
 
-package Flower;
-our @ISA = 'Ctypes::Type::Struct';
+eval{ my $flower = new Flower( 'r', 20 ) };
+like( $@, qr/Cannot instantiate/, 'Cannot instantiate Struct class without fields' );
 
-package main;
-
-my $flower = Flower( 'r', 20 );
-is( $flower, undef, 'Cannot instantiate Struct class without fields' );
-
-Flower::_fields_ = [['colour',c_char],['height',c_ushort]];
-$flower = Flower( 'r', 20 );
+$Flower::_fields_ = [ ['colour',c_char],['height',c_ushort] ];
+print Dumper( $Flower::_fields_ ) if $Debug == 1;
+$flower = new Flower( 'r', 20 ) if $Debug == 1;
 isa_ok( $flower,
         qw|Flower Ctypes::Type::Struct|,
         'Flower Struct created after defining fields' );
@@ -81,13 +86,13 @@ isa_ok( $flower,
 #   the corresponding name or create new attributes for names not
 #   present in _fields_.
 
-my $flower2 = Flower( { height => 30, loveliness => 10 } );
+my $flower2 = new Flower( { height => 30, loveliness => 10 } );
 isa_ok( $flower, qw|Flower Ctypes::Type::Struct|, 'flower2 created' );
 is( $flower2->loveliness, 10, 'Create new attributes with named arguments' );
 
 # What happens with too many positional args?
 my $flower3 = undef;
-eval { $flower3 = Flower( 'p', 8, 5 ); }
+eval { $flower3 = new Flower( 'p', 8, 5 ); };
 is( $flower3, undef, "Can't instantiate with too many args" );
 like( $@, qr/too many arguments/i, 'Warned about extraneous args' );
 
@@ -95,18 +100,14 @@ like( $@, qr/too many arguments/i, 'Warned about extraneous args' );
 #   inherit the fields of the base class plus the _fields_ defined in
 #   the sub-subclass, if any.
 
-package Daffodil;
-our @ISA = 'Flower';
-our $_fields_ = [ ['trumpetsize', c_ushort ] ];
+require t_Daffodil;
 
-package main;
-
-my $daffodil = Daffodil( 'y', 28, 15  );
+my $daffodil = new Daffodil( 'y', 28, 15  );
 is( $daffodil->trumpetsize, 15, "That's a respectable trumpet" );
 is( $daffyfields->_fields_, 
     [ { name => colour, type => 'c', size => 1, ofs => 0 },
       { name => height, type => 'S', size => 2, ofs => 0 },
-      { name => trumpetsize, type => 'S', size => 2, ofs => 0 }, ]
+      { name => trumpetsize, type => 'S', size => 2, ofs => 0 }, ],
     '$st->_fields_ returns names and type names' );
 
 #   It is possible to defined sub-subclasses of structures, they inherit

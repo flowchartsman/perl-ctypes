@@ -168,6 +168,7 @@ sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my $typecode = shift;
   my $arg = shift;
+  print "In Type::Simple constructor, typecode [ $typecode ]", $arg ? "arg [ $arg ]" : '', "\n" if $Debug == 1;
   my $self = $class->SUPER::_new;
   my $attrs = { 
     _typecode_      => $typecode,
@@ -181,7 +182,7 @@ sub new {
   $arg = 0 unless defined $arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
   $self->{_value} = $arg;
-  return undef if not defined $self->{_value};
+  return undef if not defined $self->{_rawvalue}{VALUE};
 # XXX Unimplemented! How will 'address' this work?
 # Is it relevant in our Perl-based model?
 #  $self->{_address} = Ctypes::addressof($self);
@@ -193,6 +194,7 @@ sub new {
 #
 my %access = ( 
   _typecode_        => ['_typecode_'],
+  type              => ['_typecode_'],
   allow_overflow    =>
     [ '_allow_overflow',
       sub {if( $_[0] == 1 or $_[0] == 0){return 1;}else{return 0;} },
@@ -272,7 +274,7 @@ sub TIESCALAR {
   my $class = shift;
   my $object = shift;
   my $self = { object  => $object,
-               DATA   => undef,
+               VALUE   => undef,
              };
   return bless $self => $class;
 }
@@ -280,7 +282,9 @@ sub TIESCALAR {
 sub STORE {
   my $self = shift;
   my $arg = shift;
-  print "In ", $self->{object}{_name}, "'s STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s STORE with arg [ $arg ],\n" if $Debug == 1;
+  print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  croak("Simple Types can only be assigned a single value") if @_;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
     if($ref =~ /^Ctypes::Type::/) {
@@ -299,9 +303,9 @@ sub STORE {
     }
   }
   my $typecode = $self->{object}{_typecode_};
-  croak("Simple Types can only be assigned a single value") if @_;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
+  print "    _valid_for_type returned $is_valid\n" if $Debug == 1;
   if( $is_valid < 1 ) {
     no strict 'refs';
     if( ($is_valid == -1)
@@ -501,13 +505,27 @@ See the relevant documentation for more information.
 sub Pointer {
   return Ctypes::Type::Pointer->new(@_);
 }
+
+=item Struct HASHREF
+
+Create a L<Ctypes::Type::Struct> object. Basing new classes on Struct
+may also often be more useful than subclassing other Types. See the
+relevant documentation for more information.
+
+=cut
+
+sub Struct {
+  return Ctypes::Type::Struct->new(@_);
+}
+
 {
 no strict 'refs';
 *{"Ctypes::Array"} = \&Ctypes::Type::Array;
 *{"Ctypes::Pointer"} = \&Ctypes::Type::Pointer;
+*{"Ctypes::Struct"} = \&Ctypes::Type::Struct;
 }
 
-push @_allnames, qw|Array Pointer|;
+push @_allnames, qw|Array Pointer Struct|;
 
 =item allow_overflow_all
 
