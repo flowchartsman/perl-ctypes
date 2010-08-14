@@ -63,49 +63,6 @@ sub _arg_to_type {
   return $out;
 }
 
-# Arguments to Array could be Perl natives, Type objects, or
-# user-defined types conforming to the 'Ctypes protocol'
-# We need to look at the _values_ of all args to see what kind
-# of array to make. This function gets all the values out for us.
-sub _get_values ($;\@) {
-  my $in = shift;
-  my $which_kind = shift;
-  my @values;
-  for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
-    if( !ref ) { 
-      $values[$i] = $_;
-      $which_kind->[$i] = 1;
-    }
-    elsif( ref eq 'Ctypes::Type::Simple' ) {
-      $values[$i] = $_->{val};
-      $which_kind->[$i] = 2;
-    }
-    else {
-      my $invalid = Ctypes::_check_invalid_types( [ $_ ] );
-      if( not $invalid ) {
-        my $tc = $_->{_typecode_} ?
-          $_->{_typecode_} : $_->typecode;
-        if( $tc ne 'p' ) {
-          $values[$i] = $_->{_data} ?
-            $_->{_typecode_} ?
-              unpack($_->{_typecode_}, $_->{_data}) :
-              unpack($_->_typecode_, $_->{_data}) :
-            $_->{_typecode_} ?
-              unpack($_->{_typecode_}, $_->_as_param_) :
-              unpack($_->_typecode_, $_->_as_param_); 
-        } else {
-          return -1;
-        } 
-      $which_kind->[$i] = 3;
-      } else {
-  carp("Cannot discern value of object at position $invalid");
-  return undef;
-      }
-    }
-  }
-  return @values;
-}
-
 # Scenario A: We've been told what type to make the array
 #   Cast all inputs to that type.
 sub _get_members_typed {
@@ -184,27 +141,11 @@ sub _get_members_untyped {
   }
 
 # Now, check for non-numerics...
-  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
-  if(not $found_string) {
-  # Determine smallest type suitable for holding all numbers...
-  # XXX This needs changed when we support more typecodes
-    my $low = 0;  # index into @numtypes
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
-      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
-      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
-      last if $low == 3;
-    }
-    # Now create type objects for all members...
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $members->[$i] =
-        Ctypes::Type::Simple->new($numtypes[$low], $$in[$i]);
-    }
-  } else { # $found_string = 1 (got non-numerics)...
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $members->[$i] =
-        Ctypes::Type::Simple->new('p', $$in[$i]);
-    }
+  my $lcd = Ctypes::_check_type_needed($in);   # 'lowest common denomenator'
+  # Now create type objects for all members...
+  for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
+    $members->[$i] =
+      Ctypes::Type::Simple->new($lcd, $$in[$i]);
   }
   return $members;
 }
@@ -217,9 +158,9 @@ sub _scalar_overload {
   return \shift;
 }
 
-##########################################
-# TYPE::ARRAY : PUBLIC FUNCTIONS & VALUES  #
-##########################################
+###########################################
+# TYPE::ARRAY : PUBLIC FUNCTIONS & VALUES #
+###########################################
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -315,11 +256,6 @@ if( defined $self->{_data}
     print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
     return \$self->{_data};
   }
-#  if( defined $self->{_data} ) {
-#    print "    asparam already defined\n" if $Debug == 1;
-#    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-#    return \$self->{_data};
-#  }
 # TODO This is where a check for an endianness property would come in.
   if( $self->{_endianness} ne 'b' ) {
     my @data;
@@ -328,8 +264,6 @@ if( defined $self->{_data}
   #      $_->{_data} :
         ${$_->_as_param_};
     }
-    my $string;
-    for(@data) { $string .= $_ }
     $self->{_data} = join('',@data);
     print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
     $self->{_datasafe} = 0;
@@ -355,7 +289,6 @@ sub _update_ {
     $self->{_data} = substr( ${$self->{_owner}->_data},
                              $self->{_index},
                              $self->{_size} );
-    #  $self->{_data} = $self->{_owner}->_fetch_data($self->{_index});
     }
   } else {
     if( $index ) {
@@ -420,7 +353,7 @@ sub STORE {
 
   if( $index > ($self->{object}{_length} - 1)
       and $self->{object}{_can_resize} = 0 ) {
-    carp("Max index ", $#$self,"; not allowed to resize!");
+    croak("Max index ", $#$self,"; not allowed to resize!");
     return undef;
   }
 
@@ -466,11 +399,14 @@ sub STORE {
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index}
     = $index * $self->{object}->{_member_size};
+
   my $datum = ${$val->_data};
   print "    In data form, that's $datum\n" if $Debug == 1;
-  if( $self->{object}{_owner} ) {
-    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
-  }
+# XXX Found this while working on Struct, think it's suspect. Sadly,
+# tests still pass without it. Doesn't say much for the regime :(
+#  if( $self->{object}{_owner} ) {
+#    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
+#  }
   $self->{object}->_update_($datum, $index * $self->{object}{_member_size});
   
   return $self->{VALUES}[$index]; # success
@@ -478,19 +414,17 @@ sub STORE {
 
 sub FETCH {
   my($self, $index) = @_;
-  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   if( defined $self->{object}{_owner}
       or $self->{object}{_datasafe} == 0 ) {
     print "    Can't trust data, updating...\n" if $Debug == 1;
-    $self->{object}->_update_;
-#    $self->{object}{_owner}->_fetch_data($self->{object}{_index});
+    $self->{object}->_update_; # Don't need to update member we're FETCHing;
+                               # it will pull from us, because we _owner it
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
   if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
   print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index]->{_rawvalue}->{DATA}, "\n" if $Debug == 1;
     return ${$self->{VALUES}[$index]};
-#  } elsif ( ref($$self[$index]) eq 'Ctypes::Type::Array' ) {
-#    return @{$$self[$index]};
   } else {
     print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
     print "\n" if $Debug == 1;

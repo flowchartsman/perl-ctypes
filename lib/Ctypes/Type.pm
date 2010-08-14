@@ -12,6 +12,7 @@ use constant USE_PERLTYPES => 1; # so far use only perl pack-style types,
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 our @EXPORT_OK = qw|&_types|;
+my $Debug = 0;
 
 =head1 NAME
 
@@ -19,7 +20,6 @@ Ctypes::Type - Abstract base class for Ctypes Data Type objects
 
 =cut
 
-my $Debug = 0;
 
 our $_perltypes = 
 { 
@@ -253,6 +253,7 @@ sub _update_ {
     print " " x ($self->{_index} * 8), "v\n" if $Debug == 1;
     print "12345678" x length($owners_data), "\n" if $Debug == 1;
     print unpack('b*', $owners_data), "\n" if $Debug == 1;
+    print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
     $self->{_data} = substr( ${$self->{_owner}->_data},
                              $self->{_index},
                              $self->{_size} );
@@ -549,10 +550,6 @@ objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
     return $allow_overflow_all;
   }
 }
-
-package Ctypes::Type::Field;
-use Ctypes::Type;
-our @ISA = qw(Ctypes::Type::Simple);
 
 package Ctypes::Type::Union;
 use Ctypes::Type;
