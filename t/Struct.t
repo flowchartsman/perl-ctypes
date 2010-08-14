@@ -21,9 +21,11 @@ my $point = new t_POINT(5, 15);
 print ref( $point->y ), "\n";
 print "\$point->y: ", $point->y, "\n";
 print "\$\$point->y: ", $$point->y, "\n";
-my $field = $point->y;
-$field->(20);
-# is( $$point->y, 20, '$st->field = 20 sets value' );
+$$point->y->(20);
+is( $$point->y, 20, '$st->field->(20) sets value' );
+print "\$point->y->type: ", $point->y->type, "\n";
+print "\$point->y->type: ", $point->y->type, "\n";
+print "\$\$point->y->type: ", $$point->y->type, "\n";
 
 #eval { 
 #  my $struct

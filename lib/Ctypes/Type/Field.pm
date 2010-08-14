@@ -2,28 +2,15 @@ package Ctypes::Type::Field;
 use Ctypes::Type;
 use Data::Dumper;
 use overload
-  '""'     => sub { print "string overload!\n"; return ${$_[0]->FETCH} },
-  '&{}'    => \&_code_overload_store,
+  '""'     => sub { return $_[0]->FETCH },
+  '&{}'    => \&_code_overload,
   fallback => 'TRUE';
 
-our $Debug = 1;
+our $Debug = 0;
 
-sub _code_overload_store {
-  print "In Code overload store!\n";
-  print scalar @_, " args: \n";
-  for(@_) {
-    if( ref($_) ) { print ref($_), "\n" } else { print "$_\n" }
-  }
-  return &_again;
-}
-
-sub _again {
-  print "In Code overload AGAIN!\n";
-  print scalar @_, " args: \n";
-  for(@_) {
-    if( ref($_) ) { print ref($_), "\n" } else { print "$_\n" }
-  }
-  STORE(20);
+sub _code_overload {
+  my $self = shift;
+  return sub { STORE( $self, @_ ) };
 }
 
 sub _code_overload {
@@ -93,7 +80,7 @@ sub STORE {
   my( $self, $val ) = @_;
   print "In ", $self->{_owner}{_name}, "'s ", $self->{_name}, " field STORE, called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   print "    arg is ", $val, "\n" if $Debug == 1;
-
+  print "    self is ", $self->name, "\n" if $Debug == 1;
   # Check if key exists ### Done in object
   if( !ref($val) ) {
     $val = new Ctypes::Type::Simple( $self->{_typecode}, $val );

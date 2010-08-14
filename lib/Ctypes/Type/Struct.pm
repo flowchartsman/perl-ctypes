@@ -332,7 +332,7 @@ sub AUTOLOAD {
         if( not defined $arg ) {
           if(ref($caller)) {
             print "    Returning value...\n" if $Debug == 1;
-            my $ret = $caller->{_contents}->{_rawfields}->{$name};
+            my $ret = $caller->{_contents}->{_rawfields}->{$name}->{CONTENTS};
             if( ref($ret) eq 'Ctypes::Type::Simple' ) {
               return ${$ret};
             } else {
@@ -361,8 +361,8 @@ sub AUTOLOAD {
         }
       };
       no strict 'refs';
-      *{"Ctypes::Type::Struct::_fields::$wantfield"} = $func;
-      goto &{"Ctypes::Type::Struct::_fields::$wantfield"};
+      *{"Ctypes::Type::Struct::$wantfield"} = $func;
+      goto &{"Ctypes::Type::Struct::$wantfield"};
     }
   }
 }
@@ -431,8 +431,8 @@ sub AUTOLOAD {
         if( not defined $arg ) {
           if(ref($caller)) {
             print "    Returning value...\n" if $Debug == 1;
-            print Dumper( $self->{_rawfields}->{$name} ) if $Debug == 1;
-            my $ret = $self->{_rawfields}->{$name};
+            print Dumper( $self->{_fields}->{$name} ) if $Debug == 1;
+            my $ret = $self->{_fields}->{$name};
             if( ref($ret) eq 'Ctypes::Type::Simple' ) {
               return ${$ret};
             } else {
@@ -461,7 +461,8 @@ sub AUTOLOAD {
         }
       };
       no strict 'refs';
-      goto &$func;
+      *{"Ctypes::Type::Struct::Fields::$wantfield"} = $func;
+      goto &{"Ctypes::Type::Struct::Fields::$wantfield"};
     }
   }
 }
