@@ -1,14 +1,20 @@
 package Ctypes::Type::Field;
-use Ctypes::Type;
+use Ctypes;
+use Ctypes::Type::Struct;
 use Carp;
 use Data::Dumper;
 use overload
-  '""'     => sub { return $_[0]->FETCH },
+  '""'     => \&_string_overload,
   '&{}'    => \&_code_overload,
   fallback => 'TRUE';
 
 our $Debug = 0;
 
+sub _string_overload {
+  my $self = shift;
+  return "<Field type=" . $self->typename . ", ofs=" .
+    $self->offset . ", size=" . $self->size . ">";
+}
 sub _code_overload {
   my $self = shift;
   return sub { STORE( $self, @_ ) };
@@ -143,5 +149,16 @@ sub FETCH : lvalue {
     return $self->{CONTENTS};
 #  }
 }       
+
+sub AUTOLOAD {
+  our $AUTOLOAD;
+  if ( $AUTOLOAD =~ /.*::(.*)/ ) {
+    return if $1 eq 'DESTROY';
+    my $wantfield = $1;
+    print "Trying to AUTOLOAD for $wantfield in FIELD\n"; # if $Debug == 1;
+    my $self = shift;
+    return $self->contents->$wantfield;
+  }
+}
 
 1;

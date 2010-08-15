@@ -331,7 +331,7 @@ sub AUTOLOAD {
   if ( $AUTOLOAD =~ /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
     my $wantfield = $1;
-    print "Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
+    print "Trying to AUTOLOAD for $wantfield in STRUCT\n" if $Debug == 1;
     my $self = $_[0];
     my $found = 0;
     if( exists $self->fields->{$wantfield} ) {
@@ -429,7 +429,7 @@ sub AUTOLOAD {
   if ( $AUTOLOAD =~ /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
     my $wantfield = $1;
-    print "Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
+    print "Trying to AUTOLOAD for $wantfield in FieldSS\n" if $Debug == 1;
     my $self = $_[0];
     my $found = 0;
     if( exists $self->owner->fields->{$wantfield} ) {

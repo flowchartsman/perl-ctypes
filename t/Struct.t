@@ -44,19 +44,54 @@ my $dataref = $struct->_data;
 substr( ${$dataref}, 0, length($twentyfive) ) = $twentyfive;
 is( $$int, 25, 'Data modifications percolate down' );
 
-note( 'Structs in structs...' );
+subtest 'Multiple indirection' => sub {
+  plan tests => 5;
+  
+  my $flowerbed = Struct({ fields => [
+    [ roses => 3 ],
+    [ heather => 5 ],
+    [ weeds => 2 ],
+  ] });
+  
+  my $garden = Struct({ fields => [
+    [ fence => 30 ],
+    [ flowerbed => $flowerbed ],
+    [ lawn => 20 ],
+  ] });
+  
+  #print '$garden->flowerbed: ',$garden->flowerbed, "\n";
+  #print '$$garden->flowerbed: ', $$garden->flowerbed, "\n\n";
+  
+  #print '$garden->flowerbed->contents: ',$garden->flowerbed->contents, "\n";
+  #print '$$garden->flowerbed->contents: ',$$garden->flowerbed->contents, "\n\n";
+  
+  #print '$garden->flowerbed->roses: ',$garden->flowerbed->roses, "\n";
+  #print '$$garden->flowerbed->roses: ',$$garden->flowerbed->roses, "\n\n";
+  
+  #print '$garden->flowerbed->contents->roses: ',$garden->flowerbed->contents->roses, "\n";
+  #print '$$garden->flowerbed->contents->roses: ', $$garden->flowerbed->contents->roses, "\n\n";
+  
+  is( $garden->flowerbed->contents->roses,
+      '<Field type=c_short, ofs=0, size=2>',
+      '$st->field->contents->x gives field' );
+  is( $$garden->flowerbed->contents->roses,
+      '3','$$st->field->contents->x gives value' );
+  
+  my $home = Struct({ fields => [
+    [ house => 40 ],
+    [ driveway => 20 ],
+    [ garden => $garden ],
+  ] });
+  
+  # print $home->garden->contents->flowerbed->contents->heather, "\n";
+  # print $$home->garden->contents->flowerbed->contents->heather, "\n";
+  
+  is( $home->garden->contents->flowerbed->contents->heather,
+      '<Field type=c_short, ofs=2, size=2>',
+      '$st->field->contents->x gives field' );
+  is( $$home->garden->contents->flowerbed->contents->heather,
+      '5', '$$st->field->contents->x gives value' );
+  $home->garden->contents->flowerbed->contents->heather->(500);
+  is( $$garden->heather, 500, "That's a quare load o' heather" );
+};
 
-my $flowerbed = Struct({ fields => [
-  [ roses => 3 ],
-  [ heather => 5 ],
-  [ weeds => 2 ],
-] });
-
-my $garden = Struct({ fields => [
-  [ fence => 30 ],
-  [ flowerbed => $flowerbed ],
-  [ lawn => 20 ],
-] });
-
-print $garden->flowerbed->contents->roses, "\n";
-print $$garden->flowerbed, "\n";
