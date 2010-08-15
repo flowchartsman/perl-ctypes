@@ -12,7 +12,6 @@ use overload
 our @ISA = qw|Ctypes::Type|;
 my $Debug = 0;
 
-
 sub _hash_overload {
   return shift->_get_inner;
 }
@@ -81,7 +80,8 @@ sub new {
 
   # Get fields, populate with named/unnamed args
   my $self = { _fields     => undef,      # hashref, field data by name
-               _fields_ord => undef, };   # arrayref, order of fields
+               _fields_ord => undef,      # arrayref, order of fields
+               _typecode_  => 'p'    };
 
   # format of _fields_ info: <name> <type> <default> <bitwidth>
   for( my $i=0; defined(local $_ = $in_fields->[$i]); $i++ ) {
@@ -131,7 +131,11 @@ sub new {
   # out multiple inheritance of fields).
   $self->{_name} = '';
   print "    Making name...\n" if $Debug == 1;
-  for( @{$self->{_fields_ord}} ) {  
+  for( @{$self->{_fields_ord}} ) {
+    if( !ref($_->[1]) ) {
+      my $tc = Ctypes::_check_type_needed($_->[1]);
+      $_->[1] = Ctypes::Type::Simple->new($tc, $_->[1]);
+    }
     $self->{_name} .= $_->[1]->name . '_';
     $self->{_name} =~ s/c_//;
   }
@@ -182,26 +186,37 @@ sub _as_param_ { return $_[0]->_data(@_) }
 sub _data { 
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-if( defined $self->{_data}
-      and $self->{_datasafe} == 1 ) {
-    print "    _data already defined and safe\n" if $Debug == 1;
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-    return \$self->{_data};
-  }
-# TODO This is where a check for an endianness property would come in.
-  if( $self->{_endianness} ne 'b' ) {
     my @data;
     my @ordkeys;
     for( 0..$#{$self->{_fields_ord}} ) {
       $ordkeys[$_] = $self->{_fields_ord}[$_][0];
+     print "    ordkeys[$_]: ", $ordkeys[$_], "\n" if $Debug == 1;
     }
+if( defined $self->{_data}
+      and $self->{_datasafe} == 1 ) {
+    print "    _data already defined and safe\n" if $Debug == 1;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+    for(@ordkeys) {
+      print "    Calling Datasafe on ", $_, "\n" if $Debug == 1;
+      if( defined $self->contents->raw->{$_}->contents ) {
+        $self->contents->raw->{$_}->contents->_datasafe = 0;
+        print "    He now knows his data's ", $self->contents->raw->{$_}->contents->_datasafe, "00% safe\n" if $Debug == 1;
+      }
+    }
+    return \$self->{_data};
+  }
+# TODO This is where a check for an endianness property would come in.
+  if( $self->{_endianness} ne 'b' ) {
     for(my $i=0;defined(local $_ = $ordkeys[$i]);$i++) {
       $data[$i] = ${$self->{contents}->{$ordkeys[$i]}->_data};
     }
     $self->{_data} = join('',@data);
     print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
-    $self->{_datasafe} = 0;
-    for(@ordkeys) { $self->$_->{_datasafe} = 0 }
+    $self->_datasafe = 0;
+    for(@ordkeys) {
+      print "    Calling Datasafe on ", $self->{_contents}->{$_}, "\n"; # if $Debug == 1;
+      $self->{_contents}->{$_}->_datasafe = 0
+    }
     return \$self->{_data};
   } else {
   # <insert code for other / swapped endianness here>
@@ -215,7 +230,7 @@ sub _update_ {
   print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
   print "  arg is: $arg" if $arg and $Debug == 1;
   print $arg ? (",  which is\n", unpack('b*',$arg), "\n  to you and me\n") : ('') if $Debug == 1;
-  print "  and index is: $index\n" if $Debug == 1;
+  print "  and index is: $index\n" if defined $index and $Debug == 1;
   if( not defined $arg ) {
     print "    Arg wasn't defined!\n" if $Debug == 1;
     if( $self->{_owner} ) {
@@ -262,8 +277,9 @@ sub _update_ {
   $self->{_datasafe} = 1;
   if( defined $arg or $self->{_owner} ) { # otherwise nothing's changed
     for(keys %{$self->{_fields}}) {
-      $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->{_datasafe} = 0
-        if defined $self->{_contents}->{_rawfields}->{$_};
+      print ref($self->{_contents}->{_rawfields}->{$_}->{CONTENTS}), "\n" if $Debug == 1;
+      $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->_datasafe = 0
+        if defined $self->{_contents}->{_rawfields}->{$_}->{CONTENTS};
     }
   }
   print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
@@ -332,7 +348,7 @@ sub AUTOLOAD {
         if( not defined $arg ) {
           if(ref($caller)) {
             print "    Returning value...\n" if $Debug == 1;
-            my $ret = $caller->{_contents}->{_rawfields}->{$name}->{CONTENTS};
+            my $ret = $caller->{_contents}->{_rawfields}->{$name};
             if( ref($ret) eq 'Ctypes::Type::Simple' ) {
               return ${$ret};
             } else {

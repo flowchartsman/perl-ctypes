@@ -221,10 +221,8 @@ my %access = (
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes 'flexible' settable
   alignment         => ['_alignment'],
-  name              => ['_name'],
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
-  size              => ['_size'],
   endianness        => ['_endianness'],
              );
 for my $func (keys(%access)) {

@@ -115,8 +115,28 @@ sub _new {
     _address    =>  undef,
     _datasafe   =>  1,             # Can object trust & return its _value
                                    # or must it update its _data?
+    _name       => undef,
      } => ref($_[0]) || $_[0];
 }
+
+sub _datasafe : lvalue {
+  $_[0]->{_datasafe} = $_[1] if defined $_[1]; $_[0]->{_datasafe};
+}
+
+sub owner : lvalue {
+  $_[0]->{_owner} = $_[1] if defined $_[1]; $_[0]->{_owner};
+}
+
+sub _needsfree : lvalue {
+  $_[0]->{_needsfree} = $_[1] if defined $_[1]; $_[0]->{_needsfree};
+}
+
+sub _index : lvalue {
+  $_[0]->{_index} = $_[1] if defined $_[1]; $_[0]->{_index};
+}
+
+sub size   { return $_[0]->{_size}  }
+sub name   { return $_[0]->{_name}  }
 
 package Ctypes::Type::Simple;
 use strict;
@@ -200,8 +220,6 @@ my %access = (
       sub {if( $_[0] == 1 or $_[0] == 0){return 1;}else{return 0;} },
       1 ], # <--- this makes overflow settable
   alignment         => ['_alignment'],
-  name              => ['_name'],
-  size              => ['_size'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -225,7 +243,12 @@ for my $func (keys(%access)) {
 
 sub _data { 
   my $self = shift;
-  print "In ", $self->{_typecode_}, " Type's _AS_PARAM_...\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _DATA_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  if( defined $self->owner
+      or $self->_datasafe == 0 ) {
+    print "    Can't trust data, updating...\n" if $Debug == 1;
+    $self->_update_;
+  }
   if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
     print "    asparam already defined\n" if $Debug == 1;
@@ -245,18 +268,23 @@ sub _update_ {
   my( $self, $arg ) = @_;
   print "In ", $self->{_name}, "'s _UPDATE_...\n" if $Debug == 1;
   print "    I am pwnd by ", $self->{_owner}->{_name}, "\n" if $self->{_owner} and $Debug == 1;
-  $self->{_data} = $arg if $arg;
-  if( not defined $arg
-      and $self->{_owner} ) {
-    my $owners_data = ${$self->{_owner}->_data};
-    print "    Here's where I think I am in my pwner's data:\n" if $Debug == 1;
-    print " " x ($self->{_index} * 8), "v\n" if $Debug == 1;
-    print "12345678" x length($owners_data), "\n" if $Debug == 1;
-    print unpack('b*', $owners_data), "\n" if $Debug == 1;
-    print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
-    $self->{_data} = substr( ${$self->{_owner}->_data},
-                             $self->{_index},
-                             $self->{_size} );
+  if( not defined $arg ) {
+    if( $self->{_owner} ) {
+      my $owners_data = ${$self->{_owner}->_data};
+      print "    Here's where I think I am in my pwner's data:\n" if $Debug == 1;
+      print " " x ($self->{_index} * 8), "v\n" if $Debug == 1;
+      print "12345678" x length($owners_data), "\n" if $Debug == 1;
+      print unpack('b*', $owners_data), "\n" if $Debug == 1;
+      print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
+      $self->{_data} = substr( ${$self->{_owner}->_data},
+                               $self->{_index},
+                               $self->{_size} );
+    }
+  } else {
+    $self->{_data} = $arg if $arg;
+    if( $self->owner ) {
+      $self->owner->_update_($self->{_data},$self->{_index});
+    }
   }
 #  $arg = $self->{_data} unless $arg;
 #  $self->{_rawval}{VALUE} = unpack($self->{_typecode_},$arg);
@@ -329,7 +357,7 @@ sub STORE {
   $self->{object}{_data} =
     pack( $self->{object}{_typecode_}, $arg );
   if( $self->{object}{_owner} ) {
-    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
+    $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
   }
   print "  Returning ok...\n" if $Debug == 1;
   return $self->{VALUE};
@@ -344,7 +372,7 @@ sub FETCH {
     $self->{object}->_update_;
   }
   croak("Error updating value!") if $self->{object}{_datasafe} != 1;
-  print "    ", $self->{object}{_name}, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug == 1;
+  print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug == 1;
   return $self->{VALUE};
 }
 

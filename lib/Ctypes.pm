@@ -170,7 +170,7 @@ sub _check_type_needed (@) {
   my $low = 0;
   my $char = 0;
   my $string = 0;
-  for(my $i = 0; defined( local $_ = $_[0][$i]); $i++ ) {
+  for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
     if( $char == 1 or !looks_like_number($_) ) {
       $char = 1;
       $string = 1 if length( $_ ) > 1;

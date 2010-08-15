@@ -158,8 +158,6 @@ sub _update_ {
 #
 my %access = (
   _typecode_        => ['_typecode_'],
-  name              => ['name'],
-  size              => ['size'],
   contents          => ['contents'],
   type              => ['orig_type'],
   offset            => ['offset',undef,1],

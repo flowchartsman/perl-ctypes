@@ -1,5 +1,6 @@
 package Ctypes::Type::Field;
 use Ctypes::Type;
+use Carp;
 use Data::Dumper;
 use overload
   '""'     => sub { return $_[0]->FETCH },
@@ -14,8 +15,8 @@ sub _code_overload {
 }
 
 sub _code_overload {
-  print "Did we get to code overload?\n";
-  print "args: ", Dumper( @_ );
+  print "Did we get to code overload?\n" if $Debug == 1;
+  print "args: ", Dumper( @_ ) if $Debug == 1;
   return &STORE;
 }
 
@@ -49,9 +50,9 @@ my %access = (
   alignment         => ['_alignment'],
   name              => ['_name'],
   size              => ['_size'],
-  contents          => ['CONTENTS'],
+  contents          => ['CONTENTS',undef,1],
   offset            => ['_offset'],
-  owner             => ['_owner'],
+  owner             => ['_owner',undef,1],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -78,41 +79,47 @@ for my $func (keys(%access)) {
 sub STORE {
   $DB::single = 1;
   my( $self, $val ) = @_;
-  print "In ", $self->{_owner}{_name}, "'s ", $self->{_name}, " field STORE, called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $saelf->{_owner}{_name}, "'s ", $self->{_name}, " field STORE, called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   print "    arg is ", $val, "\n" if $Debug == 1;
   print "    self is ", $self->name, "\n" if $Debug == 1;
   # Check if key exists ### Done in object
+  print $self->{CONTENTS}, "\n" if $Debug == 1;
   if( !ref($val) ) {
-    $val = new Ctypes::Type::Simple( $self->{_typecode}, $val );
-    if( not defined $val ) {
-      carp("Could not create " . $self->{_owner}{_fields}{$key}[1]->name
-           . " type from argument '$val'");
+    print "    val was not a reference\n" if $Debug == 1;
+    if( not defined $self->contents ) {
+      $val = new Ctypes::Type::Simple( $self->typecode, $val );
+      if( not defined $val ) {
+        carp("Could not create " . $self->typecode
+             . " type from argument '$val'");
+        return undef;
+      }
+      $val->{_needsfree} = 1;
+    } else {
+      print "    Setting field ", $self->{_name}, " to $val\n" if $Debug == 1;
+      ${$self->{CONTENTS}} = $val;
+    }
+  } else {
+    if( $val->name ne $self->{_typename} ) {
+      carp( "Cannot put " . $val->name . " type object into "
+            . $self->{_typename} . " type field" );
       return undef;
     }
-    $val->{_needsfree} = 1;
+    if( $self->{CONTENTS} ) {
+      $self->{CONTENTS}->{_owner} = undef;
+    }
+    print "    Setting field ", $self->{_name}, " to $val\n" if $Debug == 1;
+    $self->{CONTENTS} = $val;
   }
 
-  if( $val->name ne $self->{_typename} ) {
-    carp( "Cannot put " . $val->name . " type object into "
-          . $self->{_typename} . " type field" );
-    return undef;
-  }
-
-  if( $self->{CONTENTS} ) {
-    $self->{CONTENTS}->{_owner} = undef;
-#    if( $self->{CONTENTS}{_needsfree} == 1 )  # If this were C (or
-# if it were someday being translated to C), I think this might be where
-# one would make use of the disappearing object's _needsfree attribute.
-  }
-  print "    Setting field ", $self->{_name}, " to $val\n" if $Debug == 1;
-  $self->{CONTENTS} = $val;
+  if( not defined $self->contents ) { $self->contents($val) }
+  my $datum = ${$self->contents->_data};
+  $self->contents->owner = $self->owner;
+  print "    Self->offset is ", $self->offset, "\n" if $Debug == 1;
+  $self->contents->_index($self->offset);
+  print "CONTENTS' INDEX IS NOW ", $self->contents->_index, "\n" if $Debug == 1;
+  print "contents is now ", $self->contents, "\n" if $Debug == 1;
+  $self->owner->_update_($datum, $self->offset);
   print "    Setting Owner to ", $self->{_owner}{_name}, "\n" if $Debug == 1;
-  $self->{CONTENTS}->{_owner} = $self->{_owner};
-  $self->{CONTENTS}->{_index} = $self->{_offset};
-  print "CONTENTS' INDEX IS NOW ", $self->{_offset}, "\n" if $Debug == 1;
-
-  my $datum = ${$val->_data};
-  $self->{_owner}->_update_($datum, $self->{_offset});
   
   return $self->{CONTENTS}; # success
 }
