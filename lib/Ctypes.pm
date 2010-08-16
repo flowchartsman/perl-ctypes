@@ -29,7 +29,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError byref is_ctypes_compat
-                   Array Pointer Struct Union
+                   Array Pointer Struct
                   |, @Ctypes::Type::_allnames );
 our @EXPORT_OK = qw|_make_arrayref _check_invalid_types
                     _check_type_needed _valid_for_type
@@ -199,17 +199,6 @@ relevant documentation for more information.
 
 sub Struct {
   return Ctypes::Type::Struct->new(@_);
-}
-
-=item Union HASHREF
-
-Create a L<Ctypes::Type::Union> object. See the module docs for more
-information.
-
-=cut
-
-sub Union {
-  return Ctypes::Type::Union->new(@_);
 }
 
 =item load_library (lib, [mode])

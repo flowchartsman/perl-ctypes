@@ -14,7 +14,6 @@ use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 use Ctypes::Type::Struct;
-use Ctypes::Type::Union;
 my $Debug = 0;
 
 =head1 NAME
