@@ -12,8 +12,14 @@ use constant USE_PERLTYPES => 1; # so far use only perl pack-style types,
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 our @EXPORT_OK = qw|&_types|;
-
 my $Debug = 0;
+
+=head1 NAME
+
+Ctypes::Type - Abstract base class for Ctypes Data Type objects
+
+=cut
+
 
 our $_perltypes = 
 { 
@@ -62,21 +68,75 @@ our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
 sub allow_overflow_all;
 
+=head1 SYNOPSIS
+
+use Ctypes;
+
+# Create a (signed) integer variable of value 10...
+my $int = c_int(10);
+
+# ...and do lots of normal, boring, variable things.
+$$int = 15;                          # Note the double sigil
+$$int += 3;
+print $int->size;                    # sizeof(int) in C
+print $int->name;                    # 'c_int'
+
+my $array = Array( 7, 6, 5, 4, 3 );  #Create array (of c_ushort)
+my $dblarray = Array( c_double, [ 2, 1, 0, -1, -2 ] );
+$$dblarray[2] = $$int;               # Again, note sigils
+print $dblarray->size;               # sizeof(double) * #members
+
+# Create int-type pointer to double-type array
+my $intp = Pointer( c_int, $dblarray );
+print $$intp[2];                     # 1073741824 on my system
+
+=head1 DESCRIPTION
+
+Ctypes::Type holds no interest by itself. What you'll probably
+want to look at first are the various flavours of 
+Ctypes::Type::Simple, which represent the non-compound C data
+types, and to the description of which the rest of this
+document is devoted.
+
+=cut
+
 # Ctypes::Type::New: Abstract base class for all Ctypes objects
-sub new {
+sub _new {
   return bless my $self = {
-    _data       =>  undef,         # raw (binary) memory block
-    _needsfree  =>  1,             # does object own its data?
-    _base       =>  undef,         # ref to object that owns this one
+    _data       =>  0,             # raw (binary) memory block
+    _needsfree  =>  0,             # does object own its data?
+    _owner      =>  undef,         # ref to object that owns this one
     _size       =>  0,             # size of memory block in bytes
-    _length     =>  1,             # number of fields of this object ???
+    _length     =>  1,             # ? number of fields of this object ???
     _index      =>  undef,         # index of this object into the base
                                    # object's _object list
     _objects    =>  undef,         # objects this object holds
     _value      =>  undef,         # 'a small default buffer'
     _address    =>  undef,
+    _datasafe   =>  1,             # Can object trust & return its _value
+                                   # or must it update its _data?
+    _name       => undef,
      } => ref($_[0]) || $_[0];
 }
+
+sub _datasafe : lvalue {
+  $_[0]->{_datasafe} = $_[1] if defined $_[1]; $_[0]->{_datasafe};
+}
+
+sub owner : lvalue {
+  $_[0]->{_owner} = $_[1] if defined $_[1]; $_[0]->{_owner};
+}
+
+sub _needsfree : lvalue {
+  $_[0]->{_needsfree} = $_[1] if defined $_[1]; $_[0]->{_needsfree};
+}
+
+sub _index : lvalue {
+  $_[0]->{_index} = $_[1] if defined $_[1]; $_[0]->{_index};
+}
+
+sub size   { return $_[0]->{_size}  }
+sub name   { return $_[0]->{_name}  }
 
 package Ctypes::Type::Simple;
 use strict;
@@ -128,22 +188,21 @@ sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my $typecode = shift;
   my $arg = shift;
-  my $self = $class->SUPER::new;
+  print "In Type::Simple constructor, typecode [ $typecode ]", $arg ? "arg [ $arg ]" : '', "\n" if $Debug == 1;
+  my $self = $class->SUPER::_new;
   my $attrs = { 
-    %$self,
     _typecode_      => $typecode,
     _name            => $_types->{$typecode},
     _alignment       => undef,
     _allow_overflow  => 1,
-    _datasafe       => 1,
               };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
   $self->{_size} = Ctypes::sizeof($typecode);
   $arg = 0 unless defined $arg;
-  $self->{_rawval} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
+  $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
   $self->{_value} = $arg;
-  return undef if not defined $self->{_value};
+  return undef if not defined $self->{_rawvalue}{VALUE};
 # XXX Unimplemented! How will 'address' this work?
 # Is it relevant in our Perl-based model?
 #  $self->{_address} = Ctypes::addressof($self);
@@ -155,13 +214,12 @@ sub new {
 #
 my %access = ( 
   _typecode_        => ['_typecode_'],
+  type              => ['_typecode_'],
   allow_overflow    =>
     [ '_allow_overflow',
       sub {if( $_[0] == 1 or $_[0] == 0){return 1;}else{return 0;} },
       1 ], # <--- this makes overflow settable
   alignment         => ['_alignment'],
-  name              => ['_name'],
-  size              => ['_size'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -183,12 +241,14 @@ for my $func (keys(%access)) {
   }
 }
 
-sub _data { &_as_param_(@_) }
-
-sub _as_param_ {
+sub _data { 
   my $self = shift;
-  print "In ", $self->{_typecode_}, " Type's _AS_PARAM_...\n" if $Debug == 1;
-  # STORE will always undef _as_param_
+  print "In ", $self->{_name}, "'s _DATA_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  if( defined $self->owner
+      or $self->_datasafe == 0 ) {
+    print "    Can't trust data, updating...\n" if $Debug == 1;
+    $self->_update_;
+  }
   if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
     print "    asparam already defined\n" if $Debug == 1;
@@ -196,19 +256,40 @@ sub _as_param_ {
     return \$self->{_data};
   }
   $self->{_data} =
-    pack( $self->{_typecode_}, $self->{_rawval}{DATA} );
+    pack( $self->{_typecode_}, $self->{_rawvalue}{VALUE} );
   print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
   $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_data};
 }
 
+sub _as_param_ { &_data(@_) }
+
 sub _update_ {
   my( $self, $arg ) = @_;
-  print "In ", $self->{_typecode_}, " Type's _UPDATE_...\n" if $Debug == 1;
-  $arg = $self->{_data} unless $arg;
-
-  $self->{_rawval}{DATA} = unpack($self->{_typecode_},$arg);
-  $self->{_data} = $arg;
+  print "In ", $self->{_name}, "'s _UPDATE_...\n" if $Debug == 1;
+  print "    I am pwnd by ", $self->{_owner}->{_name}, "\n" if $self->{_owner} and $Debug == 1;
+  if( not defined $arg ) {
+    if( $self->{_owner} ) {
+      my $owners_data = ${$self->{_owner}->_data};
+      print "    Here's where I think I am in my pwner's data:\n" if $Debug == 1;
+      print " " x ($self->{_index} * 8), "v\n" if $Debug == 1;
+      print "12345678" x length($owners_data), "\n" if $Debug == 1;
+      print unpack('b*', $owners_data), "\n" if $Debug == 1;
+      print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
+      $self->{_data} = substr( ${$self->{_owner}->_data},
+                               $self->{_index},
+                               $self->{_size} );
+    }
+  } else {
+    $self->{_data} = $arg if $arg;
+    if( $self->owner ) {
+      $self->owner->_update_($self->{_data},$self->{_index});
+    }
+  }
+#  $arg = $self->{_data} unless $arg;
+#  $self->{_rawval}{VALUE} = unpack($self->{_typecode_},$arg);
+#  $self->{_data} = $arg;
+  $self->{_rawvalue}{VALUE} = unpack($self->{_typecode_},$self->{_data});
   $self->{_datasafe} = 1;
   return 1; 
 }
@@ -220,9 +301,9 @@ use Carp;
 
 sub TIESCALAR {
   my $class = shift;
-  my $owner = shift;
-  my $self = { owner  => $owner,
-               DATA   => undef,
+  my $object = shift;
+  my $self = { object  => $object,
+               VALUE   => undef,
              };
   return bless $self => $class;
 }
@@ -230,7 +311,9 @@ sub TIESCALAR {
 sub STORE {
   my $self = shift;
   my $arg = shift;
-  print "In ", $self->{owner}{name}, "'s STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s STORE with arg [ $arg ],\n" if $Debug == 1;
+  print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  croak("Simple Types can only be assigned a single value") if @_;
   # Deal with being assigned other Type objects and the like...
   if(my $ref = ref($arg)) {
     if($ref =~ /^Ctypes::Type::/) {
@@ -248,45 +331,49 @@ sub STORE {
       }
     }
   }
-  my $typecode = $self->{owner}{_typecode_};
-  croak("Simple Types can only be assigned a single value") if @_;
+  my $typecode = $self->{object}{_typecode_};
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
+  print "    _valid_for_type returned $is_valid\n" if $Debug == 1;
   if( $is_valid < 1 ) {
     no strict 'refs';
     if( ($is_valid == -1)
-        and ( $self->{owner}->allow_overflow == 0
+        and ( $self->{object}->allow_overflow == 0
         or Ctypes::Type::allow_overflow_all == 0 ) ) {
-      carp( "Value out of range for " . $self->{owner}{name} . ": $arg");
+      carp( "Value out of range for " . $self->{object}{_name} . ": $arg");
       return undef;
     } else {
       my $temp = Ctypes::_cast($arg,$typecode);
       if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
         $arg = $temp;
       } else {
-        carp("Unreconcilable argument for type " . $self->{owner}{name} .
+        carp("Unreconcilable argument for type " . $self->{object}{_name} .
               ": $arg");
         return undef;
       }
     }
   }
-  $self->{owner}{_data} = undef;  # cache no longer up to date
-  $self->{DATA} = $arg;
+  $self->{VALUE} = $arg;
+  $self->{object}{_data} =
+    pack( $self->{object}{_typecode_}, $arg );
+  if( $self->{object}{_owner} ) {
+    $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
+  }
   print "  Returning ok...\n" if $Debug == 1;
-  return $self->{DATA};
+  return $self->{VALUE};
 }
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{owner}{name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  if ( defined $self->{owner}{_data}
-       and $self->{owner}{_datasafe} == 0 ) {
-    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_data}),"\n" if $Debug == 1;
-    $self->{owner}->_update_($self->{owner}{_data});
+  print "In ", $self->{object}{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  if ( defined $self->{object}{_owner}
+       or $self->{object}{_datasafe} == 0 ) {
+    print "    Can't trust data, updating...\n" if $Debug == 1;
+    $self->{object}->_update_;
   }
-  croak("Error updating value!") if $self->{owner}{_datasafe} != 1;
-  print "  Returning ok...\n" if $Debug == 1;
-  return $self->{DATA};
+  croak("Error updating value!") if $self->{object}{_datasafe} != 1;
+  print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug == 1;
+  return $self->{VALUE};
 }
 
 
@@ -406,26 +493,68 @@ our @_allnames = keys %_defined;
 
 =over
 
-=item Array ( I<LIST> ) or new Array( TYPE, ARRAYREF )
+=item Array I<LIST>
 
-Create a L<Ctypes::Type::Array> object. See the relevant documentation
-for more information.
+=item Array I<TYPE>, I<ARRAYREF>
+
+Create a L<Ctypes::Type::Array> object. LIST and ARRAYREF can contain
+Ctypes objects, or a Perl natives.
+
+If the latter, Ctypes will try to choose the smallest appropriate C
+type and create Ctypes objects out of the Perl natives for you. You
+can find out which type it chose afterwards by calling the C<member_type>
+accessor method on the Array object.
+
+If you want to specify the data type of the array, you can do so by
+passing a Ctypes type as the first parameter, and the contents in an
+array reference as the second. Naturally, your data must be compatible
+with the type specified, otherwise you'll get an error from the a
+C<Ctypes::Type::Simple> constructor.
+
+And of course, in C(types), all your array input has to be of the same
+type.
+
+See L<Ctypes::Type::Array> for more detailed documentation.
 
 =cut
 
 sub Array {
   return Ctypes::Type::Array->new(@_);
 }
+
+=item Pointer OBJECT
+
+=item Pointer TYPE, OBJECT
+
+Create a L<Ctypes::Type::Pointer> object. OBJECT must be a Ctypes object.
+See the relevant documentation for more information.
+
+=cut
+
 sub Pointer {
   return Ctypes::Type::Pointer->new(@_);
 }
+
+=item Struct HASHREF
+
+Create a L<Ctypes::Type::Struct> object. Basing new classes on Struct
+may also often be more useful than subclassing other Types. See the
+relevant documentation for more information.
+
+=cut
+
+sub Struct {
+  return Ctypes::Type::Struct->new(@_);
+}
+
 {
 no strict 'refs';
 *{"Ctypes::Array"} = \&Ctypes::Type::Array;
 *{"Ctypes::Pointer"} = \&Ctypes::Type::Pointer;
+*{"Ctypes::Struct"} = \&Ctypes::Type::Struct;
 }
 
-push @_allnames, qw|Array Pointer|;
+push @_allnames, qw|Array Pointer Struct|;
 
 =item allow_overflow_all
 
@@ -449,10 +578,6 @@ objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
     return $allow_overflow_all;
   }
 }
-
-package Ctypes::Type::Field;
-use Ctypes::Type;
-our @ISA = qw(Ctypes::Type::Simple);
 
 package Ctypes::Type::Union;
 use Ctypes::Type;

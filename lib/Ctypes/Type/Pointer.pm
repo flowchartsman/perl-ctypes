@@ -89,7 +89,7 @@ sub new {
     carp("Invalid Array type specified (first position argument)");
     return undef;
   }
-  my $self = $class->SUPER::new;
+  my $self = $class->SUPER::_new;
   my $attrs = {
      name        => $type.'_Pointer',
      size        => Ctypes::sizeof('p'),
@@ -98,7 +98,6 @@ sub new {
      bytes       => undef,
      orig_type   => $type,
      _typecode_  => 'p',
-     _datasafe   => 1,
                };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
@@ -159,8 +158,6 @@ sub _update_ {
 #
 my %access = (
   _typecode_        => ['_typecode_'],
-  name              => ['name'],
-  size              => ['size'],
   contents          => ['contents'],
   type              => ['orig_type'],
   offset            => ['offset',undef,1],

@@ -21,7 +21,7 @@ use Config;
 use Ctypes::Type;
 use DynaLoader;
 use File::Spec;
-use Scalar::Util;
+use Scalar::Util qw|blessed looks_like_number|;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -56,7 +56,7 @@ XSLoader::load('Ctypes', $VERSION);
 
 =head1 DESCRIPTION
 
-Ctypes is the Perl equivalent to the python ctypes ffi library, using libffi.
+Ctypes is the Perl equivalent to the Python ctypes FFI library, using libffi.
 
 It provides C compatible data types, and allows to call functions in 
 dlls/shared libraries. It can be used to wrap these libraries in pure Perl.
@@ -120,7 +120,7 @@ sub _check_invalid_types ($) {
     $_ = $typesref->[$i];
     # Check objects fulfil all the requirements...
     if( ref($_) ) {
-      if( !Scalar::Util::blessed($_) ) {
+      if( !blessed($_) ) {
         carp("No unblessed references as types");
         return $i;
       } else {
@@ -159,6 +159,33 @@ carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
     }
   }
   return undef;
+}
+
+# Take an list of Perl natives, return the typecode of
+# the smallest C type needed to hold all the data - the
+# lowest common demoninator, if you will (will you?)
+sub _check_type_needed (@) {
+  # XXX This needs changed when we support more typecodes
+  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
+  my $low = 0;
+  my $char = 0;
+  my $string = 0;
+  for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
+    if( $char == 1 or !looks_like_number($_) ) {
+      $char = 1;
+      $string = 1 if length( $_ ) > 1;
+      last if $string == 1;
+      next;
+    } else {
+      next if $low == 3;
+      $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
+      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
+      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
+    }
+  }
+  return 'p' if $string == 1;
+  return 'c' if $char   == 1;
+  return $numtypes[$low];
 }
 
 =head1 SUBROUTINES
@@ -238,7 +265,7 @@ sub call {
   @argtypes = split( //, substr( $sig, 2 ) ) if length $sig > 2;
   for(my $i=0 ; $i<=$#args ; $i++) {
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
-        not Scalar::Util::looks_like_number($args[$i]) ) {
+        not looks_like_number($args[$i]) ) {
       die "$i-th argument $args[$i] is no number";
     }
   }
@@ -837,7 +864,7 @@ by _typecode_ is valid. Returns undef otherwise.
 =cut
 
 sub is_ctypes_compat (\$) {
-  if( Scalar::Util::blessed($_[0]),
+  if( blessed($_[0]),
       and $_[0]->can('_as_param_')
       and $_[0]->can('_update_')
       and $_[0]->can('_typecode_')

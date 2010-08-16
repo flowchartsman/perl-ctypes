@@ -30,7 +30,7 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 =cut
 
 ##########################################
-# TYPE::ARRAY : PRIVATE FUNCTIONS & DATA #
+# TYPE::ARRAY : PRIVATE FUNCTIONS & VALUES #
 ##########################################
 
 sub _arg_to_type {
@@ -61,49 +61,6 @@ sub _arg_to_type {
         if defined($datum);
   }
   return $out;
-}
-
-# Arguments to Array could be Perl natives, Type objects, or
-# user-defined types conforming to the 'Ctypes protocol'
-# We need to look at the _values_ of all args to see what kind
-# of array to make. This function gets all the values out for us.
-sub _get_values ($;\@) {
-  my $in = shift;
-  my $which_kind = shift;
-  my @values;
-  for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
-    if( !ref ) { 
-      $values[$i] = $_;
-      $which_kind->[$i] = 1;
-    }
-    elsif( ref eq 'Ctypes::Type::Simple' ) {
-      $values[$i] = $_->{val};
-      $which_kind->[$i] = 2;
-    }
-    else {
-      my $invalid = Ctypes::_check_invalid_types( [ $_ ] );
-      if( not $invalid ) {
-        my $tc = $_->{_typecode_} ?
-          $_->{_typecode_} : $_->typecode;
-        if( $tc ne 'p' ) {
-          $values[$i] = $_->{_data} ?
-            $_->{_typecode_} ?
-              unpack($_->{_typecode_}, $_->{_data}) :
-              unpack($_->_typecode_, $_->{_data}) :
-            $_->{_typecode_} ?
-              unpack($_->{_typecode_}, $_->_as_param_) :
-              unpack($_->_typecode_, $_->_as_param_); 
-        } else {
-          return -1;
-        } 
-      $which_kind->[$i] = 3;
-      } else {
-  carp("Cannot discern value of object at position $invalid");
-  return undef;
-      }
-    }
-  }
-  return @values;
 }
 
 # Scenario A: We've been told what type to make the array
@@ -184,27 +141,11 @@ sub _get_members_untyped {
   }
 
 # Now, check for non-numerics...
-  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
-  if(not $found_string) {
-  # Determine smallest type suitable for holding all numbers...
-  # XXX This needs changed when we support more typecodes
-    my $low = 0;  # index into @numtypes
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
-      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
-      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
-      last if $low == 3;
-    }
-    # Now create type objects for all members...
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $members->[$i] =
-        Ctypes::Type::Simple->new($numtypes[$low], $$in[$i]);
-    }
-  } else { # $found_string = 1 (got non-numerics)...
-    for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
-      $members->[$i] =
-        Ctypes::Type::Simple->new('p', $$in[$i]);
-    }
+  my $lcd = Ctypes::_check_type_needed($in);   # 'lowest common denomenator'
+  # Now create type objects for all members...
+  for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
+    $members->[$i] =
+      Ctypes::Type::Simple->new($lcd, $$in[$i]);
   }
   return $members;
 }
@@ -217,9 +158,9 @@ sub _scalar_overload {
   return \shift;
 }
 
-##########################################
-# TYPE::ARRAY : PUBLIC FUNCTIONS & DATA  #
-##########################################
+###########################################
+# TYPE::ARRAY : PUBLIC FUNCTIONS & VALUES #
+###########################################
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -249,25 +190,23 @@ sub new {
 
   $deftype = $inputs_typed->[0] if not defined $deftype;
 
-  my $self = $class->SUPER::new;
+  my $self = $class->SUPER::_new;
   my $attrs = {
-    _type        => $deftype->_typecode_,
-    _name        => $deftype->name
-                     ? $deftype->name . '_Array'
-                     : ref($deftype) . '_Array',
-    _typecode_   => 'p',
-    _can_resize  => 1,
-    _endianness  => '',
-    _length      => $#$in,
-    _datasafe    => 1,
+    _name         => ref($deftype) . '_Array',
+    _typecode_    => 'p',
+    _can_resize   => 0,
+    _endianness   => '',
+    _length       => $#$in + 1,
+    _member_type  => $deftype->_typecode_,
+    _member_size  => $deftype->size,
                };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
+  $self->{_name} =~ s/::/_/g;
   $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =
     tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
-  my @arr =  @{$inputs_typed};
-  @{$self->{members}} = @arr;
+  @{$self->{members}} =  @{$inputs_typed};
   return $self;
 }
 
@@ -282,9 +221,8 @@ my %access = (
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes 'flexible' settable
   alignment         => ['_alignment'],
-  name              => ['_name'],
-  type              => ['_type'],
-  size              => ['_size'],
+  member_type       => ['_member_type'],
+  member_size       => ['_member_size'],
   endianness        => ['_endianness'],
              );
 for my $func (keys(%access)) {
@@ -307,73 +245,86 @@ for my $func (keys(%access)) {
   }
 }
 
-sub _data { &_as_param_(@_); }
-
-sub _as_param_ {
+sub _data { 
   my $self = shift;
-  # STORE will always undef _as_param_
-  print "In ", $self->{name}, "'s _AS_PARAM_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-  $self->{_datasafe} = 0; # used by FETCH
-#  if( defined $self->{_data} ) {
-#    print "    asparam already defined\n" if $Debug == 1;
-#    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-#    return \$self->{_data};
-#  }
+  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+if( defined $self->{_data}
+      and $self->{_datasafe} == 1 ) {
+    print "    _data already defined and safe\n" if $Debug == 1;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+    return \$self->{_data};
+  }
 # TODO This is where a check for an endianness property would come in.
   if( $self->{_endianness} ne 'b' ) {
     my @data;
-    for(my $i=0;defined(local $_ = $self->{_rawmembers}{DATA}[$i]);$i++) {
+    for(my $i=0;defined(local $_ = $self->{_rawmembers}{VALUES}[$i]);$i++) {
       $data[$i] = # $_->{_data} ?
   #      $_->{_data} :
         ${$_->_as_param_};
     }
-    my $string;
-    for(@data) { $string .= $_ }
     $self->{_data} = join('',@data);
-    print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
+    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
+    $self->{_datasafe} = 0;
+    for(@{$self->{_rawmembers}{VALUES}}) { $_->{_datasafe} = 0 }
     return \$self->{_data};
   } else {
   # <insert code for other / swapped endianness here>
   }
 }
 
-sub _update_ {
-  my($self, $arg) = @_;
-  print "In ", $self->{name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
-  print "  self is ", $self, "\n" if $Debug == 1;
-  print "  arg is $arg\n" if $Debug == 1;
-  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
-  $arg = $self->{_data} unless $arg;
+sub _as_param_ { return $_[0]->_data(@_) }
 
-  my $num_members = scalar @{$self->{_rawmembers}{DATA}};
-  my $chunk_size = length($self->{_data}) / $num_members;
-  print "  My num_members is $num_members\n" if $Debug == 1;
-  print "  My chunk_size is $chunk_size\n" if $Debug == 1;
-  my @renew;
-  my $temp;
-  for( 0..$num_members-1 ) {
-    $renew[$_] = substr( $arg,
-                         ($_ * $chunk_size),
-                         $chunk_size
-                       );
-  }
-  print "  Ok, my new values are:\n" if $Debug == 1;
-  for(0..$#renew) {
-    print "\t$_: ", unpack('b*', $renew[$_] ), "\n" if $Debug == 1;
-  }
-  my $success;
-# XXX perlbug? The next line would die silently when it was:
-# for(my $i=0;defined(local $_=$renew[$i]);$i++) {
-# The removing the local() cured it...
-  for(my $i=0;$i <= $#renew;$i++) {
-    print "  Now putting ", unpack('b*', $renew[$i] ), "\n" if $Debug == 1;
-    $success = $self->{_rawmembers}{DATA}[$i]->_update_($renew[$i]);
-    if(!$success) {
-      croak($self->{name}, ": Error updating member at position $i");
+sub _update_ {
+  my($self, $arg, $index) = @_;
+  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "  self is: ", $self, "\n" if $Debug == 1;
+  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  print "  arg is: $arg\n" if $arg and $Debug == 1;
+  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $arg and $Debug == 1;
+  print "  and index is: $index\n" if $index and $Debug == 1;
+  if( not defined $arg ) {
+    if( $self->{_owner} ) {
+    $self->{_data} = substr( ${$self->{_owner}->_data},
+                             $self->{_index},
+                             $self->{_size} );
+    }
+  } else {
+    if( $index ) {
+      my $pad = $index + length($arg) - length($self->{_data});
+      if( $pad > 0 ) {
+        $self->{_data} .= "\0" x $pad;
+      }
+      substr( $self->{_data},
+              $index,
+              length($arg)
+            ) = $arg;
+    } else {
+      $self->{_data} = $arg; # if data given with no index, replaces all
     }
   }
-  print "  So far... so good?\n" if $Debug == 1;
+
+  # Have to send all data upstream even if only 1 member updated
+  # ... or do we? Send our _index, plus #bytes updated member starts at?
+  # Could C::B::C help with this???
+  if( defined $arg and $self->{_owner} ) {
+  my $success = undef;
+  print "  Sending data back upstream:\n" if $arg and $Debug == 1;
+  print "    Index is ", $self->{_index}, "\n" if $arg and $Debug == 1;
+    $success =
+      $self->{_owner}->_update_(
+        $self->{_data},
+        $self->{_index}
+      );
+    if(!$success) {
+      croak($self->{_name},
+            ": Error updating member in owner object ",
+              $self->{_owner}->{_name});
+    }
+  }
   $self->{_datasafe} = 1;
+  for(@{$self->{_rawmembers}{VALUES}}) { $_->{_datasafe} = 0 }
+  print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
   return 1;
 }
 
@@ -388,31 +339,33 @@ use Tie::Array;
 
 sub TIEARRAY {
   my $class = shift;
-  my $owner = shift;
-  my $self = { owner    => $owner,
-               DATA     => [],
+  my $object = shift;
+  my $self = { object   => $object,
+               VALUES     => [],
              };
   return bless $self => $class;
 }
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
-  # Deal with being assigned other Type objects and the like...
 
-  if( $index > $#{$self->{DATA}} and $self->{owner}{can_resize} = 0 ) {
-    carp("Max index ", $#$self,"; not allowed to resize!");
+  if( $index > ($self->{object}{_length} - 1)
+      and $self->{object}{_can_resize} = 0 ) {
+    croak("Max index ", $#$self,"; not allowed to resize!");
     return undef;
   }
 
   my $val;
   if( !ref($arg) ) {
-    $val = Ctypes::Type::Array::_arg_to_type($arg,$self->{owner}{type});
+    $val = Ctypes::Type::Array::_arg_to_type($arg,$self->{object}{_type});
     if( not defined $val ) {
-      carp("Could not create " . $self->{owner}{name}
+      carp("Could not create " . $self->{object}{_name}
            . " type from argument '$arg'");
       return undef;
     }
+    $val->{_needsfree} = 1;
   } else {
+  # Deal with being assigned other Type objects and the like...
     $val = $arg;
   }
 
@@ -420,35 +373,65 @@ sub STORE {
     $val = new Ctypes::Type::Array( $val );
   }
 
-  if( $val->_typecode_ ne $self->{owner}{_type} ) {
+  if( $val->_typecode_ =~ /p/ ) {  # might add other pointer types...
+    if ( ref($self->{VALUES}[0])   # might be first obj added
+         and ref($val) ne ref($self->{VALUES}[0]) ) {
     carp( "Cannot put " . ref($val) . " type object into "
-          . $self->{owner}{name} );
+          . $self->{object}{_name} );
+    return undef;
+    }
+  } elsif( $val->_typecode_ ne $self->{object}{_member_type} ) {
+    carp( "Cannot put " . ref($val) . " type object into "
+          . $self->{object}{_name} );
     return undef;
   }
 
-  $self->{owner}{_data} = undef;  # cache no longer up to date
-  $self->{DATA}[$index] = $val;
-  return $self->{DATA}[$index]; # success
+  if( $self->{VALUES}[$index] ) {
+    $self->{VALUES}[$index]->{_owner} = undef;
+#    if( $self->{VALUES}[$index]{_needsfree} == 1 )  # If this were C (or
+# if it were someday being translated to C), I think this might be where
+# one would make use of the disappearing object's _needsfree attribute.
+  }
+  print "    Setting {VALUES}[$index] to $val\n" if $Debug == 1;
+  $self->{VALUES}[$index] = $val;
+  $self->{VALUES}[$index]->{_owner} = $self->{object};
+  $self->{VALUES}[$index]->{_index}
+    = $index * $self->{object}->{_member_size};
+
+  my $datum = ${$val->_data};
+  print "    In data form, that's $datum\n" if $Debug == 1;
+# XXX Found this while working on Struct, think it's suspect. Sadly,
+# tests still pass without it. Doesn't say much for the regime :(
+#  if( $self->{object}{_owner} ) {
+#    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
+#  }
+  $self->{object}->_update_($datum, $index * $self->{object}{_member_size});
+  
+  return $self->{VALUES}[$index]; # success
 }
 
 sub FETCH {
   my($self, $index) = @_;
-  if( defined $self->{owner}{_data}
-      and $self->{owner}{_datasafe} == 0 ) {
-    $self->{owner}->_update_(${$self->{owner}->_as_param_});
+  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  if( defined $self->{object}{_owner}
+      or $self->{object}{_datasafe} == 0 ) {
+    print "    Can't trust data, updating...\n" if $Debug == 1;
+    $self->{object}->_update_; # Don't need to update member we're FETCHing;
+                               # it will pull from us, because we _owner it
   }
-  croak("Error updating values!") if $self->{owner}{_datasafe} != 1;
-  if( ref($self->{DATA}[$index]) eq 'Ctypes::Type::Simple' ) {
-    return ${$self->{DATA}[$index]};
-#  } elsif ( ref($$self[$index]) eq 'Ctypes::Type::Array' ) {
-#    return @{$$self[$index]};
+  croak("Error updating values!") if $self->{object}{_datasafe} != 1;
+  if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
+  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index]->{_rawvalue}->{DATA}, "\n" if $Debug == 1;
+    return ${$self->{VALUES}[$index]};
   } else {
-    return $self->{DATA}[$index];
+    print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
+    print "\n" if $Debug == 1;
+    return $self->{VALUES}[$index];
   }
 }
 
-sub CLEAR { $_[0]->{DATA} = [] }
+sub CLEAR { $_[0]->{VALUES} = [] }
 sub EXTEND { }
-sub FETCHSIZE { scalar @{$_[0]->{DATA}} }
+sub FETCHSIZE { scalar @{$_[0]->{VALUES}} }
 
 1;
