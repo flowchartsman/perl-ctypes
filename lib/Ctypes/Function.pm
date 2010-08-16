@@ -2,7 +2,7 @@ package Ctypes::Function;
 
 use strict;
 use warnings;
-use Ctypes;
+use Ctypes qw|_make_arrayref _check_invalid_types|;
 use overload '&{}' => \&_call_overload;
 use Scalar::Util qw|blessed looks_like_number|;
 use Carp;
@@ -353,7 +353,7 @@ sub _form_sig {
   $sig_parts[0] = $self->{abi} or abi_default();
   if( ref($self->{restype}) ) {
     if( ref($self->{restype}) =~ /Ctypes::Type/ ) {
-      $sig_parts[1] = $self->{restype}->{_typecode_};
+      $sig_parts[1] = $self->{restype}->{_typecode};
     } else {
       return undef; # Can't take typecodes for non Type objects
     }
@@ -365,7 +365,7 @@ sub _form_sig {
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
       if( ref($self->{argtypes}[$i]) ) {
         if( ref($self->{argtypes}[$i]) ) {
-          $sig_parts[$i+2] = $self->{argtypes}[$i]->{typecode};
+          $sig_parts[$i+2] = $self->{argtypes}[$i]->{_typecode};
         }
         # Can't represent non-Type objects as typecodes!
         return undef;
@@ -685,9 +685,9 @@ Or: argtypes( $arrayref [ offset ] )
 
 =cut
 
-sub argtypes : lvalue {
+sub argtypes : lvalue method {
   my $self = shift;
-  die("Object method") if ref($self) ne 'Ctypes::Function';
+  croak("Usage: \$funcobj->argtypes") if ref($self) ne 'Ctypes::Function';
   my $new_argtypes;
   if(@_) {
     # if we got an offset...
@@ -704,7 +704,7 @@ sub argtypes : lvalue {
         $self->{argtypes} = $new_argtypes; 
       }
     } else {
-      $self->{argtypes} = _make_types_arrayref( @_ );
+      $self->{argtypes} = Ctypes::_make_arrayref( @_ );
     }
   }
   return $self->{argtypes};

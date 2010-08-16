@@ -20,4 +20,10 @@ my $opts = { trustme => [ qr/^c_[a-z_]*$/,    # all private methods
                           # (XXX will expose to users in a different format later) 
                           qr/^constant$/,     # Auto-generated
                         ] };
-all_pod_coverage_ok($opts);
+# all_pod_coverage_ok($opts);
+pod_coverage_ok( 'Ctypes', $opts );
+pod_coverage_ok( 'Ctypes::Type', $opts );
+pod_coverage_ok( 'Ctypes::Type::Simple', $opts );
+pod_coverage_ok( 'Ctypes::Type::Struct', $opts );
+pod_coverage_ok( 'Ctypes::Type::Pointer', $opts );
+pod_coverage_ok( 'Ctypes::Type::Array', $opts );

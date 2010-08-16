@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 19;
+use Test::More tests => 20;
 use Ctypes;
 use utf8;
 
@@ -27,10 +27,10 @@ is( $$number_seven, 18, '$obj += <num>' );
 $$number_seven--;
 is( $$number_seven, 17, '$obj -= <num>' );
 
-is( $number_seven->_typecode_, 'i', "->typecode getter" );
-is( $number_seven->_typecode_('p'), 'i', "typecode cannot be set" );
+is( $number_seven->typecode, 'i', "->typecode getter" );
+is( $number_seven->typecode('p'), 'i', "typecode cannot be set" );
 
-is( ${$number_seven->_data}, pack('i', 17), "->_data getter" );
+is( ${$number_seven->data}, pack('i', 17), "->_data getter" );
 
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');
@@ -70,6 +70,10 @@ Ctypes::Type::allow_overflow_all(0);
 $overflower = c_int(2147483648);
 is($overflower, undef, 'Can (dis)allow_overflow_all');
 
-my $ret_as_char = c_char(89);
-is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
-# TODO: define behaviour for numbers > 255!
+TODO: {
+  local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';
+  my $charar = c_char('P');
+  is( $$charar, 'P', 'c_char shows as 1-char strings in Perl' );
+  my $ret_as_char = c_char(89);
+  is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
+}

@@ -21,7 +21,6 @@ use Data::Dumper;
 
 my $ushort = c_ushort(25); # because it makes the Wrong sized deref simpler
 is( $ushort->name, 'c_ushort', 'created c_ushort' );
-
 my $ushortp = Pointer( $ushort );
 isa_ok( $ushortp, 'Ctypes::Type::Pointer', 'Pointer object' );
 
@@ -69,10 +68,6 @@ subtest 'Set -ve offset and index forwards' => sub {
   is( $$ushortp[6], 1, 'Subscript retrieves correct value' );
 };
 
-($!, $@) = undef;
-# for(-20..10) {
-# }
-
 TODO: {
   note("The following few lines are TODO...");
   local $TODO = "Weird quirk in Test::More? See comments";
@@ -83,9 +78,9 @@ TODO: {
   eval { diag( "# from diag: ", $$ushortp[-4] ); };
   diag( $@ ) if $@;
 }
-
-note( "Now, a more complex example" );
-
+#  
+#  note( "Now, a more complex example" );
+#  
 my $array = Array( c_ushort, [ 1, 2, 3, 4, 5 ] );
 $$ushortp = $array;
 like( $ushortp->contents, qr/HASH/, '->contents still works' );
@@ -94,9 +89,9 @@ is( ${$ushortp->_as_param_}, pack('S*',1,2,3,4,5),
 $$ushortp[2] = 20;
 is( $$ushortp[2], 20, '$$ptr[x] assignment again' );
 is( $$array[2], 20, '$$array[x] = $$ptr[x]: array manipulated via $ptr' );
-
-note( "Now for Functions..." );
-
+#  
+#  note( "Now for Functions..." );
+#  
 sub cb_func {
   my( $ay, $bee ) = @_;
   if( ($ay+0) < ($bee+0) ) { return -1; }

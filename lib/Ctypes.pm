@@ -1,7 +1,7 @@
 package Ctypes;
-
 use strict;
 use warnings;
+my $Debug = 0;
 
 =head1 NAME
 
@@ -19,6 +19,7 @@ use AutoLoader;
 use Carp;
 use Config;
 use Ctypes::Type;
+use Ctypes::Type::Struct;
 use DynaLoader;
 use File::Spec;
 use Scalar::Util qw|blessed looks_like_number|;
@@ -28,7 +29,11 @@ our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError byref is_ctypes_compat
+                   Array Pointer Struct Union
                   |, @Ctypes::Type::_allnames );
+our @EXPORT_OK = qw|_make_arrayref _check_invalid_types
+                    _check_type_needed _valid_for_type
+                    _cast|;
 
 require XSLoader;
 XSLoader::load('Ctypes', $VERSION);
@@ -54,17 +59,19 @@ XSLoader::load('Ctypes', $VERSION);
     my $func = Dynaloader::dl_find_symbol( $lib, 'sqrt' );
     my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
 
+=head1 ABSTRACT
+
+Ctypes is the Perl equivalent to the Python ctypes FFI library, using
+libffi. It provides C compatible data types, and allows one to call
+functions in dlls/shared libraries.
+
 =head1 DESCRIPTION
 
-Ctypes is the Perl equivalent to the Python ctypes FFI library, using libffi.
-
-It provides C compatible data types, and allows to call functions in 
-dlls/shared libraries. It can be used to wrap these libraries in pure Perl.
-
-Ctypes is designed to let you, the Perl module author, who doesn't
-want to have to mess about with XS or C, to wrap native C libraries in
-a pure Perly way. You benefit by writing only Perl. Your users benefit from
-not having to have a compiler properly installed and configured.
+Ctypes is designed to let module authors wrap native C libraries in
+a pure Perly way. Authors can benefit by not having to deal with any
+XS or C code. Users benefit from not having to have a compiler properly
+installed and configured - they simply download the necessary binaries
+and run the Ctypes-based Perl modules written against them.
 
 The module should also be as useful for the admin, scientist or general
 datamangler who wants to quickly script together a couple of functions
@@ -73,146 +80,41 @@ to expose the full functionality of a large C/C++ project.
 
 =cut
 
-################################
-#   PRIVATE FUNCTIONS & DATA   #
-################################
-
-# Take input of:
-#   ARRAY ref
-#   or list
-#   or typecode string
-# ... and interpret into an array ref
-sub _make_arrayref {
-  my @inputs = @_;
-  my $output = [];
-  # Turn single arg or LIST into arrayref...
-  if( ref($inputs[0]) ne 'ARRAY' ) {
-    if( $#inputs > 0 ) {      # there is a list of inputs 
-      for(@inputs) {
-        push @{$output}, $_;
-      }    
-    } else {   # there is only one input 
-      if( !ref($inputs[0]) ) {
-      # We can make list of argtypes from string of type codes...
-        $output = [ split(//,$inputs[0]) ];
-      } else {
-        push @{$output}, $inputs[0];
-      }
-    }
-  } else {  # first arg is an ARRAY ref, must be the only arg
-    croak( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
-    $output = $inputs[0];
-  }
-  return $output;
-}
-
-# Take an arrayref (see _make_arrayref) and makes sure all contents are
-#   valid typecodes
-#   Type objects
-#   Objects implementing _as_param_ attribute or method
-# Returns UNDEF on SUCCESS
-# Returns the index of the failing thingy on failure
-sub _check_invalid_types ($) {
-  my $typesref = shift;
-  # Now check supplied args are valid...
-  my $typecode = undef;
-  for( my $i=0; $i<=$#{$typesref}; $i++ ) {
-    $_ = $typesref->[$i];
-    # Check objects fulfil all the requirements...
-    if( ref($_) ) {
-      if( !blessed($_) ) {
-        carp("No unblessed references as types");
-        return $i;
-      } else {
-        if( !$_->can("_as_param_")
-            and not defined($_->{_as_param_}) ) {
-          carp("types must have _as_param_ method or attribute");
-          return $i;
-        }
-        # try for attribute first
-        $typecode = $_->{_typecode_};
-        if( not defined($typecode) ) {
-          if( $_->can("_typecode_") ) {
-            $typecode = $_->_typecode_;
-          } else {
-            carp("types must have _typecode_ method or attribute");
-            return $i;
-          }
-        }
-        eval{ Ctypes::sizeof($typecode) };
-        if( $@ ) { 
-          carp( @_ );
-          return $i;
-        }
-      } 
-    } else {
-    # Not a ref; make sure it's a valid 1-char typecode...
-      if( length($_) > 1 ) {
-carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
-        return $i;
-      }
-      eval{ Ctypes::sizeof($_); };
-      if( $@ ) { 
-        carp( @_ );
-        return $i;
-      }
-    }
-  }
-  return undef;
-}
-
-# Take an list of Perl natives, return the typecode of
-# the smallest C type needed to hold all the data - the
-# lowest common demoninator, if you will (will you?)
-sub _check_type_needed (@) {
-  # XXX This needs changed when we support more typecodes
-  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
-  my $low = 0;
-  my $char = 0;
-  my $string = 0;
-  for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
-    if( $char == 1 or !looks_like_number($_) ) {
-      $char = 1;
-      $string = 1 if length( $_ ) > 1;
-      last if $string == 1;
-      next;
-    } else {
-      next if $low == 3;
-      $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
-      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
-      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
-    }
-  }
-  return 'p' if $string == 1;
-  return 'c' if $char   == 1;
-  return $numtypes[$low];
-}
 
 =head1 SUBROUTINES
 
 =over
 
-=item call (sig, addr, args...)
+=item call SIG, ADDR, [ ARGS ... ]
 
-Call an external function, specified by the signature and the address,
-with the given arguments.
-Return a value as specified by the second character in sig.
+Lets you call the external function at the address specified by ADDR,
+with the signature specified by SIG, and return a value.
 
-B<sig> is the signature string. The first character specifies the
-calling-convention, s for stdcall, c for cdecl (or 64-bit fastcall). 
-The second character specifies the type-code for the return type, 
-the subsequent characters specify the argument types in type-code
-characters.
+C<Ctypes::call> is modelled after the C<call> function found in
+L<FFI.pm|FFI>: it's the low-level, bare bones access to Ctypes'
+capabilities. Most of the time you'll probably prefer the
+abstractions provided by L<Ctypes::Function>.
 
-B<addr> is the function address, the return value of L<find_function> or
+I<SIG> is the signature string. The first character specifies the
+calling-convention: s for stdcall, c for cdecl (or 64-bit fastcall). 
+The second character specifies the typecode for the return type
+of the function, and the subsequent characters specify the argument types.
+
+'Typecodes' are single character designations for various C data types.
+They're similar in concept to the codes used by Perl's
+L<pack|perlfunc/pack> and L<unpack|perlfunc/unpack> functions, but they
+are B<not> the same codes!
+ 
+I<ADDR> is the function address, the return value of L<find_function> or
 L<DynaLoader::dl_find_symbol>.
 
-B<args> are the optional arguments for the external function. The types
+I<ARGS> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Currently supported signature type-code characters - similar to Perl's
-L<pack|perlfunc/pack> notation, although slightly different (v), and may
-change:
+Here are the urrently supported signature typecode characters. As you can
+see, there is some overlap with Perl's L<pack|perlfunc/pack> notation,
+they're not identical (v), and furthermore B<WILL CHANGE> to offer a wider
+range of types:
 
   'v': void
   'c': signed char
@@ -227,33 +129,6 @@ change:
   'd': double
   'D': long double
   'p': pointer
-
-Signature characters equivalent to python-style ctypes: (NOT YET)
-
-  's': pointer to string
-  'c': signed char as char
-  'b': signed char as byte
-  'B': unsigned char as byte
-  'C': unsigned char as char
-  'h': signed short
-  'H': unsigned short
-  'i': signed int
-  'I': unsigned int
-  'l': signed long
-  'L': unsigned long
-  'f': float
-  'd': double
-  'g': long double
-  'q': signed long long
-  'Q': unsigned long long
-  'P': void * (any pointer)
-  'u': unicode string
-  'U': unicode string (?)
-  'z': pointer to ASCIIZ string
-  'Z': pointer to wchar string
-  'X': MSWin32 BSTR
-  'v': MSWin32 bool
-  'O': pointer to perl object
 
 =cut
 
@@ -270,6 +145,71 @@ sub call {
     }
   }
   return _call( $func, $sig, @args );
+}
+
+=item Array I<LIST>
+
+=item Array I<TYPE>, I<ARRAYREF>
+
+Create a L<Ctypes::Type::Array> object. LIST and ARRAYREF can contain
+Ctypes objects, or a Perl natives.
+
+If the latter, Ctypes will try to choose the smallest appropriate C
+type and create Ctypes objects out of the Perl natives for you. You
+can find out which type it chose afterwards by calling the C<member_type>
+accessor method on the Array object.
+
+If you want to specify the data type of the array, you can do so by
+passing a Ctypes type as the first parameter, and the contents in an
+array reference as the second. Naturally, your data must be compatible
+with the type specified, otherwise you'll get an error from the a
+C<Ctypes::Type::Simple> constructor.
+
+And of course, in C(types), all your array input has to be of the same
+type.
+
+See L<Ctypes::Type::Array> for more detailed documentation.
+
+=cut
+
+sub Array {
+  return Ctypes::Type::Array->new(@_);
+}
+
+=item Pointer OBJECT
+
+=item Pointer TYPE, OBJECT
+
+Create a L<Ctypes::Type::Pointer> object. OBJECT must be a Ctypes object.
+See the relevant documentation for more information.
+
+=cut
+
+sub Pointer {
+  return Ctypes::Type::Pointer->new(@_);
+}
+
+=item Struct HASHREF
+
+Create a L<Ctypes::Type::Struct> object. Basing new classes on Struct
+may also often be more useful than subclassing other Types. See the
+relevant documentation for more information.
+
+=cut
+
+sub Struct {
+  return Ctypes::Type::Struct->new(@_);
+}
+
+=item Union HASHREF
+
+Create a L<Ctypes::Type::Union> object. See the module docs for more
+information.
+
+=cut
+
+sub Union {
+  return Ctypes::Type::Union->new(@_);
 }
 
 =item load_library (lib, [mode])
@@ -867,10 +807,10 @@ sub is_ctypes_compat (\$) {
   if( blessed($_[0]),
       and $_[0]->can('_as_param_')
       and $_[0]->can('_update_')
-      and $_[0]->can('_typecode_')
+      and $_[0]->can('typecode')
     ) {
     $@ = undef;
-    eval{ sizeof($_[0]->_typecode_) };
+    eval{ sizeof($_[0]->typecode) };
     if( !$@ ) {
       return 1;
     }
@@ -1087,6 +1027,132 @@ under the terms of the Artistic License 2.0.
 See http://dev.perl.org/licenses/ for more information.
 
 =cut
+
+
+################################
+#   PRIVATE FUNCTIONS & DATA   #
+################################
+
+# Take input of:
+#   ARRAY ref
+#   or list
+#   or typecode string
+# ... and interpret into an array ref
+sub _make_arrayref {
+  my @inputs = @_;
+  my $output = [];
+  # Turn single arg or LIST into arrayref...
+  if( ref($inputs[0]) ne 'ARRAY' ) {
+    if( $#inputs > 0 ) {      # there is a list of inputs 
+      for(@inputs) {
+        push @{$output}, $_;
+      }    
+    } else {   # there is only one input 
+      if( !ref($inputs[0]) ) {
+      # We can make list of argtypes from string of type codes...
+        $output = [ split(//,$inputs[0]) ];
+      } else {
+        push @{$output}, $inputs[0];
+      }
+    }
+  } else {  # first arg is an ARRAY ref, must be the only arg
+    croak( "Can't take more args after ARRAY ref" ) if $#inputs > 0;
+    $output = $inputs[0];
+  }
+  return $output;
+}
+
+# Take an arrayref (see _make_arrayref) and makes sure all contents are
+#   valid typecodes
+#   Type objects
+#   Objects implementing _as_param_ attribute or method
+# Returns UNDEF on SUCCESS
+# Returns the index of the failing thingy on failure
+sub _check_invalid_types ($) {
+  my $typesref = shift;
+  # Now check supplied args are valid...
+  my $typecode = undef;
+  for( my $i=0; $i<=$#{$typesref}; $i++ ) {
+    $_ = $typesref->[$i];
+    # Check objects fulfil all the requirements...
+    if( ref($_) ) {
+      if( !blessed($_) ) {
+        carp("No unblessed references as types");
+        return $i;
+      } else {
+        if( !$_->can("_as_param_")
+            and not defined($_->{_as_param_}) ) {
+          carp("types must have _as_param_ method or attribute");
+          return $i;
+        }
+        # try for attribute first
+        $typecode = $_->{_typecode_};
+        if( not defined($typecode) ) {
+          if( $_->can("typecode") ) {
+            $typecode = $_->typecode;
+          } else {
+            carp("types must have typecode method");
+            return $i;
+          }
+        }
+        eval{ Ctypes::sizeof($typecode) };
+        if( $@ ) { 
+          carp( @_ );
+          return $i;
+        }
+      } 
+    } else {
+    # Not a ref; make sure it's a valid 1-char typecode...
+      if( length($_) > 1 ) {
+carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
+        return $i;
+      }
+      eval{ Ctypes::sizeof($_); };
+      if( $@ ) { 
+        carp( @_ );
+        return $i;
+      }
+    }
+  }
+  return undef;
+}
+
+# Take an list of Perl natives, return the typecode of
+# the smallest C type needed to hold all the data - the
+# lowest common demoninator, if you will (will you?)
+sub _check_type_needed (@) {
+  # XXX This needs changed when we support more typecodes
+  print "In _check_type_needed\n" if $Debug == 1;
+  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
+  my $low = 0;
+  my $char = 0;
+  my $string = 0;
+  for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
+  print "    Now looking at: $_\n" if $Debug == 1; 
+   if( $char == 1 or !looks_like_number($_) ) {
+      $char = 1;
+      $string = 1 if length( $_ ) > 1;
+      last if $string == 1;
+      next;
+    } else {
+      next if $low == 3;
+      $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
+      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
+      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
+    }
+  }
+  my $ret;
+  if( $string == 1 ) {
+    $ret = 'p';
+  } elsif( $char == 1 ) {
+    $ret = 'C';
+  } else {
+    $ret = $numtypes[$low];
+  }
+  print "  Returning: $ret\n" if $Debug == 1; 
+  return $ret;
+}
+
 
 1;
 __END__

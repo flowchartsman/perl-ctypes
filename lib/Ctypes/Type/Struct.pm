@@ -106,7 +106,7 @@ sub new {
         $self->{_fields}{$_}
           = [ $_, Ctypes::Type::Simple->new($tc,0), undef ];
       }
-      $self->{_fields_ord}->[ $#{$self->{_fields_ords}} + 1 ]
+      $self->{_fields_ord}->[ $#{$self->{_fields_ord}} + 1 ]
         = $self->{_fields}{$_};
     }
   } else {  # positional arguments
@@ -136,8 +136,7 @@ sub new {
       my $tc = Ctypes::_check_type_needed($_->[1]);
       $_->[1] = Ctypes::Type::Simple->new($tc, $_->[1]);
     }
-    $self->{_name} .= $_->[1]->name . '_';
-    $self->{_name} =~ s/c_//;
+    $self->{_name} .= $_->[1]->typecode;
   }
   $self->{_name} .= '_Struct';
 
@@ -171,6 +170,7 @@ sub new {
     }
   }
   $self->{_allow_new_fields} = 0;
+  $self->{_endianness} = 0;
 
 #  for (@$fields) { # arrayref of ctypes, or just arrayref of paramtypes
     # XXX convert fields to ctypes
@@ -181,9 +181,9 @@ sub new {
   return $self;
 }
 
-sub _as_param_ { return $_[0]->_data(@_) }
+sub _as_param_ { return $_[0]->data(@_) }
 
-sub _data { 
+sub data { 
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
     my @data;
@@ -199,7 +199,7 @@ if( defined $self->{_data}
     for(@ordkeys) {
       print "    Calling Datasafe on ", $_, "\n" if $Debug == 1;
       if( defined $self->contents->raw->{$_}->contents ) {
-        $self->contents->raw->{$_}->contents->_datasafe = 0;
+        $self->contents->raw->{$_}->contents->_datasafe(0);
         print "    He now knows his data's ", $self->contents->raw->{$_}->contents->_datasafe, "00% safe\n" if $Debug == 1;
       }
     }
@@ -207,16 +207,13 @@ if( defined $self->{_data}
   }
 # TODO This is where a check for an endianness property would come in.
   if( $self->{_endianness} ne 'b' ) {
+    my $rawcontents = $self->{_contents}->{_rawfields};
     for(my $i=0;defined(local $_ = $ordkeys[$i]);$i++) {
-      $data[$i] = ${$self->{contents}->{$ordkeys[$i]}->_data};
+      $data[$i] = $rawcontents->{$ordkeys[$i]}->{CONTENTS}->{_data};
     }
     $self->{_data} = join('',@data);
     print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
-    $self->_datasafe = 0;
-    for(@ordkeys) {
-      print "    Calling Datasafe on ", $self->{_contents}->{$_}, "\n"; # if $Debug == 1;
-      $self->{_contents}->{$_}->_datasafe = 0
-    }
+    $self->_datasafe(0);
     return \$self->{_data};
   } else {
   # <insert code for other / swapped endianness here>
@@ -235,7 +232,7 @@ sub _update_ {
     print "    Arg wasn't defined!\n" if $Debug == 1;
     if( $self->{_owner} ) {
     print "      Getting data from owner...\n" if $Debug == 1;
-    $self->{_data} = substr( ${$self->{_owner}->_data},
+    $self->{_data} = substr( ${$self->{_owner}->data},
                              $self->{_index},
                              $self->{_size} );
     }
@@ -276,11 +273,7 @@ sub _update_ {
   }
   $self->{_datasafe} = 1;
   if( defined $arg or $self->{_owner} ) { # otherwise nothing's changed
-    for(keys %{$self->{_fields}}) {
-      print ref($self->{_contents}->{_rawfields}->{$_}->{CONTENTS}), "\n" if $Debug == 1;
-      $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->_datasafe = 0
-        if defined $self->{_contents}->{_rawfields}->{$_}->{CONTENTS};
-    }
+    $self->_set_owned_unsafe;
   }
   print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
   print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
@@ -324,6 +317,29 @@ for my $func (keys(%access)) {
 #    print "    $func returning $key...\n" if $Debug == 1;
     return $self->{$key};
   }
+}
+
+sub _datasafe {
+  my( $self, $arg ) = @_;
+  if( defined $arg and $arg != 1 and $arg != 0 ) {
+    croak("Usage: ->_datasafe(1 or 0)")
+  }
+  if( defined $arg and $arg == 0 ) {
+    $self->_set_owned_unsafe;
+  }
+  $self->{_datasafe} = $arg if defined $arg;
+  return $self->{_datasafe};
+}
+
+sub _set_owned_unsafe {
+  my $self = shift;
+  for( keys %{$self->contents->raw} ) {
+    if(defined $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}) {
+      print "    Setting owned obj ", $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->name, "'s datasafe = 0\n" if $Debug == 1;
+      $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->_datasafe(0);
+    }
+  }
+  return 1;
 }
 
 sub AUTOLOAD {
@@ -447,9 +463,10 @@ sub AUTOLOAD {
         if( not defined $arg ) {
           if(ref($caller)) {
             print "    Returning value...\n" if $Debug == 1;
-            print Dumper( $self->{_fields}->{$name} ) if $Debug == 1;
-            my $ret = $self->{_fields}->{$name};
+            my $ret = $self->{_rawfields}->{$name}->contents;
             if( ref($ret) eq 'Ctypes::Type::Simple' ) {
+              return ${$ret};
+            } elsif( ref($ret) eq 'Ctypes::Type::Array') {
               return ${$ret};
             } else {
               return $ret;

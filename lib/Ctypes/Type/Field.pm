@@ -20,12 +20,6 @@ sub _code_overload {
   return sub { STORE( $self, @_ ) };
 }
 
-sub _code_overload {
-  print "Did we get to code overload?\n" if $Debug == 1;
-  print "args: ", Dumper( @_ ) if $Debug == 1;
-  return &STORE;
-}
-
 sub TIESCALAR {
   my $class = ref($_[0]) || $_[0];  shift;
   my $name  = shift;
@@ -36,7 +30,7 @@ sub TIESCALAR {
                 CONTENTS  => undef,
                 _owner    => $owner,
                 _name     => $name,
-                _typecode => $type->type,
+                _typecode => $type->typecode,
                 _typename => $type->name,
                 _size     => $type->size,
                 _offset   => $offset,
@@ -83,7 +77,6 @@ for my $func (keys(%access)) {
 }
 
 sub STORE {
-  $DB::single = 1;
   my( $self, $val ) = @_;
   print "In ", $saelf->{_owner}{_name}, "'s ", $self->{_name}, " field STORE, called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   print "    arg is ", $val, "\n" if $Debug == 1;
@@ -118,20 +111,19 @@ sub STORE {
   }
 
   if( not defined $self->contents ) { $self->contents($val) }
-  my $datum = ${$self->contents->_data};
+  my $datum = ${$self->contents->data};
+  print "    Setting Owner to ", $self->{_owner}{_name}, "\n" if $Debug == 1;
   $self->contents->owner = $self->owner;
   print "    Self->offset is ", $self->offset, "\n" if $Debug == 1;
-  $self->contents->_index($self->offset);
-  print "CONTENTS' INDEX IS NOW ", $self->contents->_index, "\n" if $Debug == 1;
+  $self->contents->index($self->offset);
+  print "CONTENTS' INDEX IS NOW ", $self->contents->index, "\n" if $Debug == 1;
   print "contents is now ", $self->contents, "\n" if $Debug == 1;
   $self->owner->_update_($datum, $self->offset);
-  print "    Setting Owner to ", $self->{_owner}{_name}, "\n" if $Debug == 1;
   
   return $self->{CONTENTS}; # success
 }
 
 sub FETCH : lvalue {
-  $DB::single = 1;
   my $self = shift;
   print "In ", $self->owner->name, "'s ", $self->name, " field FETCH,\n\tcalled from ", (caller(1))[0..3], "\n" if $Debug == 1;
   if( defined $self->{_owner}{_owner}

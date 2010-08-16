@@ -1,9 +1,11 @@
 #!perl
 
-use Test::More tests => 9;
+use Test::More tests => 11;
 use Ctypes;
 use Ctypes::Function;
 use Ctypes::Callback;
+
+note( "Initialization" );
 
 my $array = Array( 1, 2, 3, 4, 5 );
 is( ref($array), 'Ctypes::Type::Array', 'Array created from list');
@@ -12,15 +14,28 @@ my $array2 = Array( [6, 7, 8, 9, 10] );
 is( ref($array2), 'Ctypes::Type::Array', 'Array created from arrayref');
 
 my $double_array = Array( c_double, [11, 12, 13, 14, 15] );
-is( $double_array->name, 'Ctypes_Type_Simple_Array', 'Array type specified');
+is( $double_array->name, 'double_Array', 'Array type specified');
 
 is($#$double_array, 4, '$# for highest index');
 
-is(${$double_array->_data}, pack('d*',11,12,13,14,15), 'packed data looks right');
+is(${$double_array->data}, pack('d*',11,12,13,14,15), 'packed data looks right');
 
-is($double_array->[2], 13, '$obj[x] dereferencing');
+is($double_array->[2], 13, '$obj->[x] dereferencing');
+is($$double_array[2], 13, '$$obj[x] dereferencing');
 
 is( scalar @$double_array, 5, 'scalar @$array = $#$array+1' );
+
+note( "Assignment" );
+$$array[2] = 1170;
+is( $$array[2], 1170, '$$array[x] = y assignent' );
+
+# People might expect this, but it's not the C semantics - thoughts?
+# my $int1 = c_int(20);
+# my $int2 = c_int(21);
+# my $int3 = c_int(22);
+# my $intarray = Array( $int1, $int2, $int3 );
+# $$intarray[1] = 1170;
+# is( $$int2, 1170, 'Assignment modifies contained objects' );
 
 note( "As function arguments" );
 
