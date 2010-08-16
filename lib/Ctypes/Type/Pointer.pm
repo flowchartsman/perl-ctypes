@@ -19,7 +19,22 @@ Ctypes::Type::Pointer - What's that over there?
 
 =head1 SYNOPSIS
 
-  (see t/Pointer.t for now)
+    use Ctypes;
+
+    my $int = c_int(5);
+    print $$int;
+
+    my $intp = Pointer( $int );
+    print $$intp;                   #   SCALAR(0x9b3ba30)
+    print $$intp[0];                #   5
+
+    $$intp[0] = 10;
+    print $$int;                    #   10! Zounds!
+
+=head1 ABSTRACT
+
+This class emulates C pointers, or rather, pointers to other
+Ctypes objects (there's no raw memory manipulation going on here).
 
 =cut
 
@@ -66,6 +81,31 @@ sub _subtract_overload {
 ############################################
 # TYPE::POINTER : PUBLIC FUNCTIONS & DATA  #
 ############################################
+
+=head1 METHODS
+
+Ctypes::Type::Pointer provides the following methods.
+
+=over
+
+=item new OBJECT
+
+=item new CTYPE, OBJECT
+
+Like with Arrays and Structs, you'll rarely use Ctypes::Type::Pointer->new
+directly since L<Ctypes> exports the C<Pointer> function by default.
+
+Pointers can be instantiated in two ways. First, you can pass a Ctypes
+for which you want to create a pointer. The Pointer will be typed according
+to that object.
+
+Alternatively, you can pass a Ctype to indicate the type in the first
+position, and the object at which to point in the second position. In this
+way you can do things like pretend an array of 4-byte C<int>s is made of
+2-byte C<short>s and pull out B<twice> the number of values from it! (Who
+cares if the data is probably meaningless, ay?).
+
+=cut
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;

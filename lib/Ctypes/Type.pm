@@ -287,5 +287,13 @@ objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
   }
 }
 
+=head1 SEE ALSO
+
+L<Ctypes::Type::Simple>
+L<Ctypes::Type::Array>
+L<Ctypes::Type::Struct>
+
+=cut
+
 1;
 __END__

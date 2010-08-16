@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 20;
+use Test::More tests => 24;
 use Ctypes;
 use utf8;
 
@@ -20,7 +20,19 @@ my $number_twelve = $number_seven;
 is_deeply( $number_twelve, $number_seven, "Assignment copies object" );
 
 $$number_seven = 15;
-is( $$number_seven, 15, "Assign value with ->val = x" );
+is( $$number_seven, 15, "Assign value with \$\$obj = x" );
+
+$number_seven->value = 17;
+is( $$number_seven, 17, "Assign value with \$obj->value = x" );
+
+$number_seven->value(19);
+is( $$number_seven, 19, "Assign value with \$obj->value(x)" );
+
+$number_seven->(15);
+is( $$number_seven, 15, "Assign value with \$obj->(x)" );
+
+$$number_seven = 15.5972;
+is( $$number_seven, 15, "Ints rounded" );
 
 $$number_seven += 3;
 is( $$number_seven, 18, '$obj += <num>' );

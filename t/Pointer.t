@@ -24,6 +24,8 @@ is( $ushort->name, 'c_ushort', 'created c_ushort' );
 my $ushortp = Pointer( $ushort );
 isa_ok( $ushortp, 'Ctypes::Type::Pointer', 'Pointer object' );
 
+diag( $$ushortp );
+
 like( $$ushortp, qr/SCALAR/, '$$ptr returns original object' );
 like( $ushortp->contents, qr/SCALAR/, '$ptr->contents returns' );
 
