@@ -31,8 +31,12 @@ sub new {
   $self->_set_name($newname);
 
   # ??? Will this be ok or need to explicitly undef all?
-  for( keys %{$self->contents->raw} ) {
-    $self->contents->{_rawfields}->{$_}->{CONTENTS}->_datasafe(0);
+  my $raw = $self->contents->raw;
+  for( keys %{$raw} ) {
+    if( defined $raw->{$_}->contents ) {
+    $raw->{$_}->contents->_datasafe(0);
+    $raw->{$_}->contents->_set_owner = $self;
+    }
   }
 
   # WHICH MEMber is currently valid.

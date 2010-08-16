@@ -224,7 +224,7 @@ Types have the typecode 'p').
 =cut
 
 sub name   { return $_[0]->{_name}  }
-sub _set_name { return $_[0]->{_name} = $_[1] }
+sub _set_name { die unless scalar @_ == 2; return $_[0]->{_name} = $_[1] }
 
 =item owner
 
@@ -234,9 +234,8 @@ inside any others.
 
 =cut
 
-sub owner : lvalue {
-  $_[0]->{_owner} = $_[1] if defined $_[1]; $_[0]->{_owner};
-}
+sub owner { return $_[0]->{_owner}; }
+sub _set_owner { die unless scalar @_ == 2; return $_[0]->{_name} = $_[1] }
 
 =item size
 
