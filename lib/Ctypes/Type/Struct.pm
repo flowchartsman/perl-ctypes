@@ -12,6 +12,20 @@ use overload
 our @ISA = qw|Ctypes::Type|;
 my $Debug = 0;
 
+=head1 NAME
+
+Ctypes::Type::Struct - C Structures
+
+=head1 SYNOPSIS
+
+  use Ctypes;
+
+  my 
+
+=head1 ABSTRACT
+
+=cut
+
 sub _hash_overload {
   return shift->_get_inner;
 }

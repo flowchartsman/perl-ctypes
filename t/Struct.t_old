@@ -2,49 +2,47 @@
 
 BEGIN { unshift @INC, './t' }
 
-use Test::More tests => 1;
+use Test::More tests => 12;
 use Ctypes;
 use Data::Dumper;
-use t_POINT;
 my $Debug = 0;
 
-note( 'Simple construction (hashref)' );
+use t_POINT;
 
-my $struct = Struct({
-  f1 => c_int(10),
-  f2 => c_long(90000),
-  f3 => c_char('P'),
-});
-subtest 'hashref initialisation' => sub {
-  plan tests => 4;
-  isa_ok( $struct, 'Ctypes::Type::Struct' );
-  is( $struct->f1, 10 );
-  is( $struct->f2, 90000 );
-  is( $struct->f3, 'P' );
+my $point = new t_POINT(5, 15);
+
+isa_ok( $point, 'Ctypes::Type::Struct', 't_POINT' );
+my $struct;
+eval { 
+  $struct
+    = Struct({ fields => [ [ 'field', c_int ], [ 'field', c_long ] ] });
+     };
+like( $@, qr/defined more than once/,
+     'Cannot have two fields with the same name' );
+
+# Getting
+ok( $point->field_list->[0][0] eq 'x'
+  && $point->field_list->[1][1]->typecode eq 'i',
+  '$st->field_list returns names and type names' );
+ is( $$point->x, '5', '$st-><field> returns value' );
+ is( $$point->y, '15', '$st-><field> returns value' );
+
+# Setting
+$point->y->(20);
+is( $$point->y, 20, '$st->field->(20) sets value' );
+$struct = Struct({ fields => [ ['foo',c_int], ['bar',c_double] ] });
+my $int = c_int(4);
+$int->allow_overflow(0);
+$struct->foo->($int);
+TODO: {
+local $TODO = 'foo should respect that $int can\'t overflow';
+# This worked until I fixed rounding for integers?
+eval{ $struct->foo->(20000000000000000000000000) };
+is( $$struct->foo, 4, 'Simple types maintain attributes' );
 }
-
-note( 'Ordered construction (arrayref)' );
-
-my $ordstruct = Strct([
-  o1 => c_int(20),
-  o2 => c_long(180000),
-  o3 => c_char('Q'),
-]);
-subtest 'arrayref initialisation' => sub {
-  plan tests => 4;
-  isa_ok( $struct, 'Ctypes::Type::Struct' );
-  is( $struct->f1, 10 );
-  is( $struct->f2, 90000 );
-  is( $struct->f3, 'P' );
-}
-
-note( 'Positional parameterized construction' );
-
-my $point = new t_POINT( 30, 40 );
-isa_ok( $point, 't_POINT' );
 
 $struct->foo->(7);
-s( $$int, 7, 'Modify members without squashing' );
+is( $$int, 7, 'Modify members without squashing' );
 
 $struct->bar->(14);
 my $data = pack('i',7) . pack('d',14);
