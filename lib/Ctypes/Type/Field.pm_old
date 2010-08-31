@@ -1,4 +1,4 @@
-package Ctypes::Type::_Field;
+package Ctypes::Type::Field;
 use Ctypes;
 use Ctypes::Type::Struct;
 use Carp;

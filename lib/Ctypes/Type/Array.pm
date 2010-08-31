@@ -268,8 +268,6 @@ the items the Array holds (or is typed to hold).
 A convenience method returning the number of items in the array
 (simply another, less sigiltastic way of saying C<$#$array + 1>).
 
-=back
-
 =cut
 
 #
@@ -302,6 +300,23 @@ for my $func (keys(%access)) {
     }
     return $self->{$key};
   }
+}
+
+=item copy
+
+Return a copy of the object.
+
+=back
+
+=cut
+
+sub copy {
+  my $self = shift;
+  my @arr;
+  for( 0..$#$self ) {
+    $arr[$_] = $$self[$_];
+  }
+  return new Ctypes::Type::Array( @arr );
 }
 
 sub data { 

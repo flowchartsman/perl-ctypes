@@ -1,6 +1,7 @@
 package Ctypes::Type::Struct;
 use strict;
 use warnings;
+use Scalar::Util qw|blessed looks_like_number|;
 use Ctypes;
 use Ctypes::Type::Field;
 use Carp;
@@ -26,12 +27,25 @@ Ctypes::Type::Struct - C Structures
 
 =cut
 
-sub _hash_overload {
-  return shift->_get_inner;
+sub _process_fields {
+  my $self = shift;
+  my $fields = shift;
+  if( ref($fields) ne 'ARRAY' ) {
+    croak( 'Usage: $struct->_process_fields( ARRAYREF )' );
+  }
+  if( scalar @$fields % 2 ) {
+    croak( "Fields must be given as key => value pairs!" );
+  }
+  my( $key, $val );
+  for( 0 .. (( $#$fields - 1 ) / 2) ) {
+    $key = shift @{$fields};
+    $val = shift @{$fields};
+    $self->{_fields}->_add_field($key, $val);
+  }
 }
 
 sub _scalar_overload {
-  return \shift->contents;
+  return \$_[0]->{_fields};
 }
 
 ############################################
@@ -41,197 +55,137 @@ sub _scalar_overload {
 sub new {
   my $class = ref($_[0]) || $_[0];  shift;
   print "In Struct::new constructor...\n" if $Debug == 1;
-  print "args:\n" if $Debug == 1;
+  print "    args:\n" if $Debug == 1;
   # Try to determine if ::new was called by a class that inherits
   # from Struct, and get the name of that class
   # XXX Later, the [non-]existence of $progeny is used to make an
   # educated guess at whether Struct was instantiated directly, or
   # via a subclass.
   # Q: What are some of the ways the following logic fails?
-  my $progeny = undef;
-  my $caller = (caller(1))[3];
+  my( $progeny, $extra_fields ) = undef;
+  my $caller = caller;
   print "    caller is ", $caller, "\n" if $caller and $Debug == 1;
-  if( defined $caller and $caller =~ m/::/ ) {  # need check for eval()s
-    $caller =~ s/::(.*)$//;
-    if( $caller->isa('Ctypes::Type::Struct') ) {
-      $progeny = $caller;
-    }
-  }
-
-  # What kind of input?
-  my( $in_vals, $in_fields ) = [];
-  if( ref($_[0]) eq 'HASH' ) {
-    my $hashref = shift;
-    # We only know about fields=> and values=>
-    for my $key (keys(%{$hashref})) {
-    croak(($progeny ? $progeny : 'Struct'), " error: unknown arg $key") 
-      unless $key eq 'fields' or $key eq 'values';
-    }
-    $in_vals   = $hashref->{values} if exists $hashref->{values};
-    $in_fields = $hashref->{fields} if exists $hashref->{fields};
-    print "    in_vals:\n", Dumper( $in_vals ) if $Debug == 1;
-    if( !$in_vals and @_ ) {  # So can specify fields in hashref
-      $in_vals = [ @_ ];      # and still list values lazily afterwards,
-    }                         # without having to name them all :)
-  } else {
-    print"    Vals are an Arrayref!\n" if $Debug == 1;
-    $in_vals = [ @_ ];
-  }
-
-  if( !$progeny ) {   # (probably) called as "new Struct( foo )"
-    print "    Check for multiply defined fields...\n" if $Debug == 1;
-    my %seenfields;
-    for( 0..$#{$in_fields} ) {
-      print "      Looking at ", Dumper($in_fields->[$_]) if $Debug == 1;
-      if( exists $seenfields{$in_fields->[$_][0]} ) {
-        croak( "Struct error: ",
-           "field '", $in_fields->[$_][0], "' defined more than once");
-        return undef;
+  if( $caller->isa('Ctypes::Type::Struct') ) {
+    no strict 'refs';
+    $progeny = $caller;
+    if( defined ${"${caller}::_fields_"} ) {
+      my $_fields_ = ${"${caller}::_fields_"};
+      for( 0..$#$_fields_ ) {
+      # Can't just set = as shift() extra_fields later affects every instance
+        if( blessed( $_fields_->[$_] )
+            and $_fields_->[$_]->isa('Ctypes::Type') ) {
+          $extra_fields->[$_] = $_fields_->[$_]->copy;
+        } else {
+          $extra_fields->[$_] = $_fields_->[$_];
+        }
       }
-      $seenfields{$in_fields->[$_][0]} = 1;
+      print "    Got these extra fields:\n" if $Debug == 1;
+      print Dumper( $extra_fields ) if $Debug == 1;
+      if( scalar @$extra_fields % 2 ) {
+        croak( "_fields_ must be key => value pairs!" );
+      }
     }
   }
 
   # Get fields, populate with named/unnamed args
-  my $self = { _fields     => undef,      # hashref, field data by name
-               _fields_ord => undef,      # arrayref, order of fields
-               _typecode_  => 'p'    };
-
-  # format of _fields_ info: <name> <type> <default> <bitwidth>
-  for( my $i=0; defined(local $_ = $in_fields->[$i]); $i++ ) {
-    if( defined $_->[3] and $_->[1]->type ne 'i' ) {
-      croak("Bit fields must be type c_int (you specified a bit width)");
-    }
-    print "    Assigning field ", $_->[0], "\n" if $Debug == 1;
-    $self->{_fields}{ $_->[0] } =
-      [ $_->[0], $_->[1], $_->[2] ];
-    $self->{_fields}{$_->[0]}->[3] = $_->[3] if defined $_->[3];
-    $self->{_fields_ord}->[$i] = $self->{_fields}{ $_->[0] };
-  }
-
-  if( ref($in_vals) eq 'HASH' ) { # Named arguments
-    print "    Checking for unknown named attrs...\n" if $Debug == 1;
-    for(keys(%$in_vals) ) {
-      if( not exists $self->{_fields}{$_} ) {
-        my $tc = Ctypes::_check_type_needed( $in_vals->{$_} );
-        if( !ref($in_vals->{$_}) ) {
-          $in_vals->{$_} = Ctypes::Type::Simple->new( $tc, $in_vals->{$_} );
-        }
-        $self->{_fields}{$_}
-          = [ $_, Ctypes::Type::Simple->new($tc,0), undef ];
-      }
-      $self->{_fields_ord}->[ $#{$self->{_fields_ord}} + 1 ]
-        = $self->{_fields}{$_};
-    }
-  } else {  # positional arguments
-    if( $#$in_vals > $#{$self->{_fields_ord}} ) {
-      print $#$in_vals, " in_vals and ", scalar @{$self->{_fields_ord}},
-            " fields\n" if $Debug == 1;
-      print Dumper($in_vals) if $Debug == 1;
-      print Dumper($self->{_fields_ord}) if $Debug == 1;
-      croak( ($progeny ? $progeny : 'Struct'), " error: ",
-        "Too many positional arguments for fields!");
-    }
-  }
-
+  my $self = { _fields     => {},
+               _typecode_  => 'p',
+               _subclass   => $progeny,
+               _alignment  => 0,
+               _data       => '', };
+  $self->{_fields} = new Ctypes::Type::Struct::_Fields($self);
   bless $self => $class;
   my $base = $class->SUPER::_new;
-
-  for(keys %$base) { $self->{$_} = $base->{$_} }
-    print "    in_vals:\n", Dumper( $in_vals ) if $Debug == 1;
-
-  # Set name. This could be hella long, but it's how we figure out if two
-  # Structs in an array were of the same type, for example (until we work
-  # out multiple inheritance of fields).
-  $self->{_name} = '';
-  print "    Making name...\n" if $Debug == 1;
-  for( @{$self->{_fields_ord}} ) {
-    if( !ref($_->[1]) ) {
-      my $tc = Ctypes::_check_type_needed($_->[1]);
-      $_->[1] = Ctypes::Type::Simple->new($tc, $_->[1]);
-    }
-    $self->{_name} .= $_->[1]->typecode;
+  for( keys(%$base) ) {
+    $self->{$_} = $base->{$_};
   }
-  $self->{_name} .= '_Struct';
+  $self->{_name} = $progeny ? $progeny . '_Struct' : 'Struct';
 
-  $self->{_allow_new_fields} = 1;
-  $self->{_size} = 0;
-  $self->{_contents} = new Ctypes::Type::Struct::Fields($self);
-  print "    Creating fields...\n" if $Debug == 1;
-  for( @{$self->{_fields_ord}} ) {
-    $self->{_contents}->add_field($_);
-    $self->{_size} += $_->[1]->size;
-  }
-  print "    Assigning values...\n" if $Debug == 1;
-    print "    in_vals:\n", Dumper( $in_vals ) if $Debug == 1;
-  if( ref($in_vals) eq 'HASH' ) {
-    for( @{$self->{_fields_ord}} ) {
-      $in_vals->{ $_[0] }
-        ? $self->{_contents}->set_value( $_->[0], $in_vals->{ $_->[0] } )
-        : $self->{_contents}->set_value( $_->[0], $_->[1] );
+  print "    \$self now looks like this:\n" if $Debug == 1;
+  print Dumper( $self ) if $Debug == 1;
+
+  if( $extra_fields ) {
+    my( $key, $val );
+    for( 0 .. (( $#$extra_fields - 1 ) / 2) ) {
+      $key = shift @{$extra_fields};
+      $val = shift @{$extra_fields};
+      print "    Adding extra field '$key'...\n" if $Debug == 1;
+      $self->{_fields}->_add_field( $key, $val );
     }
-  } else {
-    for( 0..$#{$self->{_fields_ord}} ) {
-      if( defined $in_vals->[$_] ) {
-        print "INTVALZIZ ", $in_vals->[$_], "\n" if $Debug == 1;
-        print "going into field ", $self->{_fields_ord}->[$_][0], "\n" if $Debug == 1;
-        $self->{_contents}->set_value(
-          $self->{_fields_ord}->[$_][0], $in_vals->[$_] );
-      } else {
-        $self->{_contents}->set_value(
-          $self->{_fields_ord}->[$_][0], $self->{_fields_ord}->[$_][1] );
+  }
+
+  my $in = undef;
+  if( ref($_[0]) eq 'HASH' ) {
+    $in = shift;
+    if( exists $in->{align} ) {
+      if( $in->{align} !~ /^2$|^4$|^8$|^16$|^32$|^64$/ ) {
+        croak( '\'align\' parameter must be 2, 4, 8, 16, 32 or 64' );
       }
+      $self->{_alignment} = $in->{align};
+      print "    My alignment is now ", $self->{_alignment}, "\n" if $Debug == 1;
+      delete $in->{align};
+    }
+    if( exists $in->{fields} ) {
+      $self->_process_fields($in->{fields});
+      delete $in->{fields};
+    }
+  } elsif( ref($_[0]) eq 'ARRAY' ) {
+    $in = shift;
+    $self->_process_fields($in);
+  } else {
+    if( !$progeny
+        or scalar @{$self->{_fields}} == 0 ) {
+      croak( "Don't know what to do with args without fields" );
+    }
+    for( @{$self->{_fields}} ) {
+      $_ = shift;
     }
   }
-  $self->{_allow_new_fields} = 0;
-  $self->{_endianness} = 0;
 
-#  for (@$fields) { # arrayref of ctypes, or just arrayref of paramtypes
-    # XXX convert fields to ctypes
-#    my $fsize = $_->{size};
-#    $size += $fsize;
-    # TODO: align!!
   print "    Struct constructor returning\n" if $Debug == 1;
   return $self;
 }
 
 sub _as_param_ { return $_[0]->data(@_) }
 
+=item copy
+
+Return a copy of the Struct object.
+
+=cut
+
+sub copy {
+  my $self = shift;
+}
+
 sub data { 
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-    my @data;
-    my @ordkeys;
-    for( 0..$#{$self->{_fields_ord}} ) {
-      $ordkeys[$_] = $self->{_fields_ord}[$_][0];
-     print "    ordkeys[$_]: ", $ordkeys[$_], "\n" if $Debug == 1;
-    }
-if( defined $self->{_data}
+  my @data;
+  my @ordkeys;
+#  print "    Fields are:\n" if $Debug == 1;
+#  for( 0..$#{$self->{_fields}} ) {
+#    print "      field $_: ", $self->{_fields}->[$_], "\n" if $Debug == 1;
+#  }
+  if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
     print "    _data already defined and safe\n" if $Debug == 1;
     print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-    for(@ordkeys) {
-      print "    Calling Datasafe on ", $_, "\n" if $Debug == 1;
-      if( defined $self->contents->raw->{$_}->contents ) {
-        $self->contents->raw->{$_}->contents->_datasafe(0);
-        print "    He now knows his data's ", $self->contents->raw->{$_}->contents->_datasafe, "00% safe\n" if $Debug == 1;
-      }
-    }
     return \$self->{_data};
   }
 # TODO This is where a check for an endianness property would come in.
-  if( $self->{_endianness} ne 'b' ) {
-    my $rawcontents = $self->{_contents}->{_rawfields};
-    for(my $i=0;defined(local $_ = $ordkeys[$i]);$i++) {
-      $data[$i] = $rawcontents->{$ordkeys[$i]}->{CONTENTS}->{_data};
+#  if( $self->{_endianness} ne 'b' ) {
+    for(@{$self->{_fields}->{_rawarray}}) {
+      push @data, $_->{_data};
     }
     $self->{_data} = join('',@data);
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
     print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
     $self->_datasafe(0);
     return \$self->{_data};
-  } else {
+#  } else {
   # <insert code for other / swapped endianness here>
-  }
+#  }
 }
 
 sub _update_ {
@@ -252,8 +206,10 @@ sub _update_ {
     }
   } else {
     if( defined $index ) {
+      print "     Got an index...\n" if $Debug == 1;
       my $pad = $index + length($arg) - length($self->{_data});
       if( $pad > 0 ) {
+        print "    pad was $pad\n" if $Debug == 1;
         $self->{_data} .= "\0" x $pad;
       }
       print "    Setting chunk of self->data\n" if $Debug == 1;
@@ -298,18 +254,12 @@ sub _update_ {
 # Accessor generation
 #
 my %access = ( 
-  typecode        => ['_typecode_'],
-  type              => ['_typecode_'],
-  allow_overflow    =>
-    [ '_allow_overflow',
-      sub {if( $_[0] == 1 or $_[0] == 0){return 1;}else{return 0;} },
-      1 ], # <--- makes this settable
-  alignment         => ['_alignment'],
-  name              => ['_name'],
-  size              => ['_size'],
-  fields            => ['_fields'],
-  field_list        => ['_fields_ord'],
-  contents          => ['_contents'],
+  typecode      => ['_typecode_'],
+  align         => ['_alignment'],
+  alignment     => ['_alignment'],
+  name          => ['_name'],
+  size          => ['_size'],
+  fields        => ['_fields'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -347,73 +297,296 @@ sub _datasafe {
 
 sub _set_owned_unsafe {
   my $self = shift;
-  for( keys %{$self->contents->raw} ) {
-    if(defined $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}) {
-      print "    Setting owned obj ", $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->name, "'s datasafe = 0\n" if $Debug == 1;
-      $self->{_contents}->{_rawfields}->{$_}->{CONTENTS}->_datasafe(0);
-    }
+  print "Setting _owned_unsafe\n" if $Debug == 1;
+  for( @{$self->{_fields}->{_rawarray}} ) {
+#    print "    Setting owned obj ", $_, "'s datasafe = 0\n" if $Debug == 1;
+    $_->_datasafe(0);
+    print "    He now knows his data's ", $_->_datasafe, "00% safe\n" if $Debug == 1;
   }
   return 1;
 }
 
-sub AUTOLOAD {
-  our $AUTOLOAD;
-  if ( $AUTOLOAD =~ /.*::(.*)/ ) {
-    return if $1 eq 'DESTROY';
-    my $wantfield = $1;
-    print "Trying to AUTOLOAD for $wantfield in STRUCT\n" if $Debug == 1;
-    my $self = $_[0];
-    my $found = 0;
-    if( exists $self->fields->{$wantfield} ) {
-      $found = 1;
+package Ctypes::Type::Struct::_Fields;
+use warnings;
+use strict;
+use Carp;
+use Data::Dumper;
+use Scalar::Util qw|blessed looks_like_number|;
+use overload
+  '@{}'    => \&_array_overload,
+  '%{}'    => \&_hash_overload,
+  fallback => 'TRUE';
+use Ctypes;
+
+sub _array_overload {
+#  print "In _Fields' _array_overload\n" if $Debug == 1;
+  return $_[0]->{_array};
+}
+
+sub _hash_overload {
+#  print "In _Fields' _hash_overload\n" if $Debug == 1;
+  if( caller =~ /^Ctypes::Type::Struct/ ) {
+#    print "    Called from self, returning self...\n" if $Debug == 1;
+    return $_[0];
+  }
+#  print for (@_);
+  my( $self, $key ) = ( shift, shift );
+  my $class = ref($self);
+  bless $self => 'overload::dummy';
+  my $ret = $self->{_hash};
+  bless $self => $class;
+  return $ret;
+}
+
+sub new {
+  my $class = ref($_[0]) || $_[0];  shift;
+  my $obj = shift;
+  my $self = {
+                _obj         => $obj,
+                _hash        => {},
+                _rawhash     => undef,
+                _array       => [],
+                _rawarray    => undef,
+                _size        => 0,
+                _allowchange => 1,
+                _finder      => undef,
+              };
+  $self->{_rawhash} = tie %{$self->{_hash}},
+                      'Ctypes::Type::Struct::_Fields::_hash';
+  $self->{_rawarray} = tie @{$self->{_array}},
+                      'Ctypes::Type::Struct::_Fields::_array';
+  bless $self => $class;
+#  $self->{_finder} = new Ctypes::Type::Struct::_Fields::_Finder($self);
+  return $self;
+}
+
+sub _add_field {
+  my( $self, $key, $val ) = ( shift, shift, shift );
+  print "In ", $self->{_obj}->{_name}, "'s _add_field(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  if( blessed($val) ) {
+    if( $val->isa('Ctypes::Type') ) {
+      $val = $val->copy;
+    } else {
+      croak( "Fields must be initialised with a Ctypes Type" );
     }
-    my $name = $wantfield;
-    $found ? print "    Found it!\n" : print "    Didnt find it\n" if $Debug == 1;
-    if( $found == 1 ) {
-      my $func = sub {
-        my $caller = shift;
-        my $arg = shift;
-        print "In $name accessor\n" if $Debug == 1;
-        croak("Usage: $name( arg )") if @_;
-        if( not defined $arg ) {
-          if(ref($caller)) {
-            print "    Returning value...\n" if $Debug == 1;
-            my $ret = $caller->{_contents}->{_rawfields}->{$name};
-            if( ref($ret) eq 'Ctypes::Type::Simple' ) {
-              return ${$ret};
-            } else {
-              return $ret;
-            }
-          } else {  # class method
-            if( defined ${"${caller}::_fields_info{$name}"} ) {
-              return  ${"${caller}::_fields_info{$name}"};
-            } else {
-              my $field;
-              print "    Looking for field '$name'\n" if $Debug == 1;
-              for( $self->field_list ) {
-                $field = $_ if $_[0] = $name;
-              }
-              my $info = {
-                     name => $name,
-                     type => $field->[1]->_typecode_,
-                     size => $field->[1]->size,
-                     ofs  => 0,                       # XXX
-                   };
-               ${"${caller}::_fields_info{$name}"} = $info;
-              return $info;
-            }
-          }
-        } else {
-        }
-      };
-      no strict 'refs';
-      *{"Ctypes::Type::Struct::$wantfield"} = $func;
-      goto &{"Ctypes::Type::Struct::$wantfield"};
+  } else {
+    if( looks_like_number($val) ) {
+      my $tc = Ctypes::_check_type_needed( $val );
+      $val = new Ctypes::Type::Simple( $tc, $val );
+    } else {
+      croak( "Fields must be initialised with a Ctypes Type" );
     }
+  }
+  print "    key is $key\n" if $Debug == 1;
+  print "    value is $$val\n" if $Debug == 1;
+  my $offset = undef;
+  $DB::single = 1;
+  if( not exists $self->{_rawhash}->{$key} ) {
+    print "    Key didn't exist, adding...\n" if $Debug == 1;
+    $offset = 0;
+    my $newfieldindex = 0;
+    if( scalar @{$self->{_array}} > 0 ) {
+      print "    Already stuff in array\n" if $Debug == 1;
+      my $lastindex = $#{$self->{_rawarray}};
+      my $align = $self->{_obj}->{_alignment};
+      $align = 1 if $align == 0;
+      $offset = $self->{_rawarray}->[$lastindex]->index
+                + $self->{_rawarray}->[$lastindex]->size;
+      print "    alignment is $align\n" if $Debug == 1;
+      my $offoff = abs( $offset - $align ) % $align;
+      if( $offoff ) { # how much the 'off'set is 'off' by.
+        print "  offoff was $offoff off!\n" if $Debug == 1;
+        $offset += $offoff;
+      }
+      $newfieldindex = $#{$self->{_array}} + 1;
+    }
+    print "    offset will be ", $offset, "\n" if $Debug == 1;
+    print "    setting array...\n" if $Debug == 1;
+    $self->{_rawarray}->[$newfieldindex] = $val;
+  } else {
+    $offset = $self->{_rawhash}->{$key}->index;
+  }
+  my $datum = ${$val->data};
+  print $datum ? ("    datum is\n", unpack('b*',$datum), "\n") : ('') if $Debug == 1;
+  print "    setting hash...\n" if $Debug == 1;
+  $self->{_rawhash}->{$key} = $val;
+  print "    setting index $offset...\n" if $Debug == 1;
+  $self->{_rawhash}->{$key}->_set_index($offset);
+  print "  offset is ", $self->{_rawhash}->{$key}->index, "\n" if $Debug == 1;
+  print "    setting owner...\n" if $Debug == 1;
+  $self->{_rawhash}->{$key}->_set_owner($self->{_obj});
+  $self->{_obj}->_update_( $datum, $offset );
+  print "  val is still ", $$val, "\n" if $Debug == 1;
+#  print "  self->hash->key is ", $self->{_hash}->{$key}, "\n" if $Debug == 1;
+  $self->{_obj}->{_size} = length($self->{_obj}->{_data});
+  print "    _ADD_FIELD returning!\n" if $Debug == 1;
+  return $self->{_rawhash}->{$key};
+}
+
+#  sub _add_field {
+#    my $self = shift;
+#    my $key = shift;
+#    my $val = shift;
+#    print "In ", $self->{_obj}->{_name}, "'s _add_field(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+#    if( blessed($val) ) {
+#      if( $val->isa('Ctypes::Type') ) {
+#        $val = $val->copy;
+#      } else {
+#        croak( "Fields must be initialised with a Ctypes Type" );
+#      }
+#    } else {
+#      if( looks_like_number($val) ) {
+#        my $tc = Ctypes::_check_type_needed( $val );
+#        $val = new Ctypes::Type::Simple( $tc, $val );
+#      } else {
+#        croak( "Fields must be initialised with a Ctypes Type" );
+#      }
+#    }
+#    print "    key is $key\n" if $Debug == 1;
+#    print "    value is $$val\n" if $Debug == 1;
+#    my $offset = undef;
+#        $DB::single = 1;
+#    if( not exists $self->{_rawhash}->{$key} ) {
+#      print "    Key didn't exist, adding...\n" if $Debug == 1;
+#      $offset = 0;
+#      my $newfieldindex = 0;
+#      if( scalar @{$self->{_array}} > 0 ) {
+#        print "    Already stuff in array\n" if $Debug == 1;
+#        my $lastindex = $#{$self->{_rawarray}};
+#        my $align = $self->{_obj}->{_alignment};
+#        $align = 1 if $align == 0;
+#        $offset = $self->{_rawarray}->[$lastindex]->index
+#                  + $self->{_rawarray}->[$lastindex]->size;
+#        print "    offset is $offset\n" if $Debug == 1;
+#        print "    alignment is $align\n" if $Debug == 1;
+#        my $offoff = abs( $offset - $align ) % $align;
+#        if( $offoff ) { # how much the 'off'set is 'off' by.
+#          print "  offoff was $offoff off!\n" if $Debug == 1;
+#          $offset += $offoff;
+#        }
+#        $newfieldindex = $#{$self->{_array}} + 1;
+#      }
+#      print "    offset will be ", $offset, "\n" if $Debug == 1;
+#      print "    setting array...\n" if $Debug == 1;
+#      $self->{_rawarray}->[$newfieldindex] = $val;
+#    } else {
+#      $offset = $self->{_rawhash}->{$key}->index;
+#    }
+#    my $datum = ${$val->data};
+#    print $datum ? ("    datum is\n", unpack('b*',$datum), "\n") : ('') if $Debug == 1;
+#    print "    setting hash...\n" if $Debug == 1;
+#    $self->{_rawhash}->{$key} = $val;
+#    print "    setting index $offset...\n" if $Debug == 1;
+#    $self->{_rawhash}->{$key}->_set_index($offset);
+#    print "  offset is ", $self->{_rawhash}->{$key}->index, "\n" if $Debug == 1;
+#    print "    setting owner...\n" if $Debug == 1;
+#    $self->{_rawhash}->{$key}->_set_owner($self->{_obj});
+#    $self->{_obj}->_update_( $datum, $offset );
+#    print "  val is still ", $$val, "\n" if $Debug == 1;
+#  #  print "  self->hash->key is ", $self->{_hash}->{$key}, "\n" if $Debug == 1;
+#    $self->{_obj}->{_size} = length($self->{_obj}->{_data});
+#    print "    _ADD_FIELD returning!\n" if $Debug == 1;
+#    return $self->{_rawhash}->{$key};
+#  }
+
+package Ctypes::Type::Struct::_Fields::_array;
+use warnings;
+use strict;
+use Carp;
+use Tie::Array;
+use Scalar::Util qw|blessed|;
+use Ctypes;
+use Data::Dumper;
+our @ISA = 'Tie::StdArray';
+
+sub STORE {
+  my $self = shift;
+  my $index = shift;
+  my $val = shift;
+  print "In _Fields::_array::STORE\n" if $Debug == 1;
+  print "    index is $index\n" if $Debug == 1;
+  print "    val is $val\n" if $Debug == 1;
+  if( not exists $self->[$index] ) {
+    croak( "There is no field at position '$index'" );
+  } else {
+    if( blessed($self->[$index])
+        and $self->[$index]->isa('Ctypes::Type::Simple') ) {
+      ${$self->[$index]} = $val;
+    } else {
+      $self->[$index] = $val;
+    }
+  }
+  print "    returning ", $self->[$index], "\n" if $Debug == 1;
+  return $self->[$index];
+}
+
+sub FETCH {
+  if( blessed($_[0]->[$_[1]])
+    and $_[0]->[$_[1]]->isa('Ctypes::Type::Simple') ) {
+    return ${$_[0]->[$_[1]]};
+  } else {
+    return $_[0]->[$_[1]];
   }
 }
 
-package Ctypes::Type::Struct::Fields;
+package Ctypes::Type::Struct::_Fields::_hash;
+use warnings;
+use strict;
+use Tie::Hash;
+use Scalar::Util qw|blessed|;
+use Ctypes;
+use Carp;
+use Data::Dumper;
+our @ISA = 'Tie::StdHash';
+
+#  sub TIEHASH {
+#    my $class = ref($_[0]) || $_[0];  shift;
+#    my $obj = shift;
+#    my $self = {
+#                  _obj         => $obj,
+#                  _hash        => {},
+#                  _array       => [],
+#                  _size        => 0,
+#                  _allowchange => 1,
+#                  _finder      => undef,
+#                };
+#    bless $self => $class;
+#    $self->{_finder} = new Ctypes::Type::Struct::_Fields::_Finder($self);
+#    return bless \{} => shift;
+#  }
+
+sub STORE {
+  my $self = shift;
+  my $key = shift;
+  my $val = shift;
+  print "In _Fields::_hash::STORE\n" if $Debug == 1;
+  print "    key is $key\n" if $Debug == 1;
+  print "    val is $val\n" if $Debug == 1;
+  if( not exists $self->{$key} ) {
+    croak( "Field '$key' does not exist" );
+  } else {
+    if( $self->{$key}->isa('Ctypes::Type::Simple') ) {
+      ${$self->{$key}} = $val;
+    } else {
+      $self->{$key} = $val;
+    }
+  }
+  print "    returning ", $self->{$key}, "\n" if $Debug == 1;
+  return $self->{$key};
+}
+
+sub FETCH {
+  print "In _hash::FETCH, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  if( blessed($_[0]->{$_[1]})
+    and $_[0]->{$_[1]}->isa('Ctypes::Type::Simple') ) {
+    return ${$_[0]->{$_[1]}};
+  } else {
+    return $_[0]->{$_[1]};
+  }
+}
+
+
+package Ctypes::Type::Struct::_Fields::_Finder;
 use warnings;
 use strict;
 use Ctypes;
@@ -421,63 +594,44 @@ use Carp;
 use Data::Dumper;
 
 sub new {
-  my $class = ref($_[0]) || $_[0];  shift;
-  my $owner = shift;
-  return bless {
-                 _owner     => $owner,
-                 _fields    => {},
-                 _rawfields => {},
-               } => $class;
+  if( caller ne 'Ctypes::Type::Struct::_Fields' ) {
+    our $AUTOLOAD = '_Finder::new';
+    shift->AUTOLOAD;
+  }
+  my $class = shift;
+  my $fields = shift;
+  return bless [ $fields ] => $class;
 }
-
-sub owner { return $_[0]->{_owner} }
-
-sub add_field {
-  my $self = shift;
-  my $field = shift;
-  print "IN ADD FIELD\n" if $Debug == 1;
-  print "    offset will be ", $self->owner->size, "\n" if $Debug == 1;
-  $self->{_rawfields}->{$_->[0]} = 
-    tie $self->{_fields}->{$_->[0]},
-      'Ctypes::Type::Field',
-      $_->[0],
-      $_->[1],
-      $self->owner->size,
-      $self->owner;
-}
-
-sub set_value {
-  my( $self, $key, $val ) = @_;
-  $self->{_fields}->{$key} = $val;
-  return 1;
-}
-
-sub raw { return $_[0]->{_rawfields} }
 
 sub AUTOLOAD {
   our $AUTOLOAD;
+  print "In _Finder::AUTOLOAD\n" if $Debug == 1;
+  print "    AUTOLOAD is $AUTOLOAD\n" if $Debug == 1;
   if ( $AUTOLOAD =~ /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
     my $wantfield = $1;
-    print "Trying to AUTOLOAD for $wantfield in FieldSS\n" if $Debug == 1;
+    print "     Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
     my $self = $_[0];
-    my $found = 0;
-    if( exists $self->owner->fields->{$wantfield} ) {
-      $found = 1;
+    my $instance = $self->[0]->{_obj};
+    if( defined $instance->{_subclass}
+        and $instance->can($wantfield) ) {
+      no strict 'refs';
+      goto &{$self->[0]->{_obj}->can($wantfield)};
     }
-    my $name = $wantfield;
-    $found ? print "    Found it!\n" : print "    Didnt find it\n" if $Debug == 1;
-    if( $found == 1 ) {
-      my $owner = $self->owner;
+    my $found = 0;
+    if( exists $self->[0]->{_hash}->{$wantfield} ) {
+      $found = 1;
+      print "    Found it!\n" if $Debug == 1;
+      my $object = $self->[0]->{_obj};
       my $func = sub {
         my $caller = shift;
         my $arg = shift;
-        print "In $name accessor\n" if $Debug == 1;
-        croak("Usage: $name( arg )") if @_;
+        print "In $wantfield accessor\n" if $Debug == 1;
+        croak("Too many arguments") if @_;
         if( not defined $arg ) {
           if(ref($caller)) {
             print "    Returning value...\n" if $Debug == 1;
-            my $ret = $self->{_rawfields}->{$name}->contents;
+            my $ret = $self->[0]->{_hash}->{$wantfield};
             if( ref($ret) eq 'Ctypes::Type::Simple' ) {
               return ${$ret};
             } elsif( ref($ret) eq 'Ctypes::Type::Array') {
@@ -485,33 +639,27 @@ sub AUTOLOAD {
             } else {
               return $ret;
             }
-          } else {  # class method
-            if( defined ${"${owner}::_fields_info{$name}"} ) {
-              return  ${"${owner}::_fields_info{$name}"};
-            } else {
-              my $field;
-              print "    Looking for field '$name'\n" if $Debug == 1;
-              for( $owner->field_list ) {
-                $field = $_ if $_[0] = $name;
-              }
-              my $info = {
-                     name => $name,
-                     type => $field->[1]->_typecode_,
-                     size => $field->[1]->size,
-                     ofs  => 0,                       # XXX
-                   };
-               ${"${owner}::_fields_info{$name}"} = $info;
-              return $info;
-            }
+          } else {
+            # class method?
+            # or should that be done in Type::Struct?
           }
         } else {
         }
       };
-      no strict 'refs';
-      *{"Ctypes::Type::Struct::Fields::$wantfield"} = $func;
-      goto &{"Ctypes::Type::Struct::Fields::$wantfield"};
+      if( defined( my $subclass = $self->[0]->{_obj}->{_subclass} ) ) {
+        no strict 'refs';
+        *{"${subclass}::$wantfield"} = $func;
+        goto &{"${subclass}::$wantfield"};
+      }
+    } else { # didn't find field
+      print "    Didn't find it\n" if $Debug == 1;
+      print "    Here's what we had:\n" if $Debug == 1;
+      print Dumper( $self->[0]->{_hash} ) if $Debug == 1;
+      print Dumper( $self->[0]->{_array} ) if $Debug == 1;
+      croak( "Couldn't find field '$wantfield' in ",
+        $self->[0]->{_obj}->name );
     }
-  }
+  }  # if ( $AUTOLOAD =~ /.*::(.*)/ )
 }
 
 1;

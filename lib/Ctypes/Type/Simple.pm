@@ -181,6 +181,16 @@ sub allow_overflow {
     $self->{_allow_overflow};
 }
 
+=item copy
+
+Return a copy of the object.
+
+=cut
+
+sub copy {
+  return new Ctypes::Type::Simple( $_[0]->typecode, $_[0]->value );
+}
+
 =item value EXPR
 
 =item value

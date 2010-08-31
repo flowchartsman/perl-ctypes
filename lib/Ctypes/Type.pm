@@ -187,8 +187,12 @@ has one (i.e. an Array, Struct or Union).
 
 =cut
 
-sub index : lvalue {
-  $_[0]->{_index} = $_[1] if defined $_[1]; $_[0]->{_index};
+sub index {
+  return $_[0]->{_index};
+}
+
+sub _set_index {
+  $_[0]->{_index} = $_[1] if defined $_[1]; return $_[0]->{_index};
 }
 
 =item name
@@ -238,8 +242,12 @@ inside any others.
 
 =cut
 
-sub owner : lvalue {
-  $_[0]->{_owner} = $_[1] if defined $_[1]; $_[0]->{_owner};
+sub owner {
+ return $_[0]->{_owner};
+}
+
+sub _set_owner {
+  $_[0]->{_owner} = $_[1] if defined $_[1]; return $_[0]->{_owner};
 }
 
 =item size

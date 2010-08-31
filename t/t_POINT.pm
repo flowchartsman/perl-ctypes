@@ -9,16 +9,9 @@ our $_fields_ = [ x => c_int,
                   y => c_int, ];
 
 sub new {
-  my $class = ref($_[0]) || $_[0];   shift;
-  my $self = $class->SUPER::new( $_fields_ );
-  if $self {
-    for($self->fields) {
-      $_ = shift;
-    }
-    return bless $self => $class;
-  } else {
-    croak( "Couldn't create t_POINT" );
-  }
+  my $class = ref($_[0]) || $_[0];  shift;
+  my $self = $class->SUPER::new(@_);
+  return bless $self => $class if $self;
 }
 
 1;

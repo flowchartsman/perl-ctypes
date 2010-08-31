@@ -226,6 +226,16 @@ sub new {
   return $self;
 }
 
+=item copy
+
+Return a copy of the Pointer object.
+
+=cut
+
+sub copy {
+  return new Ctypes::Type::Pointer( $$_[0] );
+}
+
 =item deref
 
 This accessor returns the Ctypes object to which the Pointer points,
