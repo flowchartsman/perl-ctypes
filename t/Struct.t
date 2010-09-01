@@ -6,14 +6,16 @@ use Test::More tests => 1;
 use Ctypes;
 use Data::Dumper;
 use t_POINT;
-my $Debug = 0;
+my $Debug = 1;
 
 my $point = new t_POINT( 30, 40 );
 subtest 'Positional parameterised initialisation' => sub {
-  plan tests => 3;
+  plan tests => 5;
   isa_ok( $point, 't_POINT' );
   is( $$point->{x}, 30 );
   is( $$point->{y}, 40 );
+  is( $$point->[0], 30 );
+  is( $$point->[1], 40 );
 };
 
 my $point_2 = new t_POINT([ y => 30, x => 40 ]);
@@ -70,18 +72,18 @@ subtest 'Ordered construction (arrayref)' => sub {
 };
 
 subtest 'Data access' => sub {
-  plan tests => 6;
+  plan tests => 7;
   is( $$struct->{f2}, 10 );
+  is( $struct->{f2}->name, 'c_int' );
   $$struct->{f2} = 30;
   is( $$struct->{f2}, 30 );
-  $struct->fields->{f2} = 50;
+  $struct->values->{f2} = 50;
   is( $$struct->{f2}, 50 );
-  is( $$struct->{f2}->name, 'c_int' );
   is( $$struct->[1], 50 );
   $$struct->[1] = 10;
   is( $$struct->[1], 10 );
-  $struct->fields->[1] = 30;
-  is( $struct->fields->[1], 30 );
+  $struct->values->[1] = 30;
+  is( $$struct->[1], 30 );
 };
 
 subtest 'Attribute access' => sub {
@@ -90,7 +92,8 @@ subtest 'Attribute access' => sub {
   is( $struct->typecode, 'p' );
   is( $struct->align, 0 );
   is( $struct->size, 9 );
-  # $struct->fields->f1->info ? <Field type=c_int, ofs=0, size=4>
+  is( $struct->fields->{f2}->info, '<Field type=c_int, ofs=1, size=4>' );
+  is( $alignedstruct->fields->{o2}->info, '<Field type=c_int, ofs=1, size=4>' );
 };
 
 #  my $data = pack('i',7) . pack('d',14);
