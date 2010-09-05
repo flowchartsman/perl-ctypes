@@ -278,7 +278,7 @@ my %access = (
   can_resize        =>
     [ '_can_resize',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
-      1 ], # <--- this makes 'flexible' settable
+      1 ], # <--- this makes '_can_resize' settable
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
              );
@@ -312,7 +312,7 @@ sub copy {
   my $self = shift;
   my @arr;
   for( 0..$#$self ) {
-    $arr[$_] = $$self[$_];
+    $arr[$_] = $self->{_rawmembers}->{VALUES}->[$_];
   }
   return new Ctypes::Type::Array( @arr );
 }
