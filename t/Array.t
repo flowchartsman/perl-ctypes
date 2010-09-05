@@ -1,6 +1,6 @@
 #!perl
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 use Ctypes;
 use Ctypes::Function;
 use Ctypes::Callback;
@@ -28,6 +28,8 @@ is( scalar @$double_array, 5, 'scalar @$array = $#$array+1' );
 note( "Assignment" );
 $$array[2] = 1170;
 is( $$array[2], 1170, '$$array[x] = y assignent' );
+$array->[2] = 500;
+is( $$array[2], 500, '$array->[x] = y assignment' );
 
 # People might expect this, but it's not the C semantics - thoughts?
 # my $int1 = c_int(20);

@@ -14,7 +14,6 @@ use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 use Ctypes::Type::Struct;
-use Ctypes::Type::Union;
 my $Debug = 0;
 
 =head1 NAME
@@ -40,31 +39,36 @@ our $_perltypes =
   p =>  "c_void_p",
 };
 
+# c_char c_wchar c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
+# c_longlong c_ulonglong c_float c_double c_longdouble c_char_p c_wchar_p
+# c_size_t c_ssize_t c_bool c_void_p
+
+# implemented as aliases:
+# c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64
+
 our $_pytypes = 
 { 
-  s =>  "c_char_p",
-  c =>  "c_char",
-  b =>  "c_byte",
-  B =>  "c_ubyte",
-  C =>  "c_uchar",
-  h =>  "c_short",
-  H =>  "c_ushort",
-  i =>  "c_int",
-  I =>  "c_uint",
-  l =>  "c_long",
-  L =>  "c_ulong",
-  f =>  "c_float",
-  d =>  "c_double",
-  g =>  "c_longdouble",
-  q =>  "c_longlong",
-  Q =>  "c_ulonglong",
-  P =>  "c_void_p",
-  u =>  "c_wchar_p",
-  U =>  "c_char_p",
-  Z =>  "c_wchar_p",
-  X =>  "c_bstr",
-  v =>  "c_bool",
-  O =>  "c_void_p",
+  b =>  "c_byte",        # -128 < int < 128, c?
+  B =>  "c_ubyte",       # 0 < int < 256, C?
+  X =>  "c_bstr",        # a?
+  c =>  "c_char",        # single character, c?
+  C =>  "c_uchar",       # C?
+  s =>  "c_char_p",      # null terminated string, A?
+  w =>  "c_wchar",       # U
+  z =>  "c_wchar_p",     # U*
+  h =>  "c_short",       # s
+  H =>  "c_ushort",      # S
+  i =>  "c_int",         # Alias to c_long where equal, i
+  I =>  "c_uint",        # ''                           I
+  l =>  "c_long",        # l
+  L =>  "c_ulong",       # L
+  f =>  "c_float",       # f
+  d =>  "c_double",      # d
+  g =>  "c_longdouble",  # Alias to c_double where equal, D
+  q =>  "c_longlong",    # q
+  Q =>  "c_ulonglong",   # Q
+  v =>  "c_bool",        # ?
+  O =>  "c_void_p",      # i???
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
@@ -183,8 +187,12 @@ has one (i.e. an Array, Struct or Union).
 
 =cut
 
-sub index : lvalue {
-  $_[0]->{_index} = $_[1] if defined $_[1]; $_[0]->{_index};
+sub index {
+  return $_[0]->{_index};
+}
+
+sub _set_index {
+  $_[0]->{_index} = $_[1] if defined $_[1]; return $_[0]->{_index};
 }
 
 =item name
@@ -234,8 +242,10 @@ inside any others.
 
 =cut
 
-sub owner { return $_[0]->{_owner}; }
-sub _set_owner { die unless scalar @_ == 2; return $_[0]->{_name} = $_[1] }
+sub owner { return $_[0]->{_owner} }
+sub _set_owner {
+  $_[0]->{_owner} = $_[1] if defined $_[1]; return $_[0]->{_owner};
+}
 
 =item size
 
@@ -286,6 +296,14 @@ objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
     return $allow_overflow_all;
   }
 }
+
+=head1 SEE ALSO
+
+L<Ctypes::Type::Simple>
+L<Ctypes::Type::Array>
+L<Ctypes::Type::Struct>
+
+=cut
 
 1;
 __END__

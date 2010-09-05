@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 23;
+use Test::More tests => 24;
 use Ctypes;
 use Ctypes::Callback;
 use Ctypes::Function;
@@ -25,10 +25,15 @@ my $ushortp = Pointer( $ushort );
 isa_ok( $ushortp, 'Ctypes::Type::Pointer', 'Pointer object' );
 
 like( $$ushortp, qr/SCALAR/, '$$ptr returns original object' );
-like( $ushortp->contents, qr/SCALAR/, '$ptr->contents returns' );
+like( $ushortp->contents, qr/SCALAR/, '$ptr->contents returns original object' );
 
 is( ${$$ushortp}, 25, 'Get object value with ${$$ptr}');
 is( $ushortp->deref, 25, 'Get object value with $ptr->deref' );
+
+$$$ushortp = 30;
+
+is( $$ushort, 30, 'Modify contents with $$ptr = x' );
+$$$ushortp = 25;
 
 #   The only thing one has to remember is different in Perl is that
 # ${$$ptr} and $ptr->deref are NOT 'dereferencing the pointer' in
@@ -54,7 +59,7 @@ is( $$ushort, 30, 'Modify val of original object via $$ptr[x] = y' );
 $$ushortp = c_int(65536);  # should warn of incompat types
 subtest 'Wrongly sized deref' => sub {
   plan tests => 2;
-  is( $$ushortp[0], 0 );   # First {$ushort->size} bytes of int 65536
+  is( $$ushortp[0], 0 );   # First ($ushort->size) bytes of int 65536
   $ushortp++;
   is( $$ushortp[0], 1 );   # Second set of bytes
 };
@@ -78,9 +83,9 @@ TODO: {
   eval { diag( "# from diag: ", $$ushortp[-4] ); };
   diag( $@ ) if $@;
 }
-#  
-#  note( "Now, a more complex example" );
-#  
+
+note( "Now, a more complex example" );
+
 my $array = Array( c_ushort, [ 1, 2, 3, 4, 5 ] );
 $$ushortp = $array;
 like( $ushortp->contents, qr/HASH/, '->contents still works' );
@@ -89,9 +94,9 @@ is( ${$ushortp->_as_param_}, pack('S*',1,2,3,4,5),
 $$ushortp[2] = 20;
 is( $$ushortp[2], 20, '$$ptr[x] assignment again' );
 is( $$array[2], 20, '$$array[x] = $$ptr[x]: array manipulated via $ptr' );
-#  
-#  note( "Now for Functions..." );
-#  
+
+note( "Now for Functions..." );
+
 sub cb_func {
   my( $ay, $bee ) = @_;
   if( ($ay+0) < ($bee+0) ) { return -1; }

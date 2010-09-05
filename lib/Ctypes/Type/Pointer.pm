@@ -19,7 +19,89 @@ Ctypes::Type::Pointer - What's that over there?
 
 =head1 SYNOPSIS
 
-  (see t/Pointer.t for now)
+    use Ctypes;
+
+    my $int = c_int(5);
+    print $$int;                   #   5
+
+    my $ptr = Pointer( $int );
+    print $$ptr;                   #   SCALAR(0x9b3ba30)
+    print $$ptr[0];                #   5
+
+    $$ptr[0] = 10;
+    print $$int;                   #   10
+
+=head1 ABSTRACT
+
+This class emulates C pointers. Or rather, pointers to other
+Ctypes objects (there's no raw memory manipulation going on here).
+
+=head1 DESCRIPTION
+
+In the current implementation, Pointer objects are the only Ctypes
+Type which come close to dealing with raw memory. For most types,
+which simply represent a value, that value can be normally be cached
+as a Perl scalar up until the point it is required by a C library
+function. However, in order to emulate pointer arithmetic, Pointer
+objects have to access the raw data fields of the Ctypes objects
+to which they point whenever they are dereferenced.
+
+This needn't happen on all occasions though. Since Ctypes Types are
+both 'object' and 'value', and it would be nice to use Pointers to
+access both, Pointer objects can be 'dereferenced' in two different
+ways.
+
+=head3 Pointer as alias
+
+When you wish to use a Pointer as a straight-forward alias to another
+Ctypes Type object, you can use B<scalar dereferencing> of the
+Pointer object, or the C<contents> object method.
+
+  my $int = c_int(10);
+  my $ptr = Pointer( $int );
+  
+  print $ptr;             # SCALAR(0xb1ab1aa), the Pointer object
+  print $$prt;            # SCALAR(0xf00f000), the c_int object
+  print $ptr->contents;   # the c_int object again
+
+This means that to use the C<c_int> object via the Pointer, you
+can add (yet) another dollar-sign to perform dereferencing on the
+returned C<c_int> object:
+
+  print $$$ptr;           # 10
+  $$$ptr = 25;
+  print $$int;            # 25
+
+It might be helpful to remember what each sigil is doing what here:
+
+                      $$$ptr;
+                      ^^^
+                     / | \
+                    /  |  Sigil for the Pointer object
+  Dereferencing the    |
+  returned c_int, to  Scalar dereferncing of the
+  return the value    Pointer object, returning the
+                      c_int object
+
+=head3 Pointer to data
+
+The other way of using Pointer objects is in contexts of 'pointer
+arithmetic', using them to index to arbitrary memory locations.
+Due to Ctypes' current implementation (mainly Perl, as opposed
+to mainly C), there is a limit to the arbitrariness of these
+memory locations. You can use Pointers to access locations within
+the C<data> fields of Ctypes objects, but you can't stray out
+into uncharted memory. This might be viewed by positively or
+negatively by different people. In any case, the situation would
+likely change should Ctypes move to a mainly C implementation.
+
+You access memory with Pointers using B<array dereferencing>.
+If the type of the pointer is the same as the type of the object
+you it's currently pointing to, C<$$ptr[0]> will return the value
+held by the object. If the Pointer type and the object type
+are different, then strange, hard to predict, but potentially
+very useful things can happen. See below under the C<new> method
+for an example.
 
 =cut
 
@@ -67,6 +149,39 @@ sub _subtract_overload {
 # TYPE::POINTER : PUBLIC FUNCTIONS & DATA  #
 ############################################
 
+=head1 METHODS
+
+Ctypes::Type::Pointer provides the following methods.
+
+=over
+
+=item new OBJECT
+
+=item new CTYPE, OBJECT
+
+Like with Arrays and Structs, you'll rarely use Ctypes::Type::Pointer->new
+directly since L<Ctypes> exports the C<Pointer> function by default.
+
+Pointers can be instantiated in two ways. First, you can pass a Ctypes
+for which you want to create a pointer. The Pointer will be typed according
+to that object.
+
+Alternatively, you can pass a Ctype to indicate the type in the first
+position, and the object at which to point in the second position. In this
+way you can index into data at arbitrary intervals based on the size of
+the 'type' of pointer you choose. For example, on a system where C<short>
+is two octets and C<char> is one:
+
+  my $uint = c_uint(691693896);
+  my $charptr = Pointer( c_char, $uint );
+  print @$charptr, "\n";
+
+Here, a Pointer has been made of type C<c_char>, four of which can be
+elicited from the four-byte C<c_uint> number. The output of this code
+on a Big-endian system would be a friendly greeting.
+
+=cut
+
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my( $type, $contents );
@@ -111,6 +226,24 @@ sub new {
   return $self;
 }
 
+=item copy
+
+Return a copy of the Pointer object.
+
+=cut
+
+sub copy {
+  return new Ctypes::Type::Pointer( $_[0]->deref );
+}
+
+=item deref
+
+This accessor returns the Ctypes object to which the Pointer points,
+like C<$$pointer>, but since it doesn't require the double sigil it
+is useful in e.g. accessing members of compound objects like Arrays.
+
+=cut
+
 sub deref () : method {
   return ${shift->{_contents}};
 }
@@ -153,6 +286,53 @@ sub _update_ {
   $self->{_datasafe} = 1;
   return 1;
 }
+
+=item contents
+
+This accessor returns the object to which the Pointer points (as
+opposed to the I<value> represented by that object). C<$ptr->contents>
+is a synonym for C<$$ptr>, but since it doesn't require the double-
+sigil syntax it can be used e.g. when accessing members of compound
+objects like Arrays.
+
+=item type
+
+This accessor returns the typecode of the type to which the Pointer
+points. It is analogous to the pointer 'type' in C. Pointer I<objects>
+themselves are always typecode 'p'.
+
+=item offset NUMBER
+
+=item offset
+
+This method sets and/or returns the current offset of the Pointer
+object. The offset of the Pointer object can also be manipulated by
+using various mathematical operators on the object:
+
+  $pointer++;
+  $pointer--;
+  $pointer += 2;
+
+Note that these are performed on the Pointer object itself (with one
+sigil). Two sigils gets you the value the Pointer points to, and they're
+not what you want to increment.
+
+When using Perl array-style subscript dereferencing on the Pointer to
+access chunks of data, the subscript B<is added to the offset>. The
+following shows two ways to get the same result:
+
+  my $array = Array( c_int, [ 1, 2, 3, 4, 5 ] );
+  my $intptr = ( c_int, $array );      # offset is 0
+
+  print $$intptr[2];                   # 3
+  $intptr += 3;
+  print $$intptr[0];                   # 3
+
+Note that since Perl translates negative subscripts into positive ones
+based on array size, negative subscripts on Pointer objects do not
+work.
+
+=cut
 
 #
 # Accessor generation
@@ -218,7 +398,7 @@ sub FETCH {
   my $self = shift;
   print "In ", $self->{_owner}{_name}, "'s content FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   if( defined $self->{_owner}{_data}
-      and $self->{_owner}{_datasafe} == 0 ) {
+      or $self->{_owner}{_datasafe} == 0 ) {
     print "    Woop... _as_param_ is ", unpack('b*',$self->{_owner}{_data}),"\n" if $Debug == 1;
     my $success = $self->{_owner}->_update_(${$self->{_owner}->_as_param_});
     croak($self->{_name},": Could not update contents!") if not $success;
@@ -252,7 +432,7 @@ sub STORE {
     return undef;
   }
 
-  my $data = $self->{_owner}{_contents}->_as_param_;
+  my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug == 1;
   my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
 
@@ -282,7 +462,7 @@ sub STORE {
         ) =  $insert;
   print unpack('b*',$$data), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $insert;  # don't think this can be used
-  $self->{_owner}{_contents}->_update_($$data);
+  $self->{_owner}{_rawcontents}{DATA}->_update_($$data);
   print "  ", $self->{_owner}{_name}, "'s Bytes STORE returning ok...\n" if $Debug == 1;
   return $insert;
 }
@@ -298,7 +478,7 @@ sub FETCH {
     return undef;
   }
 
-  my $data = $self->{_owner}{_contents}->_as_param_;
+  my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug == 1;
   my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
 
@@ -330,9 +510,9 @@ sub FETCH {
 }
 
 sub FETCHSIZE {
-  my $data = $_[0]->{_owner}{_contents}{_data}
-  ? $_[0]->{_owner}{_contents}{_data}
-  : $_[0]->{_owner}{_contents}->_as_param_;
+  my $data = $_[0]->{_owner}{_rawcontents}{DATA}{_data}
+  ? $_[0]->{_owner}{_rawcontents}{DATA}{_data}
+  : $_[0]->{_owner}{_rawcontents}{DATA}->_as_param_;
   return length($data) / Ctypes::sizeof($_[0]->{_owner}{_orig_type});
 }
 

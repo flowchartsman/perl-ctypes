@@ -20,7 +20,23 @@ my $Debug = 0;
 
 Ctypes::Type::Simple - The atomic C data types
 
-=head1 INSTANTIATION
+=head1 SYNOPSIS
+
+    use Ctypes;         # standard c_<type> funcs imported
+
+    my $int = c_int;    # defaults to value 0
+    $$c_int++;
+    $$c_int += 5;
+
+    my $double = c_double(200000);   # etc...
+
+=head1 ABSTRACT
+
+All the basic C data types are represented by Ctypes::Type::Simple
+objects. Their constructors are abstracted through the main Ctypes
+module, so you'll rarely want to call Simple->new directly.
+
+=head1 DESCRIPTION
 
 =over
 
@@ -37,50 +53,36 @@ functions put in the appropriate typecode for you and are normally
 more convenient.
 
 A Ctypes::Type object represents a variable of a certain C type. If
-uninitialised, the value defaults to zero. You can use uninitialised
-instances to find out information about the various types (see list of
-accessor methods below).
+uninitialised, the value defaults to zero. Uninitialized instances
+are often used as parameters for constructing compound objects.
 
 After creation, you can manipulate the value stored in a Type object
 in any of the following ways:
 
 =over
 
-=item $obj->val = 100;
+=item $$int = 100;
 
-=item $obj->val(100);
+=item $int->(100);
 
-=item $obj->(100);
+=item $int->value(100);
+
+=item $int->value = 100;
 
 =back
 
-The actual data which will be passed to C is held in
-L<packed|perlfunc/"pack"> string form in an internal attribute called
-C<{_data}>. Note the underscore! The methods above do all the necessary
-validation of values assigned to the object for you, as well as packing
-the data into a format C understands. You cannot set C<{_data}> directly
-(although you can examine it through its accessor should you ever feel
-like looking at some unintelligible gibberish).
+The 'double-sigil' shown first is perhaps the most convenient, despite
+looking a bit unusual. In general, the convention to remember in
+Ctypes is that you use B<two> sigils to talk about the B<value> you're
+representing, and B<one> sigil to talk about the object you're
+representing it with. So $$int returns the value which would be
+passed to C, while $int can be used to find out things about the object
+itself, like C<$int->name>, C<$int->size>, etc.
 
 In addition to the methods provided by Ctypes::Type, Ctypes::Type::Simple
-objects provide the following extra method.
-
-=over
-
-=item allow_overflow
-
-B<Mutator> setting and/or returning a flag (1 or 0) indicating whether
-this particular object is allowed to overflow. Defaults to 1, allowing
-overflowing, as in C, but you'll get a warning about it. Note that even
-if C<allow_overflow> is set to 1 for a particular object, overflows
-will be prevented if C<allow_overflow_all> is set to 0. See the
-L<allow_overflow_all|Ctypes::Type/allow_overflow_all> class method in
-L<Ctypes::Type>.
-
-=back
+objects provide the following extra methods.
 
 =cut
-
 
 sub _num_overload { return shift->{_value}; }
 
@@ -117,8 +119,22 @@ sub _scalar_overload {
 
 sub _code_overload {
   my $self = shift;
-  return sub { $self = @_ }
+  return sub { $self->{_value} = $_[0] }
 }
+
+
+=over
+
+=item new TYPECODE, ARG
+
+=item new TYPECODE
+
+The Ctypes::Type::Simple constructor. See the main L<Ctypes|Ctypes/call>
+module for an explanation of typecodes. ARG is the optional
+initialiser for your Type. Try to make it something sensible. Numbers
+and characters usually go down well.
+
+=cut
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -142,6 +158,19 @@ sub new {
   return $self;
 }
 
+
+=item allow_overflow
+
+Mutator setting and/or returning a flag (1 or 0) indicating whether
+this particular object is allowed to overflow. Defaults to 1, allowing
+overflowing, as in C, but you'll get a warning about it. Note that even
+if C<allow_overflow> is set to 1 for a particular object, overflows
+will be prevented if C<allow_overflow_all> is set to 0. See the
+L<allow_overflow_all|Ctypes::Type/allow_overflow_all> class method in
+L<Ctypes::Type>.
+
+=cut
+
 sub allow_overflow {
     my $self = shift;
     my $arg = shift;
@@ -151,6 +180,39 @@ sub allow_overflow {
     $self->{_allow_overflow} = $arg if defined $arg;
     $self->{_allow_overflow};
 }
+
+=item copy
+
+Return a copy of the object.
+
+=cut
+
+sub copy {
+  return new Ctypes::Type::Simple( $_[0]->typecode, $_[0]->value );
+}
+
+=item value EXPR
+
+=item value
+
+Accessor / mutator for the value of the variable the object
+represents. C<value> is an lvalue method, so you can assign to it
+directly (all the appropriate type checking will still be done).
+
+=back
+
+=cut
+
+sub value : lvalue {
+  $_[0]->{_value} = $_[1] if defined $_[1];
+  $_[0]->{_value};
+}
+
+=head1 SEE ALSO
+
+L<Ctypes>
+
+=cut
 
 sub data { 
   my $self = shift;

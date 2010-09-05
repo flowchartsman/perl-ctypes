@@ -19,19 +19,28 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 
   use Ctypes;
 
-  my $array = Array( 1, 3, 5, 7, 9 );
+  my $array = Array( 1, 3, 5, 7, 9 );    # Array of smallest type
+                                         # necessary (ushort)
 
   my $bytes_size = $array->size;         # sizeof(int) * $#array;
 
-  $array->[2] = 4;                       # That's ok.
-  my $longnum = INT_MAX() + 1;
-  $array->[2] = $longnum;                # Error!
+  $array->[2] = 4;
+  $$array[3] = 10;
+
+  my $num_items = scalar @$array;
+
+=head1 ABSTRACT
+
+This class represents C arrays. Like in C, Arrays are typed,
+and can only contain data of that type. Arrays use the double-
+syntax of other Ctypes classes, in this case the Perl array
+sigil 'C<@>'
 
 =cut
 
-##########################################
+############################################
 # TYPE::ARRAY : PRIVATE FUNCTIONS & VALUES #
-##########################################
+############################################
 
 sub _arg_to_type {
   my( $arg, $type ) = @_;
@@ -153,7 +162,7 @@ sub _get_members_untyped {
 }
 
 sub _array_overload {
-  return shift->{members};
+  return shift->{_members};
 }
 
 sub _scalar_overload {
@@ -163,6 +172,26 @@ sub _scalar_overload {
 ###########################################
 # TYPE::ARRAY : PUBLIC FUNCTIONS & VALUES #
 ###########################################
+
+=head1 METHODS
+
+Array object provide the following methods (remember, methods are called
+on the object with B<one> sigil, and you access the 'contained' in the
+object with the two-sigil syntax).
+
+=over
+
+=item new TYPE, ARRAYREF
+
+=item new LIST
+
+Since L<Ctypes> exports the handy Array() function, you'll hardly ever use
+Ctypes::Type::Array::new directly. Arrays can be instantiated either by
+passing a Ctypes type as the first argument and an arrayref of values as
+the second, or simply by passing a list of values. In the latter case,
+Ctypes will use the smallest C type necessary for the arguments provided.
+
+=cut
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -209,10 +238,37 @@ sub new {
   $self->{_name} =~ s/::/_/g;
   $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =
-    tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
-  @{$self->{members}} =  @{$inputs_typed};
+    tie @{$self->{_members}}, 'Ctypes::Type::Array::members', $self;
+  @{$self->{_members}} =  @{$inputs_typed};
   return $self;
 }
+
+=item can_resize 1 I<or> 0
+
+Get/setter for the property flagging whether or not the Array is
+allowed to expand. Defaults to 0. Unlike in C, you can't read off
+the end of an Array object into random memory.
+
+=item member_type
+
+Invoking the standard L<Type|Ctypes::Type> method C<typecode> on
+an Array will always return 'p', the typecode for the Array itself.
+Use the member_type method to find out the typecode of the items
+the Array holds.
+
+=item member_size
+
+A similar story to C<member_type>: C<$array->size> will always give
+you the size of the whole array, i.e. sizeof(<member_type>) * number
+of members. You can use C<member_size> to return the size each of
+the items the Array holds (or is typed to hold).
+
+=item length
+
+A convenience method returning the number of items in the array
+(simply another, less sigiltastic way of saying C<$#$array + 1>).
+
+=cut
 
 #
 # Accessor generation
@@ -223,10 +279,8 @@ my %access = (
     [ '_can_resize',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
       1 ], # <--- this makes 'flexible' settable
-  alignment         => ['_alignment'],
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
-  endianness        => ['_endianness'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -246,6 +300,21 @@ for my $func (keys(%access)) {
     }
     return $self->{$key};
   }
+}
+
+=item copy
+
+Return a copy of the object.
+
+=cut
+
+sub copy {
+  my $self = shift;
+  my @arr;
+  for( 0..$#$self ) {
+    $arr[$_] = $$self[$_];
+  }
+  return new Ctypes::Type::Array( @arr );
 }
 
 sub data { 
@@ -273,6 +342,27 @@ if( defined $self->{_data}
   # <insert code for other / swapped endianness here>
   }
 }
+
+=item scalar
+
+Returns the number of elements in the Array (not the highest index),
+in the same way as C<scalar @myarray>. Useful for when Arrays are
+nested inside other objects, so you don't have to call scalar then put
+dereferencing @{} braces around the whole thing.
+
+=cut
+
+sub scalar { return scalar @{ $_[0]->{_members} } }
+
+=back
+
+=head1 SEE ALSO
+
+L<Ctypes::Type::Pointer>
+L<Ctypes::Type::Struct>
+L<Ctypes>
+
+=cut
 
 sub _as_param_ { return $_[0]->data(@_) }
 
@@ -354,9 +444,6 @@ use strict;
 use warnings;
 use Carp;
 use Ctypes::Type::Array;
-use Tie::Array;
-
-# our @ISA = ('Tie::StdArray');
 
 sub TIEARRAY {
   my $class = shift;
@@ -462,3 +549,4 @@ sub EXTEND { }
 sub FETCHSIZE { scalar @{$_[0]->{VALUES}} }
 
 1;
+__END__

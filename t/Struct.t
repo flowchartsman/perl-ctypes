@@ -2,116 +2,223 @@
 
 BEGIN { unshift @INC, './t' }
 
-use Test::More tests => 12;
+use Test::More tests => 9;
 use Ctypes;
+use Ctypes::Type::Struct;
 use Data::Dumper;
-my $Debug = 0;
-
 use t_POINT;
+my $Debug = 1;
 
-my $point = new t_POINT(5, 15);
+my $point = new t_POINT( 30, 40 );
+subtest 'Positional parameterised initialisation' => sub {
+  plan tests => 5;
+  isa_ok( $point, 't_POINT' );
+  is( $$point->{x}, 30 );
+  is( $$point->{y}, 40 );
+  is( $$point->[0], 30 );
+  is( $$point->[1], 40 );
+};
 
-isa_ok( $point, 'Ctypes::Type::Struct', 't_POINT' );
-my $struct;
-eval { 
-  $struct
-    = Struct({ fields => [ [ 'field', c_int ], [ 'field', c_long ] ] });
-     };
-like( $@, qr/defined more than once/,
-     'Cannot have two fields with the same name' );
+my $point_2 = new t_POINT([ y => 30, x => 40 ]);
+my $point_3 = new t_POINT([ y => 50 ]);
+subtest 'Named parameter initialisation' => sub {
+  plan tests => 8;
+  isa_ok( $point_2, 't_POINT' );
+  isa_ok( $point_2, 'Ctypes::Type::Struct' );
+  is( $$point_2->{x}, 40 );
+  is( $$point_2->{y}, 30 );
+  isa_ok( $point_3, 't_POINT' );
+  isa_ok( $point_3, 'Ctypes::Type::Struct' );
+  is( $$point_3->{y}, 50 );
+  is( $$point_3->{x}, 0 );
+};
 
-# Getting
-ok( $point->field_list->[0][0] eq 'x'
-  && $point->field_list->[1][1]->typecode eq 'i',
-  '$st->field_list returns names and type names' );
- is( $$point->x, '5', '$st-><field> returns value' );
- is( $$point->y, '15', '$st-><field> returns value' );
+my $struct = Struct([
+  f1 => c_char('P'),
+  f2 => c_int(10),
+  f3 => c_long(90000),
+]);
+subtest 'Simple construction (arrayref)' => sub {
+  plan tests => 5;
+  isa_ok( $struct, 'Ctypes::Type::Struct' );
+  is( chr( $$struct->{f1} ), 'P' );
+  is( $$struct->{f2}, 10 );
+  is( $$struct->{f3}, 90000 );
+  my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
+             + Ctypes::sizeof('l');
+  is( $struct->size, $size );
+};
 
-# Setting
-$point->y->(20);
-is( $$point->y, 20, '$st->field->(20) sets value' );
-$struct = Struct({ fields => [ ['foo',c_int], ['bar',c_double] ] });
-my $int = c_int(4);
-$int->allow_overflow(0);
-$struct->foo->($int);
-eval{ $struct->foo->(20000000000000000000000000) };
-is( $$struct->foo, 4, 'Simple types maintain attributes' );
-$struct->foo->(7);
-is( $$int, 7, 'Modify members without squashing' );
+my $alignedstruct = Struct({
+  fields => [
+    o1 => c_char('Q'),
+    o2 => c_int(20),
+    o3 => c_long(180000),
+  ],
+  align => 4,
+});
+subtest 'Ordered construction (arrayref)' => sub {
+  plan tests => 9;
+  isa_ok( $alignedstruct, 'Ctypes::Type::Struct' );
+  is( chr($$alignedstruct->{o1}), 'Q' );
+  is( $$alignedstruct->{o2}, 20 );
+  is( $$alignedstruct->{o3}, 180000 );
+  my( $size, $delta );
+  for(qw|c i l|) {
+    $delta = Ctypes::sizeof($_);
+    $delta += abs( $delta - 4 ) % 4 if $delta % 4;
+    $size += $delta;
+  }
+  is( $alignedstruct->size, $size );
+  is( $alignedstruct->align, 4 );
+  $alignedstruct->align(8);
+  is( $alignedstruct->align, 8 );
+  eval { $alignedstruct->align(7) };
+  is( $alignedstruct->align, 8 );
+  like( $@, qr/Invalid argument for _alignment method: 7/,
+    '->align validation ok' );
+};
 
-# {_data}
-$struct->bar->(14);
-my $data = pack('i',7) . pack('d',14);
-is( ${$struct->data}, $data, '_data looks alright' );
-my $twentyfive = pack('i',25);
-my $dataref = $struct->data;
-substr( ${$dataref}, 0, length($twentyfive) ) = $twentyfive;
-is( $$int, 25, 'Data modifications percolate down' );
+subtest 'Data access' => sub {
+  plan tests => 9;
+  is( $$struct->{f2}, 10 );
+  is( $struct->fields->{f2}->name, 'c_int' );
+  $$struct->{f2} = 30;
+  is( $$struct->{f2}, 30 );
+  $struct->values->{f2} = 50;
+  is( $$struct->{f2}, 50 );
+  is( $$struct->[1], 50 );
+  $$struct->[1] = 10;
+  is( $$struct->[1], 10 );
+  $struct->values->[1] = 30;
+  is( $$struct->[1], 30 );
+
+  my $data = pack('C',80) . pack('i',30) . pack('l',90000);
+  is( ${$struct->data}, $data, '->data looks alright' );
+  my $twentyfive = pack('i',25);
+  my $dataref = $struct->data;
+  substr( ${$dataref}, 1, length($twentyfive) ) = $twentyfive;
+  is( $$struct->[1], 25, 'Members call up for fresh data' );
+};
+
+subtest 'Attribute access' => sub {
+  plan tests => 41;
+  is( $struct->name, 'Struct' );
+  is( $struct->typecode, 'p' );
+  is( $struct->align, 0 );
+  is( $struct->size, 9 );
+  is( $struct->fields->{f2}, '<Field type=c_int, ofs=1, size=4>' );
+  is( $alignedstruct->fields->{o2}, '<Field type=c_int, ofs=4, size=4>' );
+  is( $struct->fields->[1]->info, '<Field type=c_int, ofs=1, size=4>' );
+  is( $alignedstruct->fields->[1]->info, '<Field type=c_int, ofs=4, size=4>' );
+  is( $struct->fields->{f2}->index, 1  );
+  is( $alignedstruct->fields->{o2}->index, 4 );
+  is( $struct->fields->[1]->index, 1  );
+  is( $alignedstruct->fields->[1]->index, 4 );
+  is( $struct->fields->{f1}->index, 0  );
+  is( $struct->fields->{f2}->index, 1  );
+  is( $struct->fields->{f3}->index, 5  );
+  is( $struct->fields->{f1}->name, 'c_char'  );
+  is( $struct->fields->{f2}->name, 'c_int'  );
+  is( $struct->fields->{f3}->name, 'c_long'  );
+  is( $struct->fields->{f1}->size, 1 );
+  is( $struct->fields->{f2}->size, 4 );
+  is( $struct->fields->{f3}->size, 4 );
+  is( $struct->fields->{f1}->typecode, 'C' );
+  is( $struct->fields->{f2}->typecode, 'i' );
+  is( $struct->fields->{f3}->typecode, 'l' );
+  is( $struct->fields->{f1}->owner, $struct );
+  is( $struct->fields->{f2}->owner, $struct );
+  is( $struct->fields->{f3}->owner, $struct );
+  is( $struct->fields->[0]->index, 0  );
+  is( $struct->fields->[2]->index, 5  );
+  is( $struct->fields->[0]->name, 'c_char'  );
+  is( $struct->fields->[1]->name, 'c_int'  );
+  is( $struct->fields->[2]->name, 'c_long'  );
+  is( $struct->fields->[0]->size, 1 );
+  is( $struct->fields->[1]->size, 4 );
+  is( $struct->fields->[2]->size, 4 );
+  is( $struct->fields->[0]->typecode, 'C' );
+  is( $struct->fields->[1]->typecode, 'i' );
+  is( $struct->fields->[2]->typecode, 'l' );
+  is( $struct->fields->[0]->owner, $struct );
+  is( $struct->fields->[1]->owner, $struct );
+  is( $struct->fields->[2]->owner, $struct );
+};
+
+my $struct2 = Struct->new;
+print Dumper( $struct2 );
 
 # Nesting is nice
 subtest 'Arrays in structs' => sub {
-  plan tests => 1;
+  plan tests => 3;
 
   my $grades = Array( 49, 80, 55, 75, 89, 31, 45, 65, 40, 71 );
   my $class = Struct({ fields => [
-    [ teacher => 'P' ],
-    [ grades  => $grades ],
+    teacher => 'P',
+    grades  => $grades,
   ] });
 
   my $total;
-  for( @{$$class->grades} ) { $total += $_ };
-  my $average = $total /  scalar @{$$class->grades};
-  is( $average, 60, "Mr Peterson's could do better" );
+  for( @{ $$class->{grades} } ) { $total += $_ };
+  my $average = $total /  $$class->{grades}->scalar;
+  is( $average, 60, "Mr Peterson's class could do better" );
+  is( $$class->{grades}[0], 49 );
+  is( $$class->{grades}->scalar, 10 );
 };
 
 subtest 'Structs in structs' => sub {
-  plan tests => 5;
+  plan tests => 7;
   
-  my $flowerbed = Struct({ fields => [
-    [ roses => 3 ],
-    [ heather => 5 ],
-    [ weeds => 2 ],
-  ] });
+  my $flowerbed = Struct([
+    roses => 3,
+    heather => 5,
+    weeds => 2,
+  ]);
   
   my $garden = Struct({ fields => [
-    [ fence => 30 ],
-    [ flowerbed => $flowerbed ],
-    [ lawn => 20 ],
+    fence => 30,
+    flowerbed => $flowerbed,
+    lawn => 20,
   ] });
-  
-  #print '$garden->flowerbed: ',$garden->flowerbed, "\n";
-  #print '$$garden->flowerbed: ', $$garden->flowerbed, "\n\n";
-  
-  #print '$garden->flowerbed->contents: ',$garden->flowerbed->contents, "\n";
-  #print '$$garden->flowerbed->contents: ',$$garden->flowerbed->contents, "\n\n";
-  
-  #print '$garden->flowerbed->roses: ',$garden->flowerbed->roses, "\n";
-  #print '$$garden->flowerbed->roses: ',$$garden->flowerbed->roses, "\n\n";
-  
-  #print '$garden->flowerbed->contents->roses: ',$garden->flowerbed->contents->roses, "\n";
-  #print '$$garden->flowerbed->contents->roses: ', $$garden->flowerbed->contents->roses, "\n\n";
-  
-  is( $garden->flowerbed->contents->roses,
+
+  is( $garden->{flowerbed}->fields->{roses},
       '<Field type=c_short, ofs=0, size=2>',
-      '$garden->flowerbed->contents->roses gives field (how nice...)' );
-  is( $$garden->flowerbed->contents->roses,
-      '3','$$garden->flowerbed->contents->roses gives 3' );
+      '$garden->{flowerbed}->fields->{roses} gives field (how nice...)' );
+  is( $$garden->{flowerbed}->{roses},
+      '3','$$garden->{flowerbed}->fields->{roses} gives 3' );
+  is( $garden->{flowerbed}->{roses},
+      '3','$garden->{flowerbed}->fields->{roses} also gives 3' );
   
   my $home = Struct({ fields => [
-    [ house => 40 ],
-    [ driveway => 20 ],
-    [ garden => $garden ],
+    house => 40,
+    driveway => 20,
+    garden => $garden,
   ] });
-  
-  # print $home->garden->contents->flowerbed->contents->heather, "\n";
-  # print $$home->garden->contents->flowerbed->contents->heather, "\n";
-  
-  is( $home->garden->contents->flowerbed->contents->heather,
+
+  is( $home->{garden}->{flowerbed}->fields->{heather},
       '<Field type=c_short, ofs=2, size=2>',
-      '$home->garden->contents->flowerbed->contents->heather gives field' );
-  is( $$home->garden->contents->flowerbed->contents->heather,
-      '5', '$$home->garden->contents->flowerbed->contents->heather gives 5' );
-  $home->garden->contents->flowerbed->contents->heather->(500);
-  is( $$garden->heather, 500, "That's a quare load o' heather - garden updated via \$home" );
+      '$home->{garden}->{flowerbed}->fields->{heather} gives field info' );
+  is( $$home->{garden}->{flowerbed}->{heather},
+      '5', '$$home->{garden}->{flowerbed}->{heather} gives 5' );
+  $home->{garden}->{flowerbed}->{heather} = 500;
+  is( $garden->{flowerbed}->{heather}, 500, "That's a quare load o' heather - garden updated via \$home" );
+  is( $$garden->[1]->[1], 500 );
 };
 
+# Pointers, Pointers, ra ra ra
+subtest 'Pointers' => sub {
+  plan tests => 4;
+  my $ptr = Pointer( Array( 5, 4, 3, 2, 1 ) );
+  my $arr = Array( 10, 20, 30, 40, 50 );
+  my $stct = Struct([ pointer => $ptr,
+                      array   => $arr, ]);
+  my $total = 0;
+  $total += $_ for( @{ $$stct->{array} } );
+  is( $total, 150 );
+  $total += $_ for( @{ $$stct->{pointer}->deref } );
+  is( $total, 165 );
+  $$stct->{array}->[0] = 60;
+  is( $stct->fields->[1], '<Field type=short_Array, ofs=4, size=10>' );
+  is( $stct->fields->[1]->[0], 60 );
+};

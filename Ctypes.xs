@@ -716,14 +716,14 @@ CODE:
       }
       RETVAL = 1; break;
     case 'i':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_UINT_MIN || arg_nv > PERL_UINT_MAX ) {
         RETVAL = -1; break;
@@ -731,21 +731,21 @@ CODE:
       RETVAL = 1; break;
     case 'l':
     /* ??? Are Longs always guaranteed to be IV rather than NV? */
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_LONG_MIN || arg_nv > PERL_LONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'L':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_ULONG_MIN || arg_nv > PERL_ULONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'f':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
     /* ??? Is NV, usually double, alright to use here?
        Also, any Perl vars to use instead of stdlib ones? */
       arg_nv = SvNV(arg_sv);
