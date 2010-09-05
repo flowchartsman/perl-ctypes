@@ -69,7 +69,7 @@ for my $func (keys(%access)) {
   *$func = sub {
     my $self = shift;
     my $arg = shift;
-#    print "In $func accessor\n" if $Debug == 1;
+    print "In $func accessor\n" if $Debug == 1;
     croak("The $key method only takes one argument") if @_;
     if($access{$func}[1] and defined($arg)){
       eval{ $access{$func}[1]->($arg); };
@@ -80,7 +80,7 @@ for my $func (keys(%access)) {
     if($access{$func}[2] and defined($arg)) {
       $self->{_rawcontents}->{VALUE}->{$key} = $arg;
     }
-#    print "    $func returning $key...\n" if $Debug == 1;
+    print "    $func returning $key...\n" if $Debug == 1;
     return $self->{_rawcontents}->{VALUE}->$func;
   }
 }
@@ -136,23 +136,28 @@ sub TIESCALAR {
 
 sub STORE {
   my( $self, $val ) = ( shift, shift );
-  print "In ", $self->{_obj}{_obj}{_name}, "'s Field::STORE with arg [ $val ],\n" if $Debug == 1;
+  print "In ", $self->{_obj}{_obj}{_name}, "'s Field::STORE with arg '$val',\n" if $Debug == 1;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
   croak("Simple Types can only be assigned a single value") if @_;
   if(!ref($val)) {
+    print "    \$val had no ref\n" if $Debug == 1;
     if( not defined $val ) {
+      print "    \$val not defined\n" if $Debug == 1;
       if( not defined $self->{VALUE} ) {
         croak( "Fields must be initialised with a Ctypes object" );
       } else {
+        print "    blanking data of {VALUE}\n" if $Debug == 1;
         $self->{VALUE}->_update_( "\0" x length($self->{VALUE}->{_data})  );
       }
     }
     if( not defined $self->{VALUE} ) {
+      print "    Initialising {VALUE} with plain scalar...\n" if $Debug == 1;
       my $tc = Ctypes::_check_type_needed( $val );
       $val = new Ctypes::Type::Simple( $tc, $val );
       $self->{VALUE} = $val;
     } else {
       if( $self->{VALUE}->isa('Ctypes::Type::Simple') ) {
+        print "    Setting simple type to \$val\n" if $Debug == 1;
         ${$self->{VALUE}} = $val;
       } else {
         croak( "Tried to squash ", $self->{VALUE},
@@ -160,9 +165,11 @@ sub STORE {
       }
     }
   } else {  # $val is a ref
+    print "    \$val is a ref\n" if $Debug == 1;
     if( blessed($val) ) {
       if ( $val->isa('Ctypes::Type') ) {
         $val = $val->copy;
+        print $val;
         $self->{VALUE}->_set_owner(undef) if defined $self->{VALUE};
         $self->{VALUE}->_set_index(undef) if defined $self->{VALUE};
         $self->{VALUE} = $val;

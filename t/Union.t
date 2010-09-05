@@ -17,12 +17,17 @@ my $Debug = 0;
 #  } ffi_java_raw;
 #
 
-my $ffi_java_raw = Union({ fields => [
-  [ sint => c_int ],
-  [ uint => c_uint ],
-  [ flt  => c_float ],
-  [ data => Array( c_char, [0..7] ) ],
-  [ ptr  => Pointer( c_void_p ) ], ] });
+my $ffi_java_raw = Union([
+    sint => c_int,
+    uint => c_uint,
+    flt  => c_float,
+    data => Array( c_char, [0..7] ),
+    ptr  => Pointer( c_int ) 
+]);
+
+my $data = Array( c_char, [0..7] );
+diag( $data->size );
+diag( $ffi_java_raw->fields->{data}->size );
 
 isa_ok( $ffi_java_raw, 'Ctypes::Type::Union', 'Union created ok' );
 

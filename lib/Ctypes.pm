@@ -20,6 +20,7 @@ use Carp;
 use Config;
 use Ctypes::Type;
 use Ctypes::Type::Struct;
+use Ctypes::Type::Union;
 use DynaLoader;
 use File::Spec;
 use Scalar::Util qw|blessed looks_like_number|;
@@ -29,7 +30,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError byref is_ctypes_compat
-                   Array Pointer Struct
+                   Array Pointer Struct Union
                   |, @Ctypes::Type::_allnames );
 our @EXPORT_OK = qw|_make_arrayref _check_invalid_types
                     _check_type_needed _valid_for_type
@@ -189,7 +190,7 @@ sub Pointer {
   return Ctypes::Type::Pointer->new(@_);
 }
 
-=item Struct HASHREF
+=item Struct
 
 Create a L<Ctypes::Type::Struct> object. Basing new classes on Struct
 may also often be more useful than subclassing other Types. See the
@@ -199,6 +200,18 @@ relevant documentation for more information.
 
 sub Struct {
   return Ctypes::Type::Struct->new(@_);
+}
+
+=item Union
+
+Create and return a L<Ctypes::Type::Union> object. See the documentation
+for L<Ctypes::Type::Union> and L<Ctypes::Type::Struct> for information on
+instantiation etc.
+
+=cut
+
+sub Union {
+  return Ctypes::Type::Union->new(@_);
 }
 
 =item load_library (lib, [mode])

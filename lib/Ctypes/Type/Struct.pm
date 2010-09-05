@@ -55,7 +55,7 @@ sub _array_overload {
 }
 
 sub _hash_overload {
-  if( caller =~ /^Ctypes::Type::Struct/ ) {
+  if( caller =~ /^Ctypes::Type/ ) {
     return $_[0];
   }
   print "Structs's HASH ovld\n" if $Debug == 1;
@@ -495,7 +495,7 @@ sub _hash_overload {
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
-  print "_Fields' HashOverload\n" if $Debug == 1;
+#  print "_Fields' HashOverload\n" if $Debug == 1;
   my $ret = $self->{_hash};
   bless $self => $class;
   return $ret;
@@ -589,7 +589,7 @@ sub _hash_overload {
 }
 
 sub new {
-  print "In _DATA constructor!\n" if $Debug == 1;
+  print "In _Values constructor!\n" if $Debug == 1;
   my $class = ref($_[0]) || $_[0];  shift;
   my $obj = shift;
   my $self = {

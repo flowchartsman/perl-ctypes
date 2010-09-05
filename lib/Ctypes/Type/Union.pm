@@ -17,25 +17,29 @@ sub new {
   my $class = ref($_[0]) || $_[0];  shift;
   print "In Union::new constructor...\n" if $Debug == 1;
   my $self = $class->SUPER::new(@_);
+  print "    Hash returned\n" if $Debug == 1;
 
+  print "    Getting biggest size\n" if $Debug == 1;
   my $thissize = 0;
   my $biggest = 0;
-  for( keys %{$self->contents->raw} ) {
-    $thissize = $self->contents->raw->{$_}->contents->size;
+  for( keys %{$self->fields} ) {
+    print "  Looking at field $_\n" if $Debug == 1;
+    $thissize = $self->fields->{$_}->size;
+    print "  it's $thissize bytes long\n" if $Debug == 1;
     $biggest = $thissize if $thissize > $biggest;
   }
   $self->_set_size($biggest);
+  print "  Biggest field was size $biggest\n" if $Debug == 1;
 
   my $newname = $self->name;
-  $newname =~ s/_Struct$/_Union/;
+  $newname =~ s/Struct$/Union/;
   $self->_set_name($newname);
 
   # ??? Will this be ok or need to explicitly undef all?
-  my $raw = $self->contents->raw;
-  for( keys %{$raw} ) {
-    if( defined $raw->{$_}->contents ) {
-    $raw->{$_}->contents->_datasafe(0);
-    $raw->{$_}->contents->_set_owner = $self;
+  for( keys %{$self->fields} ) {
+    if( defined $self->fields->{$_} ) {
+    $self->fields->{$_}->_datasafe(0);
+    $self->fields->{$_}->_set_owner($self);
     }
   }
 
@@ -89,7 +93,7 @@ sub data {
 
 sub _update_ {
   my($self, $arg, $index) = @_;
-  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->name, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
   print "  self is: ", $self, "\n" if $Debug == 1;
   print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
   print "  arg is: $arg" if $arg and $Debug == 1;
@@ -99,39 +103,25 @@ sub _update_ {
     print "    Arg wasn't defined!\n" if $Debug == 1;
     if( $self->{_owner} ) {
     print "      Getting data from owner...\n" if $Debug == 1;
-    $self->{_data} = substr( ${$self->{_owner}->data},
-                             $self->{_index},
-                             $self->{_size} );
+    $self->{_data} = substr( ${$self->owner->data},
+                             $self->index,
+                             $self->size );
     }
   } else {
     if( defined $index ) {
-      my $pad = $index + length($arg) - length($self->{_data});
+      print "     Got an index...\n" if $Debug == 1;
+      my $pad = $index + length($arg) - length(${$self->data});
       if( $pad > 0 ) {
+        print "    pad was $pad\n" if $Debug == 1;
         $self->{_data} .= "\0" x $pad;
       }
-      my $activemem;
-      print "    Setting other members as unsafe data...\n" if $Debug == 1;
-      my $rawcontents = $self->{_contents}->{_rawfields};
-      for( keys %{$rawcontents} ) {
-        if( defined $rawcontents->{$_}->{CONTENTS} ) {
-          if( $rawcontents->{$_}->offset == $index ) {
-            $activemem = $_;
-          } else {
-            $rawcontents->{$_}->{CONTENTS}->_datasafe(0);
-          #  $rawcontents->{$_}->{CONTENTS}->_set_undef; NYI~compounds.
-          }
-        }
-      }
-      
-      print "    Setting self->data to active member\n" if $Debug == 1;
-      $self->{_data} = "\0" x length($self->{_data});
+      print "    Setting chunk of self->data\n" if $Debug == 1;
       substr( $self->{_data},
-              0,
+              $index,
               length($arg)
             ) = $arg;
     } else {
-      # if data given with no index, replaces all (usually used by owner) 
-      $self->{_data} = $arg;
+      $self->{_data} = $arg; # if data given with no index, replaces all
     }
   }
 
@@ -159,6 +149,8 @@ sub _update_ {
     $self->_set_owned_unsafe;
   }
   print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  print "    updating size...\n" if $Debug == 1;
+  $self->{_size} = length($self->{_data});
   print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
   return 1;
 }
