@@ -233,7 +233,7 @@ Return a copy of the Pointer object.
 =cut
 
 sub copy {
-  return new Ctypes::Type::Pointer( $$_[0] );
+  return new Ctypes::Type::Pointer( $_[0]->deref );
 }
 
 =item deref

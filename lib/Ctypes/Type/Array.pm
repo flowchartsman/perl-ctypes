@@ -162,7 +162,7 @@ sub _get_members_untyped {
 }
 
 sub _array_overload {
-  return shift->{members};
+  return shift->{_members};
 }
 
 sub _scalar_overload {
@@ -238,8 +238,8 @@ sub new {
   $self->{_name} =~ s/::/_/g;
   $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =
-    tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
-  @{$self->{members}} =  @{$inputs_typed};
+    tie @{$self->{_members}}, 'Ctypes::Type::Array::members', $self;
+  @{$self->{_members}} =  @{$inputs_typed};
   return $self;
 }
 
@@ -306,8 +306,6 @@ for my $func (keys(%access)) {
 
 Return a copy of the object.
 
-=back
-
 =cut
 
 sub copy {
@@ -344,6 +342,19 @@ if( defined $self->{_data}
   # <insert code for other / swapped endianness here>
   }
 }
+
+=item scalar
+
+Returns the number of elements in the Array (not the highest index),
+in the same way as C<scalar @myarray>. Useful for when Arrays are
+nested inside other objects, so you don't have to call scalar then put
+dereferencing @{} braces around the whole thing.
+
+=cut
+
+sub scalar { return scalar @{ $_[0]->{_members} } }
+
+=back
 
 =head1 SEE ALSO
 

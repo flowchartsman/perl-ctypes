@@ -9,6 +9,7 @@ use Data::Dumper;
 use overload 
   '${}'    => \&_scalar_overload,
   '%{}'    => \&_hash_overload,
+  '@{}'    => \&_array_overload,
   fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
@@ -49,6 +50,10 @@ sub _process_fields {
   }
 }
 
+sub _array_overload {
+  return \@{ $_[0]->{_values}->{_array} };
+}
+
 sub _hash_overload {
   if( caller =~ /^Ctypes::Type::Struct/ ) {
     return $_[0];
@@ -57,7 +62,7 @@ sub _hash_overload {
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
-  my $ret = $self->{_fields}->{_hash};
+  my $ret = $self->{_values}->{_hash};
   bless $self => $class;
   return $ret;
 }
@@ -76,6 +81,47 @@ Structs expose the following methods in addition to those provided
 by Ctypes::Type.
 
 =over
+
+=item new ARRAYREF
+
+=item new HASHREF
+
+Creates and returns a new Struct object. Structs must be initialised
+using either an array reference or hash reference (since methods to add
+and remove fields after initialisation are currently NYI).
+
+The arrayref syntax is the simpler of the two, suitable for simple
+initialisations where the default alignment and endianness is acceptable.
+
+    my $s = Struct([
+                     field1 => c_int(10),
+                     field2 => c_char('B'),
+                     field3 => c_double(999999999999999999),
+                   ]);
+
+You might wonder why the hashref form doesn't look like this. The reason
+is that we need the hashref form for specifying specific attributes of
+the Struct, like C<align> and C<endianness (NYI)>, which would of course
+cause problems if you wanted to make a Struct with a field called 'align'.
+So with the arrayref syntax, we make use of the fact that Perl's C<=E<gt>>
+operator is mostly just a synonym for the comma operator to pass a simple
+list of arguments which looks like named key-value pairs to the human
+reader.
+
+The hashref syntax currently supports only two named attributes:
+
+=over
+
+=item C<fields>, an arrayref of fieldname-value pairs like the arrayref
+syntax above.
+
+=item C<align>, a number indicating the alignment of the struct. Valid
+alignments are 0, 1, 2, 4, 8, 16, 32 or 64. The default alignment is 1
+(trading processor cycles for saved space). An alignment of 0 is the same
+as 1. Note that defining alignment for individual members or sections of
+Structs is not yet implemented.
+
+=back
 
 =cut
 
@@ -160,8 +206,9 @@ sub new {
     $in = shift;
     $self->_process_fields($in);
   } else {
-    if( !$progeny
-        or scalar @{$self->{_fields}} == 0 ) {
+    if( ( !$progeny
+          or scalar @{$self->{_fields}} == 0 )
+        and defined $_[0] ) {
       croak( "Don't know what to do with args without fields" );
     }
     for( 0 .. $#{$self->{_fields}->{_array}} ) {
@@ -277,12 +324,94 @@ sub _update_ {
   return 1;
 }
 
+sub _valid_align {
+  
+}
+
+# XXX partial alignment NYI
+
+=item align
+
+Returns or sets the alignment for the Struct. Valid alignments are
+2, 4, 8, 16, 32 or 64. Setting alignment for individual members /
+areas of the struct is not yet implemented.
+
+=item fields
+
+Returns an object used to access information B<about> fields of
+the struct. You access individual fields as hash keys of this object.
+
+Take the following hash as an example:
+
+  my $struct = Struct([
+    f1 => c_char('P'),
+    f2 => c_int(10),
+    f3 => c_long(90000),
+  ]);
+
+Simply asking C<fields> for a field name returns a short description
+of the field.
+
+  print $struct->fields->{f2}; # <Field type=c_int, ofs=1, size=4>
+
+You can access any property of the field's internal Ctypes object through
+this hash key as well.
+
+  print $struct->fields->{f2}->name;     # c_int
+  print $struct->fields->{f2}->typecode; # i
+  print $struct->fields->{f2}->owner;    # Ctypes::Type::Struct=HASH(0x...)
+
+For simple types you could access the field's value by calling the C<value>
+method through the hash key, but a much more convenient way to access values
+is to use the C<values> method of the Struct object, detailed below.
+
+=item name
+
+Returns the name of the Struct object. If the object is a plain Struct
+object, the name will be simply 'Struct'. If the object is a Struct
+subclass, the name will be the last part of the package name, followed
+by an underscore, followed by Struct, e.g. 'POINT_Struct'.
+
+=item size
+
+Returns the size of the Struct. Using the default alignment of 1, this
+will be the sum of the sizes of all the members of the Struct. With
+other alignments the C<size> might greater, depending on the contents of
+the Struct.
+
+For example, with the alignment set to 4, members I<after>
+members which are smaller than 4 bytes (like C<c_char>s and C<c_short>s)
+will be aligned to the next multple-of-four'th byte, making the small
+member effectively 'take up' 4 bytes of memory in the Struct despite not
+using them. But then of course, if the Struct only contains members which
+are multiples of 4 bytes long, the 4-byte alignment will make no
+difference.
+
+=item typecode
+
+Returns 'P', the typecode of all Structs.
+
+=item values
+
+Returns an object used to access the values of fields. This is what the
+scalar dereferencing of Struct objects actually accesses for you, so the
+following two lines are equivalent:
+
+  print $struct->values->{field1};
+  print $$struct->{field1};
+
+=cut
+
 #
 # Accessor generation
 #
 my %access = (
   typecode      => ['_typecode_'],
-  align         => ['_alignment'],
+  align         => [
+    '_alignment',
+    sub {print $_[0], "\n";if($_[0] =~ /^2$|^4$|^8$|^16$|^32$|^64$/){return 1}else{return 0}},
+    1,
+                   ],
   name          => ['_name'],
   size          => ['_size'],
   fields        => ['_fields'],
@@ -295,10 +424,13 @@ for my $func (keys(%access)) {
     my $self = shift;
     my $arg = shift;
     croak("The $key method only takes one argument") if @_;
-    if($access{$func}[1] and defined($arg)){
-      eval{ $access{$func}[1]->($arg); };
-      if( $@ ) {
-        croak("Invalid argument for $key method: $@");
+    if(defined $access{$func}[1] and defined($arg)){
+      print "Validating...\n" if $Debug == 1;
+      my $res;
+      eval{ $res = $access{$func}[1]->($arg); };
+      print "res: $res\n" if $Debug == 1;
+      if( $@ or $res == 0 ) {
+        croak("Invalid argument for $key method: $arg");
       }
     }
     if($access{$func}[2] and defined($arg)) {
@@ -554,81 +686,96 @@ sub FETCH {
   return $self->{_fields}->{_hash}->{$key}->{_contents};
 }
 
-
-package Ctypes::Type::Struct::_Fields::_Finder;
-use warnings;
-use strict;
-use Ctypes;
-use Carp;
-use Data::Dumper;
-
-sub new {
-  if( caller ne 'Ctypes::Type::Struct::_Fields' ) {
-    our $AUTOLOAD = '_Finder::new';
-    shift->AUTOLOAD;
-  }
-  my $class = shift;
-  my $fields = shift;
-  return bless [ $fields ] => $class;
+sub FIRSTKEY {
+  my $a = scalar keys %{$_[0]->{_fields}->{_hash}};
+  each %{$_[0]->{_fields}->{_hash}}
 }
 
-sub AUTOLOAD {
-  our $AUTOLOAD;
-  print "In _Finder::AUTOLOAD\n" if $Debug == 1;
-  print "    AUTOLOAD is $AUTOLOAD\n" if $Debug == 1;
-  if ( $AUTOLOAD =~ /.*::(.*)/ ) {
-    return if $1 eq 'DESTROY';
-    my $wantfield = $1;
-    print "     Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
-    my $self = $_[0];
-    my $instance = $self->[0]->{_obj};
-    if( defined $instance->{_subclass}
-        and $instance->can($wantfield) ) {
-      no strict 'refs';
-      goto &{$self->[0]->{_obj}->can($wantfield)};
-    }
-    my $found = 0;
-    if( exists $self->[0]->{_hash}->{$wantfield} ) {
-      $found = 1;
-      print "    Found it!\n" if $Debug == 1;
-      my $object = $self->[0]->{_obj};
-      my $func = sub {
-        my $caller = shift;
-        my $arg = shift;
-        print "In $wantfield accessor\n" if $Debug == 1;
-        croak("Too many arguments") if @_;
-        if( not defined $arg ) {
-          if(ref($caller)) {
-            print "    Returning value...\n" if $Debug == 1;
-            my $ret = $self->[0]->{_hash}->{$wantfield};
-            if( ref($ret) eq 'Ctypes::Type::Simple' ) {
-              return ${$ret};
-            } elsif( ref($ret) eq 'Ctypes::Type::Array') {
-              return ${$ret};
-            } else {
-              return $ret;
-            }
-          } else {
-            # class method?
-            # or should that be done in Type::Struct?
-          }
-        } else {
-        }
-      };
-      if( defined( my $subclass = $self->[0]->{_obj}->{_subclass} ) ) {
-        no strict 'refs';
-        *{"${subclass}::$wantfield"} = $func;
-        goto &{"${subclass}::$wantfield"};
-      }
-    } else { # didn't find field
-      print "    Didn't find it\n" if $Debug == 1;
-      print "    Here's what we had:\n" if $Debug == 1;
-      print Dumper( $self->[0]->{_hash} ) if $Debug == 1;
-      print Dumper( $self->[0]->{_array} ) if $Debug == 1;
-      croak( "Couldn't find field '$wantfield' in ",
-        $self->[0]->{_obj}->name );
-    }
-  }  # if ( $AUTOLOAD =~ /.*::(.*)/ )
-}
+sub NEXTKEY { each %{$_[0]->{_fields}->{_hash}} }
+sub EXISTS { exists $_[0]->{_fields}->{_hash}->{$_[1]} }
+sub DELETE { croak( "XXX Cannot delete Struct fields" ) }
+sub CLEAR { croak( "XXX Cannot clear Struct fields" ) }
+sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
+
+#  package Ctypes::Type::Struct::_Fields::_Finder;
+#  use warnings;
+#  use strict;
+#  use Ctypes;
+#  use Carp;
+#  use Data::Dumper;
+#  
+#  #
+#  # This was designed to allow method-style access to Struct members
+#  # Removed and not yet re-integrated
+#  #
+#  
+#  sub new {
+#    if( caller ne 'Ctypes::Type::Struct::_Fields' ) {
+#      our $AUTOLOAD = '_Finder::new';
+#      shift->AUTOLOAD;
+#    }
+#    my $class = shift;
+#    my $fields = shift;
+#    return bless [ $fields ] => $class;
+#  }
+#  
+#  sub AUTOLOAD {
+#    our $AUTOLOAD;
+#    print "In _Finder::AUTOLOAD\n" if $Debug == 1;
+#    print "    AUTOLOAD is $AUTOLOAD\n" if $Debug == 1;
+#    if ( $AUTOLOAD =~ /.*::(.*)/ ) {
+#      return if $1 eq 'DESTROY';
+#      my $wantfield = $1;
+#      print "     Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
+#      my $self = $_[0];
+#      my $instance = $self->[0]->{_obj};
+#      if( defined $instance->{_subclass}
+#          and $instance->can($wantfield) ) {
+#        no strict 'refs';
+#        goto &{$self->[0]->{_obj}->can($wantfield)};
+#      }
+#      my $found = 0;
+#      if( exists $self->[0]->{_hash}->{$wantfield} ) {
+#        $found = 1;
+#        print "    Found it!\n" if $Debug == 1;
+#        my $object = $self->[0]->{_obj};
+#        my $func = sub {
+#          my $caller = shift;
+#          my $arg = shift;
+#          print "In $wantfield accessor\n" if $Debug == 1;
+#          croak("Too many arguments") if @_;
+#          if( not defined $arg ) {
+#            if(ref($caller)) {
+#              print "    Returning value...\n" if $Debug == 1;
+#              my $ret = $self->[0]->{_hash}->{$wantfield};
+#              if( ref($ret) eq 'Ctypes::Type::Simple' ) {
+#                return ${$ret};
+#              } elsif( ref($ret) eq 'Ctypes::Type::Array') {
+#                return ${$ret};
+#              } else {
+#                return $ret;
+#              }
+#            } else {
+#              # class method?
+#              # or should that be done in Type::Struct?
+#            }
+#          } else {
+#          }
+#        };
+#        if( defined( my $subclass = $self->[0]->{_obj}->{_subclass} ) ) {
+#          no strict 'refs';
+#          *{"${subclass}::$wantfield"} = $func;
+#          goto &{"${subclass}::$wantfield"};
+#        }
+#      } else { # didn't find field
+#        print "    Didn't find it\n" if $Debug == 1;
+#        print "    Here's what we had:\n" if $Debug == 1;
+#        print Dumper( $self->[0]->{_hash} ) if $Debug == 1;
+#        print Dumper( $self->[0]->{_array} ) if $Debug == 1;
+#        croak( "Couldn't find field '$wantfield' in ",
+#          $self->[0]->{_obj}->name );
+#      }
+#    }  # if ( $AUTOLOAD =~ /.*::(.*)/ )
+#  }
 
 1;

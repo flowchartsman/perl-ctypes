@@ -13,7 +13,7 @@ use overload
 my $Debug = 0;
 
 sub _array_overload {
-  return @{$_[0]->{_rawcontents}};
+  return \@{$_[0]->{_rawcontents}->{VALUE}};
 }
 
 sub _hash_overload {
@@ -29,11 +29,7 @@ sub _hash_overload {
 }
 
 sub _string_overload {
-  if( $_[0]->{_rawcontents}->{VALUE}->isa('Ctypes::Type::Simple') ) {
-    return $_[0]->{_contents};
-  } else {
-    return $_[0]->{_contents};
-  }
+  return $_[0]->info;
 }
 sub _code_overload {
   my $self = shift;
