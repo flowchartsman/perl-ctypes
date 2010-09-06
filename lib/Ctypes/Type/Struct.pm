@@ -176,6 +176,7 @@ sub new {
     $self->{$_} = $base->{$_};
   }
   $self->{_name} = $progeny ? $progeny . '_Struct' : 'Struct';
+  $self->{_name} =~ s/.*:://;
 
   if( $extra_fields ) {
     my( $key, $val );
@@ -238,7 +239,6 @@ sub data {
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   my @data;
-  my @ordkeys;
   if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
     print "    _data already defined and safe\n" if $Debug == 1;
@@ -298,10 +298,10 @@ sub _update_ {
   # ... or do we? Send our _index, plus #bytes updated member starts at?
   # Could C::B::C help with this???
   if( defined $arg and $self->{_owner} ) {
-  print "    Need to update my owner...\n" if $Debug == 1;
-  my $success = undef;
-  print "  Sending data back upstream:\n" if $arg and $Debug == 1;
-  print "    Index is ", $self->{_index}, "\n" if $arg and $Debug == 1;
+    print "    Need to update my owner...\n" if $Debug == 1;
+    my $success = undef;
+    print "  Sending data back upstream:\n" if $arg and $Debug == 1;
+    print "    Index is ", $self->{_index}, "\n" if $arg and $Debug == 1;
     $success =
       $self->{_owner}->_update_(
         $self->{_data},
@@ -409,7 +409,7 @@ my %access = (
   typecode      => ['_typecode_'],
   align         => [
     '_alignment',
-    sub {print $_[0], "\n";if($_[0] =~ /^2$|^4$|^8$|^16$|^32$|^64$/){return 1}else{return 0}},
+    sub {if($_[0] =~ /^2$|^4$|^8$|^16$|^32$|^64$/){return 1}else{return 0}},
     1,
                    ],
   name          => ['_name'],
@@ -489,7 +489,8 @@ sub _array_overload {
 }
 
 sub _hash_overload {
-  if( caller =~ /^Ctypes::Type::Struct/ ) {
+  my $caller = caller;
+  if( $caller =~ /^Ctypes::Type::Struct/ ) {
     return $_[0];
   }
   my( $self, $key ) = ( shift, shift );
@@ -576,7 +577,8 @@ sub _array_overload {
 }
 
 sub _hash_overload {
-  if( caller =~ /^Ctypes::Type::Struct/ ) {
+  my $caller = caller;
+  if( $caller =~ /^Ctypes::Type::Struct/ ) {
     return $_[0];
   }
   print "_Values's HASH ovld\n" if $Debug == 1;
@@ -645,9 +647,8 @@ sub FETCH {
   return $self->{_fields}->{_array}->[$index]->{_contents};
 }
 
-sub FETCHSIZE {
-  return scalar @{ $_[0]->{_fields}->{_array} };
-}
+sub FETCHSIZE { return scalar @{ $_[0]->{_fields}->{_array} } }
+sub EXISTS { exists $_[0]->{_fields}->{_array}->[$_[1]] }
 
 package Ctypes::Type::Struct::_Fields::_hash;
 use warnings;

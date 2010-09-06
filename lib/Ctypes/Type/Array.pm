@@ -9,7 +9,7 @@ use overload '@{}'    => \&_array_overload,
              fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug = 1;
+my $Debug = 0;
 
 =head1 NAME
 
@@ -545,6 +545,7 @@ sub FETCH {
 }
 
 sub CLEAR { $_[0]->{VALUES} = [] }
+sub EXISTS { exists $_[0]->{VALUES}->[$_[1]] }
 sub EXTEND { }
 sub FETCHSIZE { scalar @{$_[0]->{VALUES}} }
 

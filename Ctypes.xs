@@ -716,14 +716,26 @@ CODE:
       }
       RETVAL = 1; break;
     case 'i':
-      if( !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
+      /* XXX Why do we need private check for values
+             from Type::Simple->copy() ??            */
+        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
+        break;
+      }
+      debug_warn("#    Got scalar integer...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
+      /* XXX Why do we need private check for values
+             from Type::Simple->copy() ??            */
+        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
+        break;
+      }
+      debug_warn("#    Got type I...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_UINT_MIN || arg_nv > PERL_UINT_MAX ) {
         RETVAL = -1; break;
@@ -745,10 +757,12 @@ CODE:
       }
       RETVAL = 1; break;
     case 'f':
-      if( !SvIOK(arg_sv) ) break;
+      // if( !SvNOK(arg_sv) ) break;
     /* ??? Is NV, usually double, alright to use here?
        Also, any Perl vars to use instead of stdlib ones? */
+      debug_warn("#    Got a float...");
       arg_nv = SvNV(arg_sv);
+      debug_warn("#    got %f", (float)arg_nv);
       if( ( FLT_MIN - arg_nv) > FLT_EPSILON || (arg_nv - FLT_MAX) > FLT_EPSILON ) {
         RETVAL = -1; break;
       }
@@ -874,27 +888,27 @@ CODE:
       }
       break;
     case 'i':
-      debug_warn("Case 'i'");
+      debug_warn("#\tCase 'i'");
       if(SvIOK(arg_sv)) {
-        debug_warn("\targ was SvIOK");
+        debug_warn("#\targ was SvIOK");
         *(int*) retval = (int)SvIV(arg_sv);
       } else if(SvNOK(arg_sv)) {
-        debug_warn("\targ was SvNOK");
+        debug_warn("#\targ was SvNOK");
         *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
-        debug_warn("\targ was SvPOK");
+        debug_warn("#\targ was SvPOK");
         if(SvUTF8(arg_sv)) {
-          debug_warn("\tThis is utf8!");
+          debug_warn("#\tThis is utf8!");
           *(int*)retval =
             (int)utf8_to_uvchr((SvPVutf8_nolen(arg_sv)), &utf8retlen);
         }
         else {
-          debug_warn("\tThis is Not utf8");
+          debug_warn("#\tThis is Not utf8");
           *(int*)retval = (int)*(SvPV_nolen(arg_sv));
         }
       }
       if(*(int*)retval) {
-        debug_warn("\tretval is %i", *(int*)retval);
+        debug_warn("#\tretval is %i", *(int*)retval);
         RETVAL = newSViv(*(int*)retval);
       }
       break;

@@ -111,10 +111,11 @@ sub AUTOLOAD {
   our $AUTOLOAD;
   if ( $AUTOLOAD =~ /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
-    my $wantfield = $1;
-    print "Trying to AUTOLOAD for $wantfield in FIELD\n" if $Debug == 1;
+    my $func = $1;
+    print "Trying to AUTOLOAD for $func in FIELD\n" if $Debug == 1;
     my $self = shift;
-    return $self->{_rawcontents}->{VALUE}->$wantfield;
+    print "args: ", @_, "\n" if @_ and $Debug == 1;
+    return $self->{_rawcontents}->{VALUE}->$func(@_);
   }
 }
 
@@ -135,10 +136,12 @@ sub TIESCALAR {
 }
 
 sub STORE {
+  croak("Field's STORE must take an argument") if scalar @_ < 2;
   my( $self, $val ) = ( shift, shift );
   print "In ", $self->{_obj}{_obj}{_name}, "'s Field::STORE with arg '$val',\n" if $Debug == 1;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  croak("Simple Types can only be assigned a single value") if @_;
+  croak("Fields can only be assigned single values") if @_;
+  my $need_manual_update = 0;
   if(!ref($val)) {
     print "    \$val had no ref\n" if $Debug == 1;
     if( not defined $val ) {
@@ -146,8 +149,8 @@ sub STORE {
       if( not defined $self->{VALUE} ) {
         croak( "Fields must be initialised with a Ctypes object" );
       } else {
-        print "    blanking data of {VALUE}\n" if $Debug == 1;
-        $self->{VALUE}->_update_( "\0" x length($self->{VALUE}->{_data})  );
+        print "    setting {VALUE} to undef\n" if $Debug == 1;
+        ${$self->{VALUE}} = undef;
       }
     }
     if( not defined $self->{VALUE} ) {
@@ -155,6 +158,7 @@ sub STORE {
       my $tc = Ctypes::_check_type_needed( $val );
       $val = new Ctypes::Type::Simple( $tc, $val );
       $self->{VALUE} = $val;
+      $need_manual_update = 1;
     } else {
       if( $self->{VALUE}->isa('Ctypes::Type::Simple') ) {
         print "    Setting simple type to \$val\n" if $Debug == 1;
@@ -169,20 +173,22 @@ sub STORE {
     if( blessed($val) ) {
       if ( $val->isa('Ctypes::Type') ) {
         $val = $val->copy;
-        print $val;
+        print "    \$val copied successfully\n" if $val and $Debug == 1;
         $self->{VALUE}->_set_owner(undef) if defined $self->{VALUE};
         $self->{VALUE}->_set_index(undef) if defined $self->{VALUE};
         $self->{VALUE} = $val;
+        $need_manual_update = 1;
       } else {
         croak( "Structs can only hold Ctypes objects" );
       }
     } else {  # hashref or arrayref
       if( defined $self->{VALUE} ) { # last-ditch attempt...
         my $newval = $self->{VALUE}->new($val);
-        if( defined $val ) {
+        if( defined $newval ) {
           $self->{VALUE}->_set_owner(undef) if defined $self->{VALUE};
           $self->{VALUE}->_set_index(undef) if defined $self->{VALUE};
           $self->{VALUE} = $newval;
+          $need_manual_update = 1;
         } else {                     # didn't work
           croak( "Couldn't make new ", $self->{VALUE}->name,
                  " object from input ", $val );
@@ -193,14 +199,16 @@ sub STORE {
       }
     }
   }
-  $self->{VALUE}->_set_owner(undef);
-  my $datum = ${$self->{VALUE}->data};
-  $self->{_obj}{_obj}->_update_( $datum,
-                                 $self->{_obj}{_index} );
-  $self->{VALUE}->_set_owner( $self->{_obj}{_obj} );
-  print "    Setting index ", $self->{_obj}{_index}, " for $val\n" if $Debug == 1;
-  $self->{VALUE}->_set_index( $self->{_obj}{_index} );
-  print "      Got index ", $self->{VALUE}->index, "\n" if $Debug == 1;
+  if( $need_manual_update == 1 ) {
+    $self->{VALUE}->_set_owner(undef);
+    my $datum = ${$self->{VALUE}->data};
+    $self->{_obj}{_obj}->_update_( $datum,
+                                   $self->{_obj}{_index} );
+    $self->{VALUE}->_set_owner( $self->{_obj}{_obj} );
+    print "    Setting index ", $self->{_obj}{_index}, " for $val\n" if $Debug == 1;
+    $self->{VALUE}->_set_index( $self->{_obj}{_index} );
+    print "      Got index ", $self->{VALUE}->index, "\n" if $Debug == 1;
+  }
   return $self->{VALUE};
 }
 

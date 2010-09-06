@@ -188,7 +188,10 @@ Return a copy of the object.
 =cut
 
 sub copy {
-  return new Ctypes::Type::Simple( $_[0]->typecode, $_[0]->value );
+  print "In Simple::copy\n" if $Debug == 1;
+  my $value = $_[0]->value;
+  print "    Value is $value\n" if $Debug == 1;
+  return Ctypes::Type::Simple->new( $_[0]->typecode, $value );
 }
 
 =item value EXPR
@@ -250,9 +253,11 @@ sub _update_ {
       print "12345678" x length($owners_data), "\n" if $Debug == 1;
       print unpack('b*', $owners_data), "\n" if $Debug == 1;
       print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
+      print "    My size is ", $self->{_size}, "\n" if $Debug == 1;
       $self->{_data} = substr( ${$self->{_owner}->data},
                                $self->{_index},
                                $self->{_size} );
+      print "    My data is now:\n    ", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
     }
   } else {
     $self->{_data} = $arg if $arg;
@@ -261,9 +266,12 @@ sub _update_ {
     }
   }
   $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
+  print "    VALUE is _update_d to ", $self->{_rawvalue}{VALUE}, "\n" if $Debug == 1;
   $self->{_datasafe} = 1;
   return 1; 
 }
+
+sub _set_undef { $_[0]->{_value} = 0 }
 
 package Ctypes::Type::Simple::value;
 use strict;
@@ -308,8 +316,8 @@ sub STORE {
   # with null (i.e. numeric zero) , update owners, return early.
   if( not defined $arg ) {
     print "    Assigned undef! All goes null!\n" if $Debug == 1;
-    $self->{VALUE} = $arg;
-    $self->{object}{_data} = "\0" x $self->{object}{_size}; # must stay right length!
+    $self->{VALUE} = 0;
+    $self->{object}{_data} = "\0" x 8 x $self->{object}{_size}; # stay right length
     if( $self->{object}{_owner} ) {
       $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
     }
@@ -317,6 +325,8 @@ sub STORE {
   }
 
   my $typecode = $self->{object}{_typecode};
+  print "    Using typecode $typecode\n" if $Debug == 1;
+  print "    arg is $arg\n" if $Debug == 1;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   print "    _valid_for_type returned $is_valid\n" if $Debug == 1;

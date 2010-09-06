@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 24;
+use Test::More tests => 26;
 use Ctypes;
 use utf8;
 
@@ -50,6 +50,10 @@ is(ref($number_seven), '', '$obj = <num> squashes object');
 my $no_value = c_int;
 ok( ref($no_value) =~ /Ctypes::Type/, 'Created object without initializer' );
 is( $$no_value, 0, 'Default initialization to 0' );
+$$no_value = 10;
+is( $$no_value, 10 );
+$$no_value = undef;
+is( $$no_value, 0, 'Setting undef means zero' );
 
 my $number_y = c_int('y');
 is( $$number_y, 121, 'c_int casts from non-numeric ASCII character' );
@@ -84,7 +88,7 @@ is($overflower, undef, 'Can (dis)allow_overflow_all');
 
 TODO: {
   local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';
-  my $charar = c_char(')');
+  my $charar = c_char('P');
   is( $$charar, 'P', 'c_char shows as 1-char strings in Perl' );
   my $ret_as_char = c_char(89);
   is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
