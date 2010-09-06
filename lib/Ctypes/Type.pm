@@ -111,8 +111,8 @@ for the above packages for more detailed information.
 # Ctypes::Type::_new: Abstract base class for all Ctypes objects
 sub _new {
   return bless my $self = {
-    _data       =>  0,             # raw (binary) memory block
-    _needsfree  =>  0,             # does object own its data?
+    _data       =>  "\0",             # raw (binary) memory block
+    _needsfree  =>  0,             # does object own its data? (not used yet, 0.002)
     _owner      =>  undef,         # ref to object that owns this one
     _size       =>  0,             # size of memory block in bytes
     _length     =>  1,             # ? number of fields of this object ???
@@ -124,7 +124,7 @@ sub _new {
     _datasafe   =>  1,             # Can object trust & return its _value
                                    # or must it update its _data?
     _name       => undef,
-    _typecode  => undef,
+    _typecode   => undef,
      } => ref($_[0]) || $_[0];
 }
 
@@ -232,7 +232,7 @@ Types have the typecode 'p').
 =cut
 
 sub name   { return $_[0]->{_name}  }
-sub _set_name { return $_[0]->{_name} = $_[1] }
+sub _set_name { die unless scalar @_ == 2; return $_[0]->{_name} = $_[1] }
 
 =item owner
 
@@ -242,10 +242,7 @@ inside any others.
 
 =cut
 
-sub owner {
- return $_[0]->{_owner};
-}
-
+sub owner { return $_[0]->{_owner} }
 sub _set_owner {
   $_[0]->{_owner} = $_[1] if defined $_[1]; return $_[0]->{_owner};
 }

@@ -516,4 +516,12 @@ sub FETCHSIZE {
   return length($data) / Ctypes::sizeof($_[0]->{_owner}{_orig_type});
 }
 
+sub EXISTS { 0 }  # makes no sense for ::bytes
+sub EXTEND { }
+sub UNSHIFT { croak("Pointer::bytes isn't a normal array - can't unshift") }
+sub SHIFT { croak("Pointer::bytes isn't a normal array - can't shift") }
+sub PUSH { croak("Pointer::bytes isn't a normal array - can't push") }
+sub POP { croak("Pointer::bytes isn't a normal array - can't pop") }
+sub SPLICE { croak("Pointer::bytes isn't a normal array - can't splice") }
+
 1;

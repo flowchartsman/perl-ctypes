@@ -31,14 +31,6 @@ is( $$array[2], 1170, '$$array[x] = y assignent' );
 $array->[2] = 500;
 is( $$array[2], 500, '$array->[x] = y assignment' );
 
-# People might expect this, but it's not the C semantics - thoughts?
-# my $int1 = c_int(20);
-# my $int2 = c_int(21);
-# my $int3 = c_int(22);
-# my $intarray = Array( $int1, $int2, $int3 );
-# $$intarray[1] = 1170;
-# is( $$int2, 1170, 'Assignment modifies contained objects' );
-
 note( "As function arguments" );
 
 sub cb_func {

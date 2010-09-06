@@ -9,10 +9,59 @@ use Data::Dumper;
 use t_POINT;
 my $Debug = 1;
 
+my $struct = Struct([
+  f1 => c_char('P'),
+  f2 => c_int(10),
+  f3 => c_long(90000),
+]);
+subtest 'Simple construction (arrayref)' => sub {
+  plan tests => 6;
+  isa_ok( $struct, 'Ctypes::Type::Struct' );
+  is( $struct->name, 'Struct' );
+  is( chr( $$struct->{f1} ), 'P' );
+  is( $$struct->{f2}, 10 );
+  is( $$struct->{f3}, 90000 );
+  my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
+             + Ctypes::sizeof('l');
+  is( $struct->size, $size );
+};
+
+my $alignedstruct = Struct({
+  fields => [
+    o1 => c_char('Q'),
+    o2 => c_int(20),
+    o3 => c_long(180000),
+  ],
+  align => 4,
+});
+subtest 'Ordered construction (arrayref)' => sub {
+  plan tests => 10;
+  isa_ok( $alignedstruct, 'Ctypes::Type::Struct' );
+  is( $alignedstruct->name, 'Struct' );
+  is( chr($$alignedstruct->{o1}), 'Q' );
+  is( $$alignedstruct->{o2}, 20 );
+  is( $$alignedstruct->{o3}, 180000 );
+  my( $size, $delta );
+  for(qw|c i l|) {
+    $delta = Ctypes::sizeof($_);
+    $delta += abs( $delta - 4 ) % 4 if $delta % 4;
+    $size += $delta;
+  }
+  is( $alignedstruct->size, $size );
+  is( $alignedstruct->align, 4 );
+  $alignedstruct->align(8);
+  is( $alignedstruct->align, 8 );
+  eval { $alignedstruct->align(7) };
+  is( $alignedstruct->align, 8 );
+  like( $@, qr/Invalid argument for _alignment method: 7/,
+    '->align validation ok' );
+};
+
 my $point = new t_POINT( 30, 40 );
 subtest 'Positional parameterised initialisation' => sub {
-  plan tests => 5;
+  plan tests => 6;
   isa_ok( $point, 't_POINT' );
+  is( $point->name, 't_POINT_Struct' );
   is( $$point->{x}, 30 );
   is( $$point->{y}, 40 );
   is( $$point->[0], 30 );
@@ -31,52 +80,6 @@ subtest 'Named parameter initialisation' => sub {
   isa_ok( $point_3, 'Ctypes::Type::Struct' );
   is( $$point_3->{y}, 50 );
   is( $$point_3->{x}, 0 );
-};
-
-my $struct = Struct([
-  f1 => c_char('P'),
-  f2 => c_int(10),
-  f3 => c_long(90000),
-]);
-subtest 'Simple construction (arrayref)' => sub {
-  plan tests => 5;
-  isa_ok( $struct, 'Ctypes::Type::Struct' );
-  is( chr( $$struct->{f1} ), 'P' );
-  is( $$struct->{f2}, 10 );
-  is( $$struct->{f3}, 90000 );
-  my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
-             + Ctypes::sizeof('l');
-  is( $struct->size, $size );
-};
-
-my $alignedstruct = Struct({
-  fields => [
-    o1 => c_char('Q'),
-    o2 => c_int(20),
-    o3 => c_long(180000),
-  ],
-  align => 4,
-});
-subtest 'Ordered construction (arrayref)' => sub {
-  plan tests => 9;
-  isa_ok( $alignedstruct, 'Ctypes::Type::Struct' );
-  is( chr($$alignedstruct->{o1}), 'Q' );
-  is( $$alignedstruct->{o2}, 20 );
-  is( $$alignedstruct->{o3}, 180000 );
-  my( $size, $delta );
-  for(qw|c i l|) {
-    $delta = Ctypes::sizeof($_);
-    $delta += abs( $delta - 4 ) % 4 if $delta % 4;
-    $size += $delta;
-  }
-  is( $alignedstruct->size, $size );
-  is( $alignedstruct->align, 4 );
-  $alignedstruct->align(8);
-  is( $alignedstruct->align, 8 );
-  eval { $alignedstruct->align(7) };
-  is( $alignedstruct->align, 8 );
-  like( $@, qr/Invalid argument for _alignment method: 7/,
-    '->align validation ok' );
 };
 
 subtest 'Data access' => sub {
@@ -145,9 +148,6 @@ subtest 'Attribute access' => sub {
   is( $struct->fields->[1]->owner, $struct );
   is( $struct->fields->[2]->owner, $struct );
 };
-
-my $struct2 = Struct->new;
-print Dumper( $struct2 );
 
 # Nesting is nice
 subtest 'Arrays in structs' => sub {

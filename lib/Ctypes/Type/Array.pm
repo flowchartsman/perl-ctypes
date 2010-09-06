@@ -545,6 +545,7 @@ sub FETCH {
 }
 
 sub CLEAR { $_[0]->{VALUES} = [] }
+sub EXISTS { exists $_[0]->{VALUES}->[$_[1]] }
 sub EXTEND { }
 sub FETCHSIZE { scalar @{$_[0]->{VALUES}} }
 
