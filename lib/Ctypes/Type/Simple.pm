@@ -190,6 +190,8 @@ Return a copy of the object.
 sub copy {
   print "In Simple::copy\n" if $Debug == 1;
   my $value = $_[0]->value;
+  my $tmp = $value;
+  $value = $tmp;
   print "    Value is $value\n" if $Debug == 1;
   return Ctypes::Type::Simple->new( $_[0]->typecode, $value );
 }
@@ -257,7 +259,9 @@ sub _update_ {
       $self->{_data} = substr( ${$self->{_owner}->data},
                                $self->{_index},
                                $self->{_size} );
-      print "    My data is now:\n    ", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
+      print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
+      print "    Which is ", unpack($self->{_typecode},$self->{_data}), " as a number\n" if $Debug == 1;
+  $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
     }
   } else {
     $self->{_data} = $arg if $arg;
@@ -353,7 +357,7 @@ sub STORE {
   $self->{object}{_data} =
     pack( $self->{object}{_typecode}, $arg );
   if( $self->{object}{_owner} ) {
-    print "    Have owner, updating...\n" if $Debug == 1;
+    print "    Have owner, updating with\n", unpack('b*', $self->{object}{_data}), "\n    or ", unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug == 1;
     $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
   }
   print "  Returning ok...\n" if $Debug == 1;

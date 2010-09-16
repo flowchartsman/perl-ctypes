@@ -102,8 +102,11 @@ sub _update_ {
   if( defined $arg ) {
     my $pad = length($self->{_data}) - length($arg);
     if( $pad > 0 ) {
-      print "    Current data was $pad longer than arg; padding...\n" if $Debug == 1;
+      print "    Current data was $pad bytes longer than arg.\n    Padding arg...\n" if $Debug == 1;
       $arg .= "\0" x $pad;
+    } elsif ( $pad < 0 ) {
+      print "    Arg was longer; updating size...\n" if $Debug == 1;
+      $self->{_size} = length($arg);
     }
     print "    Setting self->data\n" if $Debug == 1;
     $self->{_data} = $arg; # if data given with no index, replaces all
@@ -141,8 +144,6 @@ sub _update_ {
     carp( $self->{_name}, "'s _update_ changed nothing!" );
   }
   print "  Data NOW looks like:\n    ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-  print "    updating size...\n" if $Debug == 1;
-  $self->{_size} = length($self->{_data});
   print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
   return 1;
 }
