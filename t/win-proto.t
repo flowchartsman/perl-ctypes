@@ -8,7 +8,7 @@ if ( $^O !~ /(MSWin32|cygwin)/ ) {
   TODO: {
     local $TODO = "Windows-specific Type objects not yet done!";
     
-    require Ctypes; import Ctypes qw(c_int POINTER WINFUNCTYPE WinDLL WinError);
+    require Ctypes; import Ctypes qw(c_int Pointer WINFUNCTYPE WinDLL WinError);
     require Ctypes::WinTypes; import Ctypes::WinTypes qw(BOOL HWND RECT LPCSTR UINT);
 
     my $prototype = WINFUNCTYPE(BOOL, HWND, POINTER(RECT));

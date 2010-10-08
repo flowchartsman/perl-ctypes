@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Test::More;
+plan tests => 6;
 
 # Ensure a recent version of Test::Pod::Coverage
 my $min_tpc = 1.08;
@@ -19,5 +20,12 @@ my $opts = { trustme => [ qr/^c_[a-z_]*$/,    # all private methods
                           qr/^PF_.*/,         # inlined flags, Function.pm
                           # (XXX will expose to users in a different format later) 
                           qr/^constant$/,     # Auto-generated
+                          qr/^data$/,         # doc'd in Type, skip in children
                         ] };
-all_pod_coverage_ok($opts);
+# all_pod_coverage_ok($opts);
+pod_coverage_ok( 'Ctypes', $opts );
+pod_coverage_ok( 'Ctypes::Type', $opts );
+pod_coverage_ok( 'Ctypes::Type::Array', $opts );
+pod_coverage_ok( 'Ctypes::Type::Pointer', $opts );
+pod_coverage_ok( 'Ctypes::Type::Simple', $opts );
+pod_coverage_ok( 'Ctypes::Type::Struct', $opts );

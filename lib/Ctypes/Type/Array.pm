@@ -19,23 +19,33 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 
   use Ctypes;
 
-  my $array = Array( 1, 3, 5, 7, 9 );
+  my $array = Array( 1, 3, 5, 7, 9 );    # Array of smallest type
+                                         # necessary (ushort)
 
   my $bytes_size = $array->size;         # sizeof(int) * $#array;
 
-  $array->[2] = 4;                       # That's ok.
-  my $longnum = INT_MAX() + 1;
-  $array->[2] = $longnum;                # Error!
+  $array->[2] = 4;
+  $$array[3] = 10;
+
+  my $num_items = scalar @$array;
+
+=head1 ABSTRACT
+
+This class represents C arrays. Like in C, Arrays are typed,
+and can only contain data of that type. Arrays use the double-
+syntax of other Ctypes classes, in this case the Perl array
+sigil 'C<@>'
 
 =cut
 
-##########################################
+############################################
 # TYPE::ARRAY : PRIVATE FUNCTIONS & VALUES #
-##########################################
+############################################
 
 sub _arg_to_type {
   my( $arg, $type ) = @_;
-  $type = $type->{_typecode_} if ref($type); # take typecode or obj
+  croak("_arg_to_type error: need typecode!") if not defined $type;
+  $type = $type->{_typecode} if ref($type); # take typecode or obj
   my $out = undef;
   if( !ref($arg) ) {     # Perl native type
     # new() will handle casting and blow up if inappropriate
@@ -43,7 +53,7 @@ sub _arg_to_type {
   } 
   # Second simplest case: input is a Type object
   if( ref($arg) eq 'Ctypes::Type::Simple' ) {
-    if( $arg->{_typecode_} eq $type ) {
+    if( $arg->{_typecode} eq $type ) {
       $out = $arg;
     } else {
       $out = Ctypes::Type::Simple->new( $type, $arg->{val} );
@@ -56,7 +66,7 @@ sub _arg_to_type {
       $arg->{_data} :
       $arg->can("_as_param_") ? $arg->_as_param_ : undef;
     carp("Object typecode differs but, you asked for it...")
-      if $arg->{_typecode_} ne $type;
+      if $arg->{_typecode} ne $type;
     $out = Ctypes::Type::Simple->new($type,unpack($type,$datum))
         if defined($datum);
   }
@@ -86,7 +96,7 @@ sub _get_members_typed {
   # A.b) Required type is a user-defined object (which we've already
   #      checked is 'Ctypes compatible'
   # Since it's a non-type object, we can't do casting (we only know
-  # how data comes out [_typecode_, _as_param_], not goes in.
+  # how data comes out [_typecode, _as_param_], not goes in.
   # Just check they're all the same type, err if not
     for(my $i = 0; $i <= $#$in; $i++) {
       if( ref($$in[$i]) ne $deftype ) {
@@ -132,6 +142,7 @@ sub _get_members_untyped {
           return undef;
         }
       }
+      $found_type = ref;
     }
     if( not looks_like_number($_) ) { $found_string = 1 };
   }
@@ -141,7 +152,7 @@ sub _get_members_untyped {
   }
 
 # Now, check for non-numerics...
-  my $lcd = Ctypes::_check_type_needed($in);   # 'lowest common denomenator'
+  my $lcd = Ctypes::_check_type_needed(@$in);   # 'lowest common denomenator'
   # Now create type objects for all members...
   for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
     $members->[$i] =
@@ -151,7 +162,7 @@ sub _get_members_untyped {
 }
 
 sub _array_overload {
-  return shift->{members};
+  return shift->{_members};
 }
 
 sub _scalar_overload {
@@ -161,6 +172,26 @@ sub _scalar_overload {
 ###########################################
 # TYPE::ARRAY : PUBLIC FUNCTIONS & VALUES #
 ###########################################
+
+=head1 METHODS
+
+Array object provide the following methods (remember, methods are called
+on the object with B<one> sigil, and you access the 'contained' in the
+object with the two-sigil syntax).
+
+=over
+
+=item new TYPE, ARRAYREF
+
+=item new LIST
+
+Since L<Ctypes> exports the handy Array() function, you'll hardly ever use
+Ctypes::Type::Array::new directly. Arrays can be instantiated either by
+passing a Ctypes type as the first argument and an arrayref of values as
+the second, or simply by passing a list of values. In the latter case,
+Ctypes will use the smallest C type necessary for the arguments provided.
+
+=cut
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -189,15 +220,17 @@ sub new {
   }
 
   $deftype = $inputs_typed->[0] if not defined $deftype;
+  my $name = $deftype->name;
+  $name =~ s/^c_//;
 
   my $self = $class->SUPER::_new;
   my $attrs = {
-    _name         => ref($deftype) . '_Array',
-    _typecode_    => 'p',
+    _name         => lc($name) . '_Array',
+    _typecode     => 'p',
     _can_resize   => 0,
     _endianness   => '',
     _length       => $#$in + 1,
-    _member_type  => $deftype->_typecode_,
+    _member_type  => $deftype->typecode,
     _member_size  => $deftype->size,
                };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
@@ -205,25 +238,49 @@ sub new {
   $self->{_name} =~ s/::/_/g;
   $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =
-    tie @{$self->{members}}, 'Ctypes::Type::Array::members', $self;
-  @{$self->{members}} =  @{$inputs_typed};
+    tie @{$self->{_members}}, 'Ctypes::Type::Array::members', $self;
+  @{$self->{_members}} =  @{$inputs_typed};
   return $self;
 }
+
+=item can_resize 1 I<or> 0
+
+Get/setter for the property flagging whether or not the Array is
+allowed to expand. Defaults to 0. Unlike in C, you can't read off
+the end of an Array object into random memory.
+
+=item member_type
+
+Invoking the standard L<Type|Ctypes::Type> method C<typecode> on
+an Array will always return 'p', the typecode for the Array itself.
+Use the member_type method to find out the typecode of the items
+the Array holds.
+
+=item member_size
+
+A similar story to C<member_type>: C<$array->size> will always give
+you the size of the whole array, i.e. sizeof(<member_type>) * number
+of members. You can use C<member_size> to return the size each of
+the items the Array holds (or is typed to hold).
+
+=item length
+
+A convenience method returning the number of items in the array
+(simply another, less sigiltastic way of saying C<$#$array + 1>).
+
+=cut
 
 #
 # Accessor generation
 #
 my %access = (
   'length'          => ['_length'],
-  _typecode_        => ['_typecode_'],
   can_resize        =>
     [ '_can_resize',
       sub {if( $_[0] != 1 and $_[0] != 0){return 0;}else{return 1;} },
-      1 ], # <--- this makes 'flexible' settable
-  alignment         => ['_alignment'],
+      1 ], # <--- this makes '_can_resize' settable
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
-  endianness        => ['_endianness'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -245,11 +302,26 @@ for my $func (keys(%access)) {
   }
 }
 
-sub _data { 
+=item copy
+
+Return a copy of the object.
+
+=cut
+
+sub copy {
+  my $self = shift;
+  my @arr;
+  for( 0..$#$self ) {
+    $arr[$_] = $self->{_rawmembers}->{VALUES}->[$_];
+  }
+  return new Ctypes::Type::Array( @arr );
+}
+
+sub data { 
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
 if( defined $self->{_data}
-      and $self->{_datasafe} == 1 ) {
+      and $self->_datasafe == 1 ) {
     print "    _data already defined and safe\n" if $Debug == 1;
     print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
     return \$self->{_data};
@@ -264,15 +336,35 @@ if( defined $self->{_data}
     }
     $self->{_data} = join('',@data);
     print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
-    $self->{_datasafe} = 0;
-    for(@{$self->{_rawmembers}{VALUES}}) { $_->{_datasafe} = 0 }
+    $self->_datasafe(0);
     return \$self->{_data};
   } else {
   # <insert code for other / swapped endianness here>
   }
 }
 
-sub _as_param_ { return $_[0]->_data(@_) }
+=item scalar
+
+Returns the number of elements in the Array (not the highest index),
+in the same way as C<scalar @myarray>. Useful for when Arrays are
+nested inside other objects, so you don't have to call scalar then put
+dereferencing @{} braces around the whole thing.
+
+=cut
+
+sub scalar { return scalar @{ $_[0]->{_members} } }
+
+=back
+
+=head1 SEE ALSO
+
+L<Ctypes::Type::Pointer>
+L<Ctypes::Type::Struct>
+L<Ctypes>
+
+=cut
+
+sub _as_param_ { return $_[0]->data(@_) }
 
 sub _update_ {
   my($self, $arg, $index) = @_;
@@ -284,7 +376,7 @@ sub _update_ {
   print "  and index is: $index\n" if $index and $Debug == 1;
   if( not defined $arg ) {
     if( $self->{_owner} ) {
-    $self->{_data} = substr( ${$self->{_owner}->_data},
+    $self->{_data} = substr( ${$self->{_owner}->data},
                              $self->{_index},
                              $self->{_size} );
     }
@@ -294,12 +386,15 @@ sub _update_ {
       if( $pad > 0 ) {
         $self->{_data} .= "\0" x $pad;
       }
+      print "  Putting arg where I think it should go...\n" if $Debug == 1;
       substr( $self->{_data},
               $index,
               length($arg)
             ) = $arg;
+      print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
     } else {
       $self->{_data} = $arg; # if data given with no index, replaces all
+  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
     }
   }
 
@@ -321,11 +416,27 @@ sub _update_ {
               $self->{_owner}->{_name});
     }
   }
-  $self->{_datasafe} = 1;
-  for(@{$self->{_rawmembers}{VALUES}}) { $_->{_datasafe} = 0 }
-  print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  $self->_datasafe(1);
+  print "BLARG: ", $self->{_rawmembers}, "\n" if $Debug == 1;
+  for(@{$self->{_rawmembers}->{VALUES}}) {
+    print "    Telling $_ it's not safe\n" if $Debug == 1;
+    $_->_datasafe(0);
+  }
+  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
   print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
   return 1;
+}
+
+sub _datasafe {
+  my( $self, $arg ) = @_;
+  if( defined $arg and $arg != 1 and $arg != 0 ) {
+    croak("Usage: ->_datasafe(1 or 0)")
+  }
+  if( defined $arg and $arg == 0 ) {
+    for(@{$self->{_rawmembers}{VALUES}}) { $_->_datasafe(0) }
+  }
+  $self->{_datasafe} = $arg if defined $arg;
+  return $self->{_datasafe};
 }
 
 package Ctypes::Type::Array::members;
@@ -333,9 +444,6 @@ use strict;
 use warnings;
 use Carp;
 use Ctypes::Type::Array;
-use Tie::Array;
-
-# our @ISA = ('Tie::StdArray');
 
 sub TIEARRAY {
   my $class = shift;
@@ -348,6 +456,7 @@ sub TIEARRAY {
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
+  print "In ", $self->{object}{_name}, "'s STORE, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
 
   if( $index > ($self->{object}{_length} - 1)
       and $self->{object}{_can_resize} = 0 ) {
@@ -357,7 +466,7 @@ sub STORE {
 
   my $val;
   if( !ref($arg) ) {
-    $val = Ctypes::Type::Array::_arg_to_type($arg,$self->{object}{_type});
+    $val = Ctypes::Type::Array::_arg_to_type($arg,$self->{object}{_member_type});
     if( not defined $val ) {
       carp("Could not create " . $self->{object}{_name}
            . " type from argument '$arg'");
@@ -373,14 +482,14 @@ sub STORE {
     $val = new Ctypes::Type::Array( $val );
   }
 
-  if( $val->_typecode_ =~ /p/ ) {  # might add other pointer types...
+  if( $val->typecode =~ /p/ ) {  # might add other pointer types...
     if ( ref($self->{VALUES}[0])   # might be first obj added
          and ref($val) ne ref($self->{VALUES}[0]) ) {
     carp( "Cannot put " . ref($val) . " type object into "
           . $self->{object}{_name} );
     return undef;
     }
-  } elsif( $val->_typecode_ ne $self->{object}{_member_type} ) {
+  } elsif( $val->typecode ne $self->{object}{_member_type} ) {
     carp( "Cannot put " . ref($val) . " type object into "
           . $self->{object}{_name} );
     return undef;
@@ -392,14 +501,17 @@ sub STORE {
 # if it were someday being translated to C), I think this might be where
 # one would make use of the disappearing object's _needsfree attribute.
   }
-  print "    Setting {VALUES}[$index] to $val\n" if $Debug == 1;
-  $self->{VALUES}[$index] = $val;
+  my $datum = ${$val->data}; # BEFORE setting owner, that's important!
+  print "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n" if $Debug == 1;
+  print "    ", __PACKAGE__ . ":" . __LINE__, ": In data form, that's\n",unpack('b*',$datum),"\n" if $Debug == 1;
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index}
     = $index * $self->{object}->{_member_size};
+  print "    Setting {VALUES}[$index] to $val\n" if $Debug == 1;
+  $self->{VALUES}[$index] = $val;
+  $self->{VALUES}[$index]->{_owner} = $self->{object};
+  $self->{VALUES}[$index]->{_index} = $index * $self->{object}->{_member_size};
 
-  my $datum = ${$val->_data};
-  print "    In data form, that's $datum\n" if $Debug == 1;
 # XXX Found this while working on Struct, think it's suspect. Sadly,
 # tests still pass without it. Doesn't say much for the regime :(
 #  if( $self->{object}{_owner} ) {
@@ -421,7 +533,9 @@ sub FETCH {
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
   if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
-  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index]->{_rawvalue}->{DATA}, "\n" if $Debug == 1;
+  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
+  carp "    ", $self->{object}{_name}, "\n" if $Debug == 1;
+  carp "    ", $self->{VALUES}[$index], "\n" if $Debug == 1;
     return ${$self->{VALUES}[$index]};
   } else {
     print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
@@ -431,7 +545,9 @@ sub FETCH {
 }
 
 sub CLEAR { $_[0]->{VALUES} = [] }
+sub EXISTS { exists $_[0]->{VALUES}->[$_[1]] }
 sub EXTEND { }
 sub FETCHSIZE { scalar @{$_[0]->{VALUES}} }
 
 1;
+__END__

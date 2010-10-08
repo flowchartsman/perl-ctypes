@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 23;
+use Test::More tests => 24;
 use Ctypes;
 use Ctypes::Callback;
 use Ctypes::Function;
@@ -21,15 +21,19 @@ use Data::Dumper;
 
 my $ushort = c_ushort(25); # because it makes the Wrong sized deref simpler
 is( $ushort->name, 'c_ushort', 'created c_ushort' );
-
 my $ushortp = Pointer( $ushort );
 isa_ok( $ushortp, 'Ctypes::Type::Pointer', 'Pointer object' );
 
 like( $$ushortp, qr/SCALAR/, '$$ptr returns original object' );
-like( $ushortp->contents, qr/SCALAR/, '$ptr->contents returns' );
+like( $ushortp->contents, qr/SCALAR/, '$ptr->contents returns original object' );
 
 is( ${$$ushortp}, 25, 'Get object value with ${$$ptr}');
 is( $ushortp->deref, 25, 'Get object value with $ptr->deref' );
+
+$$$ushortp = 30;
+
+is( $$ushort, 30, 'Modify contents with $$ptr = x' );
+$$$ushortp = 25;
 
 #   The only thing one has to remember is different in Perl is that
 # ${$$ptr} and $ptr->deref are NOT 'dereferencing the pointer' in
@@ -55,7 +59,7 @@ is( $$ushort, 30, 'Modify val of original object via $$ptr[x] = y' );
 $$ushortp = c_int(65536);  # should warn of incompat types
 subtest 'Wrongly sized deref' => sub {
   plan tests => 2;
-  is( $$ushortp[0], 0 );   # First {$ushort->size} bytes of int 65536
+  is( $$ushortp[0], 0 );   # First ($ushort->size) bytes of int 65536
   $ushortp++;
   is( $$ushortp[0], 1 );   # Second set of bytes
 };
@@ -68,10 +72,6 @@ subtest 'Set -ve offset and index forwards' => sub {
   is( $ushortp->offset(-5), -5, 'Can set -ve indices on object');
   is( $$ushortp[6], 1, 'Subscript retrieves correct value' );
 };
-
-($!, $@) = undef;
-# for(-20..10) {
-# }
 
 TODO: {
   note("The following few lines are TODO...");

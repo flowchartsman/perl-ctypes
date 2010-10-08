@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 19;
+use Test::More tests => 26;
 use Ctypes;
 use utf8;
 
@@ -20,17 +20,29 @@ my $number_twelve = $number_seven;
 is_deeply( $number_twelve, $number_seven, "Assignment copies object" );
 
 $$number_seven = 15;
-is( $$number_seven, 15, "Assign value with ->val = x" );
+is( $$number_seven, 15, "Assign value with \$\$obj = x" );
+
+$number_seven->value = 17;
+is( $$number_seven, 17, "Assign value with \$obj->value = x" );
+
+$number_seven->value(19);
+is( $$number_seven, 19, "Assign value with \$obj->value(x)" );
+
+$number_seven->(15);
+is( $$number_seven, 15, "Assign value with \$obj->(x)" );
+
+$$number_seven = 15.5972;
+is( $$number_seven, 15, "Ints rounded" );
 
 $$number_seven += 3;
 is( $$number_seven, 18, '$obj += <num>' );
 $$number_seven--;
 is( $$number_seven, 17, '$obj -= <num>' );
 
-is( $number_seven->_typecode_, 'i', "->typecode getter" );
-is( $number_seven->_typecode_('p'), 'i', "typecode cannot be set" );
+is( $number_seven->typecode, 'i', "->typecode getter" );
+is( $number_seven->typecode('p'), 'i', "typecode cannot be set" );
 
-is( ${$number_seven->_data}, pack('i', 17), "->_data getter" );
+is( ${$number_seven->data}, pack('i', 17), "->_data getter" );
 
 $number_seven = 20;
 is(ref($number_seven), '', '$obj = <num> squashes object');
@@ -38,6 +50,10 @@ is(ref($number_seven), '', '$obj = <num> squashes object');
 my $no_value = c_int;
 ok( ref($no_value) =~ /Ctypes::Type/, 'Created object without initializer' );
 is( $$no_value, 0, 'Default initialization to 0' );
+$$no_value = 10;
+is( $$no_value, 10 );
+$$no_value = undef;
+is( $$no_value, 0, 'Setting undef means zero' );
 
 my $number_y = c_int('y');
 is( $$number_y, 121, 'c_int casts from non-numeric ASCII character' );
@@ -70,6 +86,14 @@ Ctypes::Type::allow_overflow_all(0);
 $overflower = c_int(2147483648);
 is($overflower, undef, 'Can (dis)allow_overflow_all');
 
-my $ret_as_char = c_char(89);
-is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
-# TODO: define behaviour for numbers > 255!
+TODO: {
+  local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';
+  my $charar = c_char('P');
+  is( $$charar, 'P', 'c_char shows as 1-char strings in Perl' );
+  my $ret_as_char = c_char(89);
+  is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
+}
+
+# my $ushort = c_uint(691693896);
+# my $charptr = Pointer( c_char, $ushort );
+# diag( join(" ",@$charptr) );

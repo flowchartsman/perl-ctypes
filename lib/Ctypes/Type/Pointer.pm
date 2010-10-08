@@ -3,7 +3,6 @@ use strict;
 use warnings;
 use Carp;
 use Ctypes;
-use Data::Dumper;
 use overload
   '+'      => \&_add_overload,
   '-'      => \&_substract_overload,
@@ -20,7 +19,89 @@ Ctypes::Type::Pointer - What's that over there?
 
 =head1 SYNOPSIS
 
-  (see t/Pointer.t for now)
+    use Ctypes;
+
+    my $int = c_int(5);
+    print $$int;                   #   5
+
+    my $ptr = Pointer( $int );
+    print $$ptr;                   #   SCALAR(0x9b3ba30)
+    print $$ptr[0];                #   5
+
+    $$ptr[0] = 10;
+    print $$int;                   #   10
+
+=head1 ABSTRACT
+
+This class emulates C pointers. Or rather, pointers to other
+Ctypes objects (there's no raw memory manipulation going on here).
+
+=head1 DESCRIPTION
+
+In the current implementation, Pointer objects are the only Ctypes
+Type which come close to dealing with raw memory. For most types,
+which simply represent a value, that value can be normally be cached
+as a Perl scalar up until the point it is required by a C library
+function. However, in order to emulate pointer arithmetic, Pointer
+objects have to access the raw data fields of the Ctypes objects
+to which they point whenever they are dereferenced.
+
+This needn't happen on all occasions though. Since Ctypes Types are
+both 'object' and 'value', and it would be nice to use Pointers to
+access both, Pointer objects can be 'dereferenced' in two different
+ways.
+
+=head3 Pointer as alias
+
+When you wish to use a Pointer as a straight-forward alias to another
+Ctypes Type object, you can use B<scalar dereferencing> of the
+Pointer object, or the C<contents> object method.
+
+  my $int = c_int(10);
+  my $ptr = Pointer( $int );
+  
+  print $ptr;             # SCALAR(0xb1ab1aa), the Pointer object
+  print $$prt;            # SCALAR(0xf00f000), the c_int object
+  print $ptr->contents;   # the c_int object again
+
+This means that to use the C<c_int> object via the Pointer, you
+can add (yet) another dollar-sign to perform dereferencing on the
+returned C<c_int> object:
+
+  print $$$ptr;           # 10
+  $$$ptr = 25;
+  print $$int;            # 25
+
+It might be helpful to remember what each sigil is doing what here:
+
+                      $$$ptr;
+                      ^^^
+                     / | \
+                    /  |  Sigil for the Pointer object
+  Dereferencing the    |
+  returned c_int, to  Scalar dereferncing of the
+  return the value    Pointer object, returning the
+                      c_int object
+
+=head3 Pointer to data
+
+The other way of using Pointer objects is in contexts of 'pointer
+arithmetic', using them to index to arbitrary memory locations.
+Due to Ctypes' current implementation (mainly Perl, as opposed
+to mainly C), there is a limit to the arbitrariness of these
+memory locations. You can use Pointers to access locations within
+the C<data> fields of Ctypes objects, but you can't stray out
+into uncharted memory. This might be viewed by positively or
+negatively by different people. In any case, the situation would
+likely change should Ctypes move to a mainly C implementation.
+
+You access memory with Pointers using B<array dereferencing>.
+If the type of the pointer is the same as the type of the object
+you it's currently pointing to, C<$$ptr[0]> will return the value
+held by the object. If the Pointer type and the object type
+are different, then strange, hard to predict, but potentially
+very useful things can happen. See below under the C<new> method
+for an example.
 
 =cut
 
@@ -32,10 +113,10 @@ sub _add_overload {
   my( $x, $y, $swap ) = @_;
   my $ret;
   if( defined($swap) ) {
-    if( !$swap ) { $ret = $x->{offset} + $y; }
-    else { $ret = $y->{offset} + $x; }
+    if( !$swap ) { $ret = $x->{_offset} + $y; }
+    else { $ret = $y->{_offset} + $x; }
   } else {           # += etc.
-    $x->{offset} = $x->{offset} + $y;
+    $x->{_offset} = $x->{_offset} + $y;
     $ret = $x;
   }
   return $ret;
@@ -43,22 +124,22 @@ sub _add_overload {
 
 sub _array_overload {
   print ". . .._wearemany_.. . .\n" if $Debug == 1;
-  return shift->{bytes};
+  return shift->{_bytes};
 }
 
 sub _scalar_overload {
   print "We are One ^_^\n" if $Debug == 1;
-  return \shift->{contents}; 
+  return \shift->{_contents}; 
 }
 
 sub _subtract_overload {
   my( $x, $y, $swap ) = @_;
   my $ret;
   if( defined($swap) ) {
-    if( !$swap ) { $ret = $x->{offset} - $y; }
-    else { $ret = $x - $y->{offset}; }
+    if( !$swap ) { $ret = $x->{_offset} - $y; }
+    else { $ret = $x - $y->{_offset}; }
   } else {           # -= etc.
-    $x->{offset} -= $y;
+    $x->{_offset} -= $y;
     $ret = $x;
   }
   return $ret;
@@ -67,6 +148,39 @@ sub _subtract_overload {
 ############################################
 # TYPE::POINTER : PUBLIC FUNCTIONS & DATA  #
 ############################################
+
+=head1 METHODS
+
+Ctypes::Type::Pointer provides the following methods.
+
+=over
+
+=item new OBJECT
+
+=item new CTYPE, OBJECT
+
+Like with Arrays and Structs, you'll rarely use Ctypes::Type::Pointer->new
+directly since L<Ctypes> exports the C<Pointer> function by default.
+
+Pointers can be instantiated in two ways. First, you can pass a Ctypes
+for which you want to create a pointer. The Pointer will be typed according
+to that object.
+
+Alternatively, you can pass a Ctype to indicate the type in the first
+position, and the object at which to point in the second position. In this
+way you can index into data at arbitrary intervals based on the size of
+the 'type' of pointer you choose. For example, on a system where C<short>
+is two octets and C<char> is one:
+
+  my $uint = c_uint(691693896);
+  my $charptr = Pointer( c_char, $uint );
+  print @$charptr, "\n";
+
+Here, a Pointer has been made of type C<c_char>, four of which can be
+elicited from the four-byte C<c_uint> number. The output of this code
+on a Big-endian system would be a friendly greeting.
+
+=cut
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
@@ -84,41 +198,61 @@ sub new {
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
-  $type = $type->_typecode_ if ref($type);
+  $type = $type->typecode if ref($type);
   if( not Ctypes::sizeof($type) ) {
     carp("Invalid Array type specified (first position argument)");
     return undef;
   }
   my $self = $class->SUPER::_new;
   my $attrs = {
-     name        => $type.'_Pointer',
-     size        => Ctypes::sizeof('p'),
-     offset      => 0,
-     contents    => $contents,
-     bytes       => undef,
-     orig_type   => $type,
-     _typecode_  => 'p',
+     _name        => $type.'_Pointer',
+     _size        => Ctypes::sizeof('p'),
+     _offset      => 0,
+     _contents    => $contents,
+     _bytes       => undef,
+     _orig_type   => $type,
+     _typecode  => 'p',
                };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
 
   $self->{_rawcontents} =
-    tie $self->{contents}, 'Ctypes::Type::Pointer::contents', $self;
+    tie $self->{_contents}, 'Ctypes::Type::Pointer::contents', $self;
   $self->{_rawbytes} =
-    tie @{$self->{bytes}},
+    tie @{$self->{_bytes}},
           'Ctypes::Type::Pointer::bytes',
           $self;
-  $self->{contents} = $contents;
+  $self->{_contents} = $contents;
   return $self;
 }
 
-sub deref () : method {
-  return ${shift->{contents}};
+=item copy
+
+Return a copy of the Pointer object.
+
+=cut
+
+sub copy {
+  return Ctypes::Type::Pointer->new( $_[0]->contents );
 }
+
+=item deref
+
+This accessor returns the Ctypes object to which the Pointer points,
+like C<$$pointer>, but since it doesn't require the double sigil it
+is useful in e.g. accessing members of compound objects like Arrays.
+
+=cut
+
+sub deref () : method {
+  return ${shift->{_contents}};
+}
+
+sub data { &_as_param_(@_) }
 
 sub _as_param_ {
   my $self = shift;
-  print "In ", $self->{name}, "'s _As_param_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _As_param_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   if( defined $self->{_data} 
       and $self->{_datasafe} == 1 ) {
     print "already have _as_param_:\n" if $Debug == 1;
@@ -126,18 +260,18 @@ sub _as_param_ {
     print "   ", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
     return \$self->{_data} 
   }
-# Can't use $self->{contents} as FETCH will bork at _datasafe
+# Can't use $self->{_contents} as FETCH will bork at _datasafe
 # use $self->{_raw}{DATA} instead
   $self->{_data} =
     ${$self->{_rawcontents}{DATA}->_as_param_};
-  print "  ", $self->{name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
+  print "  ", $self->{_name}, "'s _as_param_ returning ok...\n" if $Debug == 1;
   $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_data};
 }
 
 sub _update_ {
   my( $self, $arg ) = @_;
-  print "In ", $self->{name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
   print "  self is ", $self, "\n" if $Debug == 1;
   print "  arg is $arg\n" if $Debug == 1;
   print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $Debug == 1;
@@ -145,7 +279,7 @@ sub _update_ {
 
   my $success = $self->{_rawcontents}{DATA}->_update_($arg);
   if(!$success) {
-    croak($self->{name}, ": Error updating contents!");
+    croak($self->{_name}, ": Error updating contents!");
   }
 # 
 #  $self->{_data} = $self->_as_param_;
@@ -153,14 +287,60 @@ sub _update_ {
   return 1;
 }
 
+=item contents
+
+This accessor returns the object to which the Pointer points (as
+opposed to the I<value> represented by that object). C<$ptr->contents>
+is a synonym for C<$$ptr>, but since it doesn't require the double-
+sigil syntax it can be used e.g. when accessing members of compound
+objects like Arrays.
+
+=item type
+
+This accessor returns the typecode of the type to which the Pointer
+points. It is analogous to the pointer 'type' in C. Pointer I<objects>
+themselves are always typecode 'p'.
+
+=item offset NUMBER
+
+=item offset
+
+This method sets and/or returns the current offset of the Pointer
+object. The offset of the Pointer object can also be manipulated by
+using various mathematical operators on the object:
+
+  $pointer++;
+  $pointer--;
+  $pointer += 2;
+
+Note that these are performed on the Pointer object itself (with one
+sigil). Two sigils gets you the value the Pointer points to, and they're
+not what you want to increment.
+
+When using Perl array-style subscript dereferencing on the Pointer to
+access chunks of data, the subscript B<is added to the offset>. The
+following shows two ways to get the same result:
+
+  my $array = Array( c_int, [ 1, 2, 3, 4, 5 ] );
+  my $intptr = ( c_int, $array );      # offset is 0
+
+  print $$intptr[2];                   # 3
+  $intptr += 3;
+  print $$intptr[0];                   # 3
+
+Note that since Perl translates negative subscripts into positive ones
+based on array size, negative subscripts on Pointer objects do not
+work.
+
+=cut
+
 #
 # Accessor generation
 #
 my %access = (
-  _typecode_        => ['_typecode_'],
-  contents          => ['contents'],
-  type              => ['orig_type'],
-  offset            => ['offset',undef,1],
+  contents          => ['_contents'],
+  type              => ['_orig_type'],
+  offset            => ['_offset',undef,1],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -189,40 +369,42 @@ use Carp;
 use Ctypes;
 
 sub TIESCALAR {
+  print "In Bytes' TIESCALAR\n" if $Debug == 1;
   my $class = shift;
   my $owner = shift;
-  my $self = { owner => $owner,
+  my $self = { _owner => $owner,
                DATA  => undef,
              };
+  print "    my owner is ", $self->{_owner}{_name}, "\n" if $Debug == 1;
   return bless $self => $class;
 }
 
 sub STORE {
   my( $self, $arg ) = @_;
-  print "In ", $self->{owner}{name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{_owner}{_name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
   if( not Ctypes::is_ctypes_compat($arg) ) {                              
     if ( $arg =~ /^\d*$/ ) {                                              
 croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
     }                                                                     
   croak("Pointers are to Ctypes compatible objects only")                 
   }          
-  $self->{owner}{_data} = undef;
-  $self->{owner}{offset} = 0; # makes sense to reset offset
-  print "  ", $self->{owner}{name}, "'s content STORE returning ok...\n" if $Debug == 1;
+  $self->{_owner}{_data} = undef;
+  $self->{_owner}{_offset} = 0; # makes sense to reset offset
+  print "  ", $self->{_owner}{_name}, "'s content STORE returning ok...\n" if $Debug == 1;
   return $self->{DATA} = $arg;
 }
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{owner}{name}, "'s content FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  if( defined $self->{owner}{_data}
-      and $self->{owner}{_datasafe} == 0 ) {
-    print "    Woop... _as_param_ is ", unpack('b*',$self->{owner}{_data}),"\n" if $Debug == 1;
-    my $success = $self->{owner}->_update_(${$self->{owner}->_as_param_});
-    croak($self->{name},": Could not update contents!") if not $success;
+  print "In ", $self->{_owner}{_name}, "'s content FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  if( defined $self->{_owner}{_data}
+      or $self->{_owner}{_datasafe} == 0 ) {
+    print "    Woop... _as_param_ is ", unpack('b*',$self->{_owner}{_data}),"\n" if $Debug == 1;
+    my $success = $self->{_owner}->_update_(${$self->{_owner}->_as_param_});
+    croak($self->{_name},": Could not update contents!") if not $success;
   }
-  croak("Error! Data not safe!") if $self->{owner}{_datasafe} != 1;
-  print "  ", $self->{owner}{name}, "'s content FETCH returning ok...\n" if $Debug == 1;
+  croak("Error! Data not safe!") if $self->{_owner}{_datasafe} != 1;
+  print "  ", $self->{_owner}{_name}, "'s content FETCH returning ok...\n" if $Debug == 1;
   print "  Returning ", ${$self->{DATA}}, "\n" if $Debug == 1;
   return $self->{DATA};
 }
@@ -236,7 +418,7 @@ use Ctypes;
 sub TIEARRAY {
   my $class = shift;
   my $owner = shift;
-  my $self = { owner => $owner,
+  my $self = { _owner => $owner,
                DATA  => [],
              };
   return bless $self => $class;
@@ -244,17 +426,17 @@ sub TIEARRAY {
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
-  print "In ", $self->{owner}{name}, "'s Bytes STORE, from ", (caller(0))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{_owner}{_name}, "'s Bytes STORE, from ", (caller(0))[0..3], "\n" if $Debug == 1;
   if( ref($arg) ) {
     carp("Only store simple scalar data through subscripted Pointers");
     return undef;
   }
 
-  my $data = $self->{owner}{contents}->_as_param_;
+  my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug == 1;
-  my $each = Ctypes::sizeof($self->{owner}{orig_type});
+  my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
 
-  my $offset = $index + $self->{owner}{offset};
+  my $offset = $index + $self->{_owner}{_offset};
   if( $offset < 0 ) {
     carp("Pointer cannot store before start of data");
     return undef;
@@ -266,9 +448,9 @@ sub STORE {
 
   print "\teach is $each\n" if $Debug == 1;
   print "\tdata length is ", length($$data), "\n" if $Debug == 1;
-  my $insert = pack($self->{owner}{orig_type},$arg);
-  print "insert is ", unpack('b*',$insert), "\n" if $Debug == 1;
-  if( length($insert) != Ctypes::sizeof($self->{owner}{orig_type}) ) {
+  my $insert = pack($self->{_owner}{_orig_type},$arg);
+  print "\tinsert is ", unpack('b*',$insert), "\n" if $Debug == 1;
+  if( length($insert) != Ctypes::sizeof($self->{_owner}{_orig_type}) ) {
     carp("You're about to break something...");
 # ??? What would be useful feedback here? Aside from just not doing it..
   }
@@ -276,31 +458,31 @@ sub STORE {
   print unpack('b*',$$data), "\n" if $Debug == 1;
   substr( $$data,
           $each * $offset,
-          Ctypes::sizeof($self->{owner}{orig_type}),
+          Ctypes::sizeof($self->{_owner}{_orig_type}),
         ) =  $insert;
   print unpack('b*',$$data), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $insert;  # don't think this can be used
-  $self->{owner}{contents}->_update_($$data);
-  print "  ", $self->{owner}{name}, "'s Bytes STORE returning ok...\n" if $Debug == 1;
+  $self->{_owner}{_rawcontents}{DATA}->_update_($$data);
+  print "  ", $self->{_owner}{_name}, "'s Bytes STORE returning ok...\n" if $Debug == 1;
   return $insert;
 }
 
 sub FETCH {
   my( $self, $index ) = @_;
-  print "In ", $self->{owner}{name}, "'s Bytes FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{_owner}{_name}, "'s Bytes FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
 
-  my $type = $self->{owner}{orig_type};
+  my $type = $self->{_owner}{_orig_type};
   if( $type =~ /[pv]/ ) {
     carp("Pointer is to type ", $type,
          "; can't know how to dereference data");
     return undef;
   }
 
-  my $data = $self->{owner}{contents}->_as_param_;
+  my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug == 1;
-  my $each = Ctypes::sizeof($self->{owner}{orig_type});
+  my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
 
-  my $offset = $index + $self->{owner}{offset};
+  my $offset = $index + $self->{_owner}{_offset};
   if( $offset < 0 ) {
     carp("Pointer cannot look back past start of data");
     return undef;
@@ -315,23 +497,31 @@ sub FETCH {
   print "\toffset is $offset\n" if $Debug == 1;
   print "\teach is $each\n" if $Debug == 1;
   print "\tstart is $start\n" if $Debug == 1;
-  print "\torig_type: ", $self->{owner}{orig_type}, "\n" if $Debug == 1;
+  print "\torig_type: ", $self->{_owner}{_orig_type}, "\n" if $Debug == 1;
   print "\tdata length is ", length($$data), "\n" if $Debug == 1;
   my $chunk = substr( $$data,
                       $each * $offset,
-                      Ctypes::sizeof($self->{owner}{orig_type})
+                      Ctypes::sizeof($self->{_owner}{_orig_type})
                     );
   print "\tchunk: ", unpack('b*',$chunk), "\n" if $Debug == 1;
   $self->{DATA}[$index] = $chunk;
-  print "  ", $self->{owner}{name}, "'s Bytes FETCH returning ok...\n" if $Debug == 1;
-  return unpack($self->{owner}{orig_type},$chunk);
+  print "  ", $self->{_owner}{_name}, "'s Bytes FETCH returning ok...\n" if $Debug == 1;
+  return unpack($self->{_owner}{_orig_type},$chunk);
 }
 
 sub FETCHSIZE {
-  my $data = $_[0]->{owner}{contents}{_data}
-  ? $_[0]->{owner}{contents}{_data}
-  : $_[0]->{owner}{contents}->_as_param_;
-  return length($data) / Ctypes::sizeof($_[0]->{owner}{orig_type});
+  my $data = $_[0]->{_owner}{_rawcontents}{DATA}{_data}
+  ? $_[0]->{_owner}{_rawcontents}{DATA}{_data}
+  : $_[0]->{_owner}{_rawcontents}{DATA}->_as_param_;
+  return length($data) / Ctypes::sizeof($_[0]->{_owner}{_orig_type});
 }
+
+sub EXISTS { 0 }  # makes no sense for ::bytes
+sub EXTEND { }
+sub UNSHIFT { croak("Pointer::bytes isn't a normal array - can't unshift") }
+sub SHIFT { croak("Pointer::bytes isn't a normal array - can't shift") }
+sub PUSH { croak("Pointer::bytes isn't a normal array - can't push") }
+sub POP { croak("Pointer::bytes isn't a normal array - can't pop") }
+sub SPLICE { croak("Pointer::bytes isn't a normal array - can't splice") }
 
 1;

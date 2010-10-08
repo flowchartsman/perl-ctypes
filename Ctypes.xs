@@ -51,7 +51,7 @@ ConvArg(SV* obj, char type_expected,
 
   debug_warn("#    Checking type_got...");
   if( sv_isobject(obj) ) {
-    type_got = (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(obj,"_typecode_"),tc_len);
+    type_got = (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(obj,"_typecode"),tc_len);
 //    tmp = Ct_HVObj_GET_ATTR_KEY(obj, "_as_param_");
 //    if( tmp == NULL || !SvOK(tmp) ) {
       AV* args = NULL;
@@ -523,7 +523,7 @@ _call(self, ...)
     rtypeSV = Ct_HVObj_GET_ATTR_KEY(self, "restype");
     if( Ct_Obj_IsDeriv(rtypeSV,"Ctypes::Type") ) {
       rtypechar =
-        (char)*SvPV_nolen(Ct_HVObj_GET_ATTR_KEY(rtypeSV,"_typecode_"));
+        (char)*SvPV_nolen(Ct_HVObj_GET_ATTR_KEY(rtypeSV,"_typecode"));
       rtype = get_ffi_type( rtypechar );
     } else {
       rtypechar = (char)*SvPV_nolen(rtypeSV);
@@ -570,7 +570,7 @@ _call(self, ...)
           if( fetched_argtype != NULL ) {
             this_argtype = *fetched_argtype;
             type_expected = Ct_Obj_IsDeriv(this_argtype, "Ctypes::Type")
-              ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"_typecode_"),tc_len)
+              ? (char)*SvPV(Ct_HVObj_GET_ATTR_KEY(this_argtype,"_typecode"),tc_len)
               : (char)*SvPV(this_argtype,tc_len);
           } else {
   croak("[%s:%i] Function::_call error: Can't grok argtype at position %i",
@@ -683,9 +683,23 @@ CODE:
     case 'v': break;
     case 'c':
     case 'C':
+      debug_warn("#    A char type...");
     /* We want the real value, not implicit conversion */
-      if( !SvPOKp(arg_sv) ) break;
-      if( sv_len(arg_sv) != 1 ) break;
+      if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+        arg_nv = SvNV(arg_sv);
+        debug_warn("#[%i]    Numeric value of arg was %g", __LINE__, arg_nv);
+        if( arg_nv < CHAR_MIN || arg_nv > CHAR_MAX ) {
+          /* no wrap-around: higher bits discarded for char */
+          debug_warn("#    ... out of range, needs cast");
+          RETVAL = 0; break;
+        }
+      } else if( SvPOK(arg_sv) ) {
+        debug_warn("#    arg was SvPOK, will be converted to int in cast");
+        RETVAL = 0; break;
+      } else {
+        croak("[%s:%i] Ctypes::_cast error: arg for type %c not IOK, NOK or POK",
+          __FILE__, __LINE__, type);
+      }
       RETVAL = 1; break;
     case 's':
       if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
@@ -702,14 +716,26 @@ CODE:
       }
       RETVAL = 1; break;
     case 'i':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
+      /* XXX Why do we need private check for values
+             from Type::Simple->copy() ??            */
+        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
+        break;
+      }
+      debug_warn("#    Got scalar integer...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
+      /* XXX Why do we need private check for values
+             from Type::Simple->copy() ??            */
+        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
+        break;
+      }
+      debug_warn("#    Got type I...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_UINT_MIN || arg_nv > PERL_UINT_MAX ) {
         RETVAL = -1; break;
@@ -717,24 +743,26 @@ CODE:
       RETVAL = 1; break;
     case 'l':
     /* ??? Are Longs always guaranteed to be IV rather than NV? */
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_LONG_MIN || arg_nv > PERL_LONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'L':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_ULONG_MIN || arg_nv > PERL_ULONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'f':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
+      // if( !SvNOK(arg_sv) ) break;
     /* ??? Is NV, usually double, alright to use here?
        Also, any Perl vars to use instead of stdlib ones? */
+      debug_warn("#    Got a float...");
       arg_nv = SvNV(arg_sv);
+      debug_warn("#    got %f", (float)arg_nv);
       if( ( FLT_MIN - arg_nv) > FLT_EPSILON || (arg_nv - FLT_MAX) > FLT_EPSILON ) {
         RETVAL = -1; break;
       }
@@ -758,8 +786,11 @@ CODE:
     case 'p':
     /* Pointers can be just about anything
        ??? Could this be improved? */
-      if( !SvPOK(arg_sv) && !SvNOK(arg_sv) && !SvIOK(arg_sv) )
+      if( !SvPOK(arg_sv) && !SvNOK(arg_sv) && !SvIOK(arg_sv) ) {
+        debug_warn("#[%s:%i] _valid_for_type: arg_sv wasn't Anything. What did you pass??",
+                   __FILE__, __LINE__ );
         RETVAL = 0; break;
+      }
       RETVAL = 1; break;
     default: croak( "Invalid type: %c", type );
   }
@@ -781,40 +812,55 @@ CODE:
   if(retval == NULL) croak("Ctypes::_cast: Out of memory!");
   STRLEN len = 1;
   STRLEN utf8retlen = 0;
+  NV arg_nv;
+  short set = 0;
+  char achar;
   RETVAL = &PL_sv_undef;
   switch (type) {
     case 'c':
       debug_warn("Case 'c'");
       if(SvIOK(arg_sv)) {
         debug_warn("\targ was SvIOK");
-        *(unsigned char*) retval = (unsigned char)SvIV(arg_sv);
+        ((signed char*)retval)[0] = (signed char)SvIV(arg_sv);
+        set = 1;
       } else if(SvNOK(arg_sv)) {
         debug_warn("\targ was SvNOK");
-        *(unsigned char*) retval = (unsigned char)SvNV(arg_sv);
+        ((signed char*)retval)[0] = (signed char)SvNV(arg_sv);
+        set = 1;
       } else if(SvPOK(arg_sv)) {
         debug_warn("\targ was SvPOK");
-        *(unsigned char*) retval = (unsigned char)*SvPV_nolen(arg_sv);
+        ((signed char*)retval)[0] = (signed char)*SvPV_nolen(arg_sv);
+        set = 1;
       }
-      if(*(unsigned char*)retval) {
-        debug_warn("\tretval is %c", *(unsigned char*)retval);
-        RETVAL = newSVpv((unsigned char*)retval, len);
+      if(set == 1) {
+        debug_warn("\tretval is %c", *(signed char*)retval);
+        RETVAL = newSViv((int)(((signed char*)retval)[0]));
       }
       break;
     case 'C':
-      debug_warn("Case 'C'");
-      if(SvIOK(arg_sv)) {
-        debug_warn("\targ was SvIOK");
-        *(unsigned char*) retval = (unsigned char)SvIV(arg_sv);
-      } else if(SvNOK(arg_sv)) {
-        debug_warn("\targ was SvNOK");
-        *(unsigned char*) retval = (unsigned char)SvNV(arg_sv);
+      debug_warn("#[%i] _cast 'C'", __LINE__);
+      if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+        arg_nv = SvNV(arg_sv);
+        debug_warn("#[%i]    Numeric value of arg was %g", __LINE__, arg_nv);
+        if( arg_nv > CHAR_MAX ) arg_nv = CHAR_MAX;
+        if( arg_nv < CHAR_MIN ) arg_nv = CHAR_MIN;
+        ((unsigned char*)retval)[0] = (char)arg_nv;
+        set = 1;
+        debug_warn("#[%i]    retval is now %i as integer and %c as char",
+                   __LINE__, (int)(((unsigned char*)retval)[0]),
+                  (char)(((unsigned char*)retval)[0]) );
       } else if(SvPOK(arg_sv)) {
-        debug_warn("\targ was SvPOK");
-        *(unsigned char*) retval = (unsigned char)*SvPV_nolen(arg_sv);
+        debug_warn("#[%i]    arg was SvPOK", __LINE__);
+        ((unsigned char*)retval)[0] = (SvPV(arg_sv, len))[0];
+        set = 1;
+        debug_warn("#[%i]    retval is now %i as integer and %c as char",
+                   __LINE__, (int)(((unsigned char*)retval)[0]),
+                  (char)(((unsigned char*)retval)[0]) );
       }
-      if(*(unsigned char*)retval) {
-        debug_warn("\tretval is %c", *(unsigned char*)retval);
-        RETVAL = newSVpv((unsigned char*)retval, len);
+      /* Following check not appropriate as input '0' would be char NULL
+      if(((unsigned char*)retval)[0]) {   */
+      if(set == 1) {
+        RETVAL = newSViv((int)(((unsigned char*)retval)[0]));
       }
       break;
     case 's':
@@ -842,27 +888,27 @@ CODE:
       }
       break;
     case 'i':
-      debug_warn("Case 'i'");
+      debug_warn("#\tCase 'i'");
       if(SvIOK(arg_sv)) {
-        debug_warn("\targ was SvIOK");
+        debug_warn("#\targ was SvIOK");
         *(int*) retval = (int)SvIV(arg_sv);
       } else if(SvNOK(arg_sv)) {
-        debug_warn("\targ was SvNOK");
+        debug_warn("#\targ was SvNOK");
         *(int*) retval = (int)SvNV(arg_sv);
       } else if(SvPOK(arg_sv)) {
-        debug_warn("\targ was SvPOK");
+        debug_warn("#\targ was SvPOK");
         if(SvUTF8(arg_sv)) {
-          debug_warn("\tThis is utf8!");
+          debug_warn("#\tThis is utf8!");
           *(int*)retval =
             (int)utf8_to_uvchr((SvPVutf8_nolen(arg_sv)), &utf8retlen);
         }
         else {
-          debug_warn("\tThis is Not utf8");
+          debug_warn("#\tThis is Not utf8");
           *(int*)retval = (int)*(SvPV_nolen(arg_sv));
         }
       }
       if(*(int*)retval) {
-        debug_warn("\tretval is %i", *(int*)retval);
+        debug_warn("#\tretval is %i", *(int*)retval);
         RETVAL = newSViv(*(int*)retval);
       }
       break;
