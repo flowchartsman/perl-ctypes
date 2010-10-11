@@ -60,4 +60,44 @@ get_ffi_type(char type)
   }
 }
 
+SV*
+get_types_info( char typecode, const char* datum, int datum_len )
+{
+  const char* tc = &typecode;
+  SV* _types_sv = NULL;
+  HV* _types_hv = NULL;
+  SV** fetched = NULL;
+  SV* typeinfo_sv = NULL;
+  HV* typeinfo_hv = NULL;
+  SV* info_sv = NULL;
+  U32 klen = 0;
+
+  _types_sv = get_sv( "Ctypes::Type::_types", 0 );
+  if( _types_sv == NULL )
+    croak( "Couldn't find $Ctypes::Type::_types hashref!" );
+  if( !SvROK(_types_sv) || SvTYPE(SvRV(_types_sv)) != SVt_PVHV )
+    croak( "_types was something other than a hashref!" );
+
+  _types_hv = (HV*)SvRV(_types_sv);
+
+  klen = 1;
+  fetched = hv_fetch( _types_hv, tc, klen, 0 );
+  if( fetched == NULL )
+    croak( "Couldn't find type info for type %c!", typecode );
+  typeinfo_sv = *fetched;
+
+  if( !SvROK(_types_sv) || SvTYPE(SvRV(_types_sv)) != SVt_PVHV )
+    croak( "_types was something other than a hashref!" );
+  typeinfo_hv = (HV*)SvRV(typeinfo_sv);
+
+  fetched = NULL;
+  klen = datum_len;
+  fetched = hv_fetch( typeinfo_hv, datum, klen, 0 );
+  if( fetched == NULL )
+    croak( "Couldn't find datum '%s' for type %c!", datum, typecode );
+  info_sv = *fetched;
+
+  return info_sv;
+}
+
 #endif

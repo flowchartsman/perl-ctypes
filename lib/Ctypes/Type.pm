@@ -22,21 +22,38 @@ Ctypes::Type - Abstract base class for Ctypes Data Type objects
 
 =cut
 
+#  our $_perltypes = 
+#  { 
+#    v =>  "c_void",
+#    c =>  "c_byte",
+#    C =>  "c_char",
+#    s =>  "c_short",
+#    S =>  "c_ushort",
+#    i =>  "c_int",
+#    I =>  "c_uint",
+#    l =>  "c_long",
+#    L =>  "c_ulong",
+#    f =>  "c_float",
+#    d =>  "c_double",
+#    D =>  "c_longdouble",
+#    p =>  "c_void_p",
+#  };
+
 our $_perltypes = 
 { 
-  v =>  "c_void",
-  c =>  "c_byte",
-  C =>  "c_char",
-  s =>  "c_short",
-  S =>  "c_ushort",
-  i =>  "c_int",
-  I =>  "c_uint",
-  l =>  "c_long",
-  L =>  "c_ulong",
-  f =>  "c_float",
-  d =>  "c_double",
-  D =>  "c_longdouble",
-  p =>  "c_void_p",
+  v =>  { name => 'c_void', sizecode => 'v' },
+  b =>  { name => 'c_byte', sizecode => 'c' },
+  C =>  { name => 'c_char', sizecode => 'c' },
+  s =>  { name => 'c_short', sizecode => 's' },
+  S =>  { name => 'c_ushort', sizecode => 's' },
+  i =>  { name => 'c_int', sizecode => 'i' },
+  I =>  { name => 'c_uint', sizecode => 'i' },
+  l =>  { name => 'c_long', sizecode => 'l' },
+  L =>  { name => 'c_ulong', sizecode => 'l' },
+  f =>  { name => 'c_float', sizecode => 'f' },
+  d =>  { name => 'c_double', sizecode => 'd' },
+  D =>  { name => 'c_longdouble', sizecode => 'D' },
+  p =>  { name => 'c_void_p', sizecode => 'p' },
 };
 
 # c_char c_wchar c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
@@ -144,7 +161,7 @@ sub _needsfree : lvalue {
 #
 my %_defined;
 for my $k (keys %$_types) {
-  my $name = $_types->{$k};
+  my $name = $_types->{$k}->{name};
   my $func;
   unless ($_defined{$name}) {
     no strict 'refs';

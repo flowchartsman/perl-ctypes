@@ -14,7 +14,7 @@ use overload '${}' => \&_scalar_overload,
              fallback => 'TRUE';
        # TODO Multiplication will have to be overridden
        # to implement Python's Array contruction with "type * x"???
-my $Debug = 0;
+my $Debug = 1;
 
 =head1 NAME
 
@@ -145,7 +145,7 @@ sub new {
   my $self = $class->SUPER::_new;
   my $attrs = { 
     _typecode        => $typecode,
-    _name            => Ctypes::Type::_types()->{$typecode},
+    _name            => Ctypes::Type::_types()->{$typecode}->{name},
     _allow_overflow  => 1,
               };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };

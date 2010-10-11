@@ -7,9 +7,9 @@ use Ctypes::Callback;
 sub cb_func {
   my( $ay, $bee ) = @_;
   print "    \$ay is $ay, \$bee is $bee...";
-  if( ($ay+0) < ($bee+0) ) { print " returning -1!\n"; return -1; }
-  if( ($ay+0) == ($bee+0) ) { print " returning 0!\n"; return 0; }
-  if( ($ay+0) > ($bee+0) ) { print " returning 1!\n"; return 1; }
+  if( $ay < $bee ) { print " returning -1!\n"; return -1; }
+  if( $ay == $bee ) { print " returning 0!\n"; return 0; }
+  if( $ay > $bee ) { print " returning 1!\n"; return 1; }
 }
 
 my $qsort = Ctypes::Function->new
