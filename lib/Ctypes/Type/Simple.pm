@@ -76,7 +76,7 @@ looking a bit unusual. In general, the convention to remember in
 Ctypes is that you use B<two> sigils to talk about the B<value> you're
 representing, and B<one> sigil to talk about the object you're
 representing it with. So $$int returns the value which would be
-passed to C, while $int can be used to find out things about the object
+passed to C, while $int can be used to find out things I<about> the object
 itself, like C<$int->name>, C<$int->size>, etc.
 
 In addition to the methods provided by Ctypes::Type, Ctypes::Type::Simple
@@ -146,11 +146,10 @@ sub new {
   my $attrs = { 
     _typecode        => $typecode,
     _name            => Ctypes::Type::_types()->{$typecode}->{name},
-    _allow_overflow  => 1,
+    _strict_input    => 0,
               };
   for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   bless $self => $class;
-  $self->{_size} = Ctypes::sizeof($typecode);
   $arg = 0 unless defined $arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
   $self->{_value} = $arg;
@@ -159,26 +158,28 @@ sub new {
 }
 
 
-=item allow_overflow
+=item strict_input
 
-Mutator setting and/or returning a flag (1 or 0) indicating whether
-this particular object is allowed to overflow. Defaults to 1, allowing
-overflowing, as in C, but you'll get a warning about it. Note that even
-if C<allow_overflow> is set to 1 for a particular object, overflows
-will be prevented if C<allow_overflow_all> is set to 0. See the
-L<allow_overflow_all|Ctypes::Type/allow_overflow_all> class method in
-L<Ctypes::Type>.
+Mutator setting and/or returning a flag (1 or 0) indicating how
+fussy this object should be about values given it to store. Defaults
+to 0, meaning Ctypes will do its best to make a sensible value of
+the correct type out of any value it gets (although its ability to do
+so is not always guaranteed). You'll probably get a warning about it.
+Note that even if C<strict_input> is 0 for a particular object, it is
+overridden if C<strict_input_all> is set to 1.
+See the L<strict_input_all|Ctypes::Type/strict_input_all> class method
+in L<Ctypes::Type>.
 
 =cut
 
-sub allow_overflow {
+sub strict_input {
     my $self = shift;
     my $arg = shift;
     if( @_  or ( defined $arg and $arg != 1 and $arg != 0 ) ) {
       croak("Usage: allow_overflow(1 or 0)");
     }
-    $self->{_allow_overflow} = $arg if defined $arg;
-    $self->{_allow_overflow};
+    $self->{_strict_input} = $arg if defined $arg;
+    $self->{_strict_input};
 }
 
 =item copy
@@ -255,10 +256,10 @@ sub _update_ {
       print "12345678" x length($owners_data), "\n" if $Debug == 1;
       print unpack('b*', $owners_data), "\n" if $Debug == 1;
       print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
-      print "    My size is ", $self->{_size}, "\n" if $Debug == 1;
+      print "    My size is ", $self->size, "\n" if $Debug == 1;
       $self->{_data} = substr( ${$self->{_owner}->data},
                                $self->{_index},
-                               $self->{_size} );
+                               $self->size );
       print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
       print "    Which is ", unpack($self->{_typecode},$self->{_data}), " as a number\n" if $Debug == 1;
   $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
@@ -276,6 +277,11 @@ sub _update_ {
 }
 
 sub _set_undef { $_[0]->{_value} = 0 }
+
+sub size { Ctypes::sizeof($Ctypes::Type::_types->{$_[0]->{_typecode}}->{sizecode}); }
+sub sizecode { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{sizecode}; }
+sub packcode { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{packcode}; }
+sub validate { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in}->($_[1]); }
 
 package Ctypes::Type::Simple::value;
 use strict;
@@ -330,32 +336,27 @@ sub STORE {
 
   my $typecode = $self->{object}{_typecode};
   print "    Using typecode $typecode\n" if $Debug == 1;
-  print "    arg is $arg\n" if $Debug == 1;
+  print "    1) arg is $arg, which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
-  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  print "    _valid_for_type returned $is_valid\n" if $Debug == 1;
-  if( $is_valid < 1 ) {
+#  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
+  $self->{object}->{_input} = $arg;
+  my ($invalid, $result) = $self->{object}->validate($arg);
+  print "    _valid_for_type returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug == 1;
+  if( defined $invalid ) {
     no strict 'refs';
-    if( ($is_valid == -1)
-        and ( $self->{object}->allow_overflow == 0
-        or Ctypes::Type::allow_overflow_all() == 0 ) ) {
-      carp( "Value out of range for " . $self->{object}{_name} . ": $arg");
+    if( $self->{object}->strict_input == 1
+        or Ctypes::Type::strict_input_all() == 1 ) {
+      croak( $invalid, " (got $arg)");
       return undef;
     } else {
-      my $temp = Ctypes::_cast($arg,$typecode);
-      print "    _cast returned: ", $temp, "\n" if $Debug == 1;
-      if( $temp && Ctypes::_valid_for_type($temp,$typecode) ) {
-        $arg = $temp;
-      } else {
-        carp("Unreconcilable argument for type " . $self->{object}{_name} .
-              ": $arg");
-        return undef;
-      }
+      carp( $invalid, " (got $arg)");
+      $arg = $result;
     }
   }
-  $self->{VALUE} = $arg;
+  print "    2) arg is $arg, which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1; 
   $self->{object}{_data} =
-    pack( $self->{object}{_typecode}, $arg );
+    pack( $self->{object}->packcode, $result );
+  $self->{VALUE} = unpack( $self->{object}->packcode, $self->{object}{_data} );
   if( $self->{object}{_owner} ) {
     print "    Have owner, updating with\n", unpack('b*', $self->{object}{_data}), "\n    or ", unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug == 1;
     $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
@@ -374,7 +375,11 @@ sub FETCH {
   }
   croak("Error updating value!") if $self->{object}{_datasafe} != 1;
   print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug == 1;
-  return $self->{VALUE};
+  if( exists $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out} ) {
+    return $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out}->($self->{VALUE}, $self->{object});
+  } else {
+    return $self->{VALUE};
+  }
 }
 
 1;

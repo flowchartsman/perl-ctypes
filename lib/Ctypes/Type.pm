@@ -5,7 +5,7 @@ use warnings;
 use Carp;
 require Exporter;
 our @ISA = qw|Exporter|;
-our @EXPORT_OK = qw|&_types &allow_overflow_all|;
+our @EXPORT_OK = qw|&_types &strict_input_all|;
 our $VERSION = 0.002;
 use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
@@ -14,7 +14,10 @@ use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 use Ctypes::Type::Struct;
+use Scalar::Util qw|looks_like_number|;
+use Encode;
 my $Debug = 0;
+use utf8;
 
 =head1 NAME
 
@@ -41,9 +44,71 @@ Ctypes::Type - Abstract base class for Ctypes Data Type objects
 
 our $_perltypes = 
 { 
-  v =>  { name => 'c_void', sizecode => 'v' },
-  b =>  { name => 'c_byte', sizecode => 'c' },
-  C =>  { name => 'c_char', sizecode => 'c' },
+  v => { 
+         name     => 'c_void',
+         sizecode => 'v',
+         packcode => 'a',
+         typecode => 'v',
+         hook_in  => sub {
+           my $valid = undef;
+           if( exists $_[0] ) {
+             $valid = "c_void: void types cannot take values";
+           }
+           return ( $valid, "\0" );
+         }, # end of hook_in
+       }, # end of type 'v'
+  b => {
+         name     => 'c_byte',
+         sizecode => 'C',
+         packcode => 'C',
+         typecode => 'b',
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           return ( "c_byte: cannot take references", $arg )
+             if ref($arg);
+           if( looks_like_number($arg) ) {
+             if( $arg % 1 and $arg != 0 ) {
+               $valid = "c_byte: numeric values must " .
+                         "be integers 0 < x < 255";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < 0 or $arg > 255 ) {
+               $valid = "c_byte: numeric values must " .
+                        "be integers 0 < x < 255";
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "1 char long!\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid = "c_byte: character values must " .
+                          "be 0 < ord(x) < 255";
+               }
+             } else {
+               $valid = "c_byte: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid .= ", and must be 0 < ord(x) < 255";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+         hook_out => sub {
+           my ($val, $obj) = (shift, shift);
+           print "INPUT WAS ", $obj->{_input}, "\n";
+           return looks_like_number($obj->{_input}) ? $val : chr($val);
+         },
+       }, # end of type 'b'
+  C =>  {
+          name => 'c_char',
+          sizecode => 'c',
+          typecode => '',
+          packcode => '',
+          hook_in  => sub {
+          },
+        }, # end of type 'C'
   s =>  { name => 'c_short', sizecode => 's' },
   S =>  { name => 'c_ushort', sizecode => 's' },
   i =>  { name => 'c_int', sizecode => 'i' },
@@ -89,7 +154,7 @@ our $_pytypes =
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
-sub allow_overflow_all;
+sub strict_input_all;
 
 =head1 SYNOPSIS
 
@@ -291,26 +356,28 @@ sub typecode { return $_[0]->{_typecode} }
 
 =over
 
-=item allow_overflow_all
+=item strict_input_all
 
-This class method can put a stop to all overflowing for all Type
-objects. Sets/returns 1 or 0. See L</"allow_overflow"> above.
+This class method can cease all toleration of incorrect input
+for all Type objects. Sets/returns 1 or 0. See the
+L<strict_input/Ctypes::Type::Simple/allow_overflow> object method
+for how to do this to individual objects
 
 =back
 
 =cut
 
 {
-  my $allow_overflow_all = 1;
-  sub allow_overflow_all {
+  my $strict_input_all = 0;
+  sub strict_input_all {
 # ??? This could be improved; could still be called as a class method
 # with an object instead of a 1 or 0 and user would not be notified
     my $arg = shift;
     if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
       croak("Usage: allow_overflow_all(x) (1 or 0)");
     }
-    $allow_overflow_all = $arg if defined $arg;
-    return $allow_overflow_all;
+    $strict_input_all = $arg if defined $arg;
+    return $strict_input_all;
   }
 }
 
