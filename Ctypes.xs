@@ -985,6 +985,78 @@ CODE:
 OUTPUT:
   RETVAL
 
+
+MODULE=Ctypes   PACKAGE=Ctypes::Type
+
+int
+is_a_number(arg_sv)
+  SV* arg_sv
+CODE:
+  debug_warn("#[%s:%i] Entered is_a_number", __FILE__, __LINE__);
+  if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+    debug_warn("#    WAS IOK/NOK");
+    RETVAL = 1;
+  } else {
+    debug_warn("#    NOT IOK/NOK");
+    RETVAL = 0;
+  }
+OUTPUT:
+  RETVAL
+
+void
+validate(arg_sv, typecode)
+  SV* arg_sv;
+  char typecode;
+PPCODE:
+  SV* valid_sv = &PL_sv_undef;
+  SV* converted = newSVsv(arg_sv);
+  NV arg_nv;
+  STRLEN len;
+  debug_warn("#[%s:%i] Entered _valid_for_type with typecode %c",
+    __FILE__, __LINE__, typecode);
+/*  SV* typecode_sv = get_types_info( typecode, "sizecode", 8 ); */
+//  typecode = *SvPV( typecode_sv, len );
+  switch (typecode) {
+    case 'v': break;
+    case 'c':
+      debug_warn("#    Got to 'c' switch");
+      if( SvROK(arg_sv) ) {
+        len = 30;
+        valid_sv = newSVpvn("c_char: cannot take references", len);
+        converted = &PL_sv_undef;
+        break;
+      }
+      if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+        arg_nv = SvNV(arg_sv);
+/*        if( arg_nv != 0 && (NV)arg_nv % (NV)1 ) {
+          len = 56;
+          valid_sv = newSVpvn("c_char: numeric values must be integers \
+                               -128 <= x <= 127", len);
+          arg_nv = sprintf("%u", (double)arg_nv);
+        } */
+        if( arg_nv < CHAR_MIN || arg_nv > CHAR_MAX ) {
+          len = 56;
+          valid_sv = newSVpvn("c_char: numeric values must be integers \
+                               -128 <= x <= 127", len);
+          break;
+        }
+      }
+      if( SvPOK(arg_sv) ) {
+        debug_warn("#    SvI-Not-OK!");
+        if( SvLEN(arg_sv) == 0 ) {
+          SvIV_set(converted, 0); /* will be IV scalar 0 -> char null */
+          break;
+        }
+        if( SvLEN(arg_sv) > 1 ) {
+          len = 30;
+          valid_sv = newSVpvn("c_char: single characters only", len);
+        }
+      }
+  }
+  XPUSHs(valid_sv);
+  XPUSHs(converted);
+
+
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
 void

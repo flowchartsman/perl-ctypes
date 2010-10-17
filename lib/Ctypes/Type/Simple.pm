@@ -287,6 +287,7 @@ package Ctypes::Type::Simple::value;
 use strict;
 use warnings;
 use Carp;
+use Scalar::Util qw|blessed|;
 
 sub TIESCALAR {
   my $class = shift;
@@ -304,23 +305,25 @@ sub STORE {
   print "In ", $self->{object}{_name}, "'s STORE with arg [ $arg ],\n" if $Debug == 1;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
   croak("Simple Types can only be assigned a single value") if @_;
+
+# The following section may be removed completely to allow different
+# Types full discretion of their own input validation via hook_in().
+
   # Deal with being assigned other Type objects and the like...
-  if(my $ref = ref($arg)) {
-    if($ref =~ /^Ctypes::Type::/) {
-      $arg = $arg->{_data};
-    } else {
-      if($arg->can("_as_param_")) {
-        $arg = $arg->_as_param_;
-      } elsif($arg->{_data}) {
-        $arg = $arg->{_data};
-      } else {
-  # ??? Would you ever want to store an object/reference as the value
-  # of a type? What would get pack()ed in the end?
-        croak("Ctypes Types can only be made from native types or " . 
-              "Ctypes compatible objects");
-      }
-    }
-  }
+#    if(my $ref = ref($arg)) {
+#      if($ref =~ /^Ctypes::Type::/) {
+#        $arg = $arg->{_data};
+#      } else {
+#        if($arg->can("data")) {
+#          $arg = ${$arg->data};
+#        } else {
+#    # ??? Would you ever want to store an object/reference as the value
+#    # of a type? What would get pack()ed in the end?
+#          croak("Ctypes Types can only be made from native types or " . 
+#                "Ctypes compatible objects");
+#        }
+#      }
+#    }
 
   # Object's Value set to undef: {_val} becomes undef, {_data} filled
   # with null (i.e. numeric zero) , update owners, return early.
@@ -336,27 +339,29 @@ sub STORE {
 
   my $typecode = $self->{object}{_typecode};
   print "    Using typecode $typecode\n" if $Debug == 1;
-  print "    1) arg is $arg, which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1;
+  print "    1) arg is ", $arg, ", which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
 #  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  $self->{object}->{_input} = $arg;
+  print "    Calling validate...\n";
   my ($invalid, $result) = $self->{object}->validate($arg);
-  print "    _valid_for_type returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug == 1;
+  print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug == 1;
   if( defined $invalid ) {
     no strict 'refs';
-    if( $self->{object}->strict_input == 1
-        or Ctypes::Type::strict_input_all() == 1 ) {
+    if( ($self->{object}->strict_input == 1)
+        or (Ctypes::Type::strict_input_all() == 1)
+        or (not defined $result) ) {
+      print "Undef result!\n";
       croak( $invalid, " (got $arg)");
       return undef;
     } else {
       carp( $invalid, " (got $arg)");
-      $arg = $result;
     }
   }
-  print "    2) arg is $arg, which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1; 
+  print "    2) arg is $result, which is ", unpack('b*', $result), " or ", ord($result), "\n" if $Debug == 1; 
   $self->{object}{_data} =
     pack( $self->{object}->packcode, $result );
   $self->{VALUE} = unpack( $self->{object}->packcode, $self->{object}{_data} );
+  $self->{object}->{_input} = $arg;
   if( $self->{object}{_owner} ) {
     print "    Have owner, updating with\n", unpack('b*', $self->{object}{_data}), "\n    or ", unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug == 1;
     $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});

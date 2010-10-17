@@ -7,7 +7,7 @@ require Exporter;
 our @ISA = qw|Exporter|;
 our @EXPORT_OK = qw|&_types &strict_input_all|;
 our $VERSION = 0.002;
-use constant USE_PERLTYPES => 1; # so far use only perl pack-style types, 
+use constant USE_PERLTYPES => 0; # so far use only perl pack-style types, 
                                  # not the full python ctypes types
 use Ctypes;
 use Ctypes::Type::Simple;
@@ -15,8 +15,9 @@ use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
 use Ctypes::Type::Struct;
 use Scalar::Util qw|looks_like_number|;
+use B qw|svref_2object|;
 use Encode;
-my $Debug = 0;
+my $Debug = 1;
 use utf8;
 
 =head1 NAME
@@ -46,68 +47,12 @@ our $_perltypes =
 { 
   v => { 
          name     => 'c_void',
-         sizecode => 'v',
-         packcode => 'a',
-         typecode => 'v',
-         hook_in  => sub {
-           my $valid = undef;
-           if( exists $_[0] ) {
-             $valid = "c_void: void types cannot take values";
-           }
-           return ( $valid, "\0" );
-         }, # end of hook_in
        }, # end of type 'v'
   b => {
          name     => 'c_byte',
-         sizecode => 'C',
-         packcode => 'C',
-         typecode => 'b',
-         hook_in  => sub {
-           my $arg = shift;
-           my $valid = undef;
-           return ( "c_byte: cannot take references", $arg )
-             if ref($arg);
-           if( looks_like_number($arg) ) {
-             if( $arg % 1 and $arg != 0 ) {
-               $valid = "c_byte: numeric values must " .
-                         "be integers 0 < x < 255";
-               $arg = sprintf("%u",$arg);
-             }
-             if( $arg < 0 or $arg > 255 ) {
-               $valid = "c_byte: numeric values must " .
-                        "be integers 0 < x < 255";
-             }
-           } else {
-             if( length($arg) == 1 ) {
-               print "1 char long!\n";
-               $arg = ord($arg);
-               if( $arg < 0 or $arg > 255 ) {
-                 $valid = "c_byte: character values must " .
-                          "be 0 < ord(x) < 255";
-               }
-             } else {
-               $valid = "c_byte: single characters only";
-               $arg = ord(substr($arg, 0, 1));
-               if( $arg < 0 or $arg > 255 ) {
-                 $valid .= ", and must be 0 < ord(x) < 255";
-               }
-             }
-           }
-           return ($valid, $arg);
-         }, # end of hook_in
-         hook_out => sub {
-           my ($val, $obj) = (shift, shift);
-           print "INPUT WAS ", $obj->{_input}, "\n";
-           return looks_like_number($obj->{_input}) ? $val : chr($val);
-         },
        }, # end of type 'b'
   C =>  {
           name => 'c_char',
-          sizecode => 'c',
-          typecode => '',
-          packcode => '',
-          hook_in  => sub {
-          },
         }, # end of type 'C'
   s =>  { name => 'c_short', sizecode => 's' },
   S =>  { name => 'c_ushort', sizecode => 's' },
@@ -130,27 +75,170 @@ our $_perltypes =
 
 our $_pytypes = 
 { 
-  b =>  "c_byte",        # -128 < int < 128, c?
-  B =>  "c_ubyte",       # 0 < int < 256, C?
-  X =>  "c_bstr",        # a?
-  c =>  "c_char",        # single character, c?
-  C =>  "c_uchar",       # C?
-  s =>  "c_char_p",      # null terminated string, A?
-  w =>  "c_wchar",       # U
-  z =>  "c_wchar_p",     # U*
-  h =>  "c_short",       # s
-  H =>  "c_ushort",      # S
-  i =>  "c_int",         # Alias to c_long where equal, i
-  I =>  "c_uint",        # ''                           I
-  l =>  "c_long",        # l
-  L =>  "c_ulong",       # L
-  f =>  "c_float",       # f
-  d =>  "c_double",      # d
-  g =>  "c_longdouble",  # Alias to c_double where equal, D
-  q =>  "c_longlong",    # q
-  Q =>  "c_ulonglong",   # Q
-  v =>  "c_bool",        # ?
-  O =>  "c_void_p",      # i???
+  b => { # -128 <= int <= 127, c?
+         name     => 'c_byte',
+         sizecode => 'c',
+         packcode => 'c',
+         typecode => 'b',
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           print "In hook_in\n";
+           return ( "c_byte: cannot take references", undef )
+             if ref($arg);
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg % 1 and $arg != 0 ) {
+               $valid = "c_byte: numeric values must " .
+                         "be integers -128 <= x <= 127";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < -128 or $arg > 127 ) {
+               $valid = "c_byte: numeric values must " .
+                        "be integers -128 <= x <= 127";
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "    1 char long, good\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > 127 ) {
+                 $valid = "c_byte: character values must " .
+                          "be 0 <= ord(x) <= 127";
+               }
+             } else {
+               $valid = "c_byte: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > 127 ) {
+                 $valid .= ", and must be 0 <= ord(x) <= 127";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+         hook_out => sub {
+           print "In hook_out\n";
+           my ($val, $obj) = (shift, shift);
+           print "    INPUT WAS ", $obj->{_input}, "\n";
+           return Ctypes::Type::is_a_number($obj->{_input}) ? $val : chr($val);
+         }, # end of hook_out
+       }, # end of type 'c_byte'
+  B => { # 0 < int < 256, C?
+         name     => 'c_ubyte',
+         packcode => 'C',
+         sizecode => 'c',
+         typecode => 'B',
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           return ( "c_ubyte: cannot take references", undef )
+             if ref($arg);
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg % 1 and $arg != 0 ) {
+               $valid = "c_ubyte: numeric values must " .
+                         "be integers 0 <= x <= 255";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < 0 or $arg > 255 ) {
+               $valid = "c_ubyte: numeric values must " .
+                        "be integers 0 <= x <= 255";
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "1 char long!\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid = "c_ubyte: character values must " .
+                          "be 0 <= ord(x) <= 255";
+               }
+             } else {
+               $valid = "c_ubyte: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid .= ", and must be 0 <= ord(x) <= 255";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+         hook_out => sub {
+           print "In hook_out\n";
+           my ($val, $obj) = (shift, shift);
+           print "    INPUT WAS ", $obj->{_input}, "\n";
+           return Ctypes::Type::is_a_number($obj->{_input}) ? $val : chr($val);
+         }, # end of hook_out
+       }, # end of type 'c_ubyte'
+  X => { name => 'c_bstr' },        # a?
+  c => { # single character, c?
+         name => 'c_char',
+         sizecode => 'c',
+         typecode => 'c',
+         packcode => 'c',
+         hook_in  => sub {
+           my $arg = $_[0];
+           my $valid = undef;
+           return ( "c_char: cannot take references", undef )
+             if ref($arg);
+           # Ctypes.xs: checks SvIOK / SvNOK flags (so string "0"
+           # to string "9" don't 'look like numbers'
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg % 1 and $arg != 0 ) {
+               $valid = "c_char: numeric values must " .
+                         "be integers -128 <= x <= 127";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < -128 or $arg > 127 ) {
+               $valid = "c_char: numeric values must " .
+                        "be integers -128 <= x <= 127";
+             }
+           } else {
+             print "Didn't look_like_number!\n" if $Debug == 1;
+             if( length($arg) == 1 ) {
+               print "1 char long, great!\n" if $Debug == 1;
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > 127 ) {
+                 $valid = "c_char: character values must " .
+                          "be 0 <= ord(x) <= 127";
+               }
+             } else {
+               $valid = "c_byte: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid .= ", and must be 0 < ord(x) < 127";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+         hook_out => sub { return chr(shift) },
+       }, # end of type 'c_char'
+  C => { name => 'c_uchar' },       # C?
+  s => { name => 'c_char_p' },      # null terminated string, A?
+  w => { name => 'c_wchar' },       # U
+  z => { name => 'c_wchar_p' },     # U*
+  h => { name => 'c_short' },       # s
+  H => { name => 'c_ushort' },      # S
+  i => { name => 'c_int' },         # Alias to c_long where equal, i
+  I => { name => 'c_uint' },        # ''                           I
+  l => { name => 'c_long' },        # l
+  L => { name => 'c_ulong' },       # L
+  f => { name => 'c_float' },       # f
+  d => { name => 'c_double' },      # d
+  g => { name => 'c_longdouble' },  # Alias to c_double where equal, D
+  q => { name => 'c_longlong' },    # q
+  Q => { name => 'c_ulonglong' },   # Q
+  v => { name => 'c_bool' },        # ?
+  O => {                # i???
+         name     => 'c_void',
+         sizecode => 'v',
+         packcode => 'a',
+         typecode => 'v',
+         hook_in  => sub {
+           my $valid = undef;
+           if( exists $_[0] ) {
+             $valid = "c_void: void types cannot take values";
+           }
+           return ( $valid, "\0" );
+         }, # end of hook_in
+       }, # end of type 'v'
 };
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
