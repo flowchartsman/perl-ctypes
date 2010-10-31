@@ -145,7 +145,8 @@ our $_pytypes =
              if( length($arg) == 1 ) {
                print "1 char long!\n";
                $arg = ord($arg);
-               if( $arg < 0 or $arg > 255 ) {
+               
+if( $arg < 0 or $arg > 255 ) {
                  $valid = "c_ubyte: character values must " .
                           "be 0 <= ord(x) <= 255";
                }
@@ -173,7 +174,7 @@ our $_pytypes =
          typecode => 'c',
          packcode => 'c',
          hook_in  => sub {
-           my $arg = $_[0];
+           my $arg = shift;
            my $valid = undef;
            return ( "c_char: cannot take references", undef )
              if ref($arg);
@@ -199,7 +200,7 @@ our $_pytypes =
                           "be 0 <= ord(x) <= 127";
                }
              } else {
-               $valid = "c_byte: single characters only";
+               $valid = "c_char: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 255 ) {
                  $valid .= ", and must be 0 < ord(x) < 127";
@@ -210,7 +211,49 @@ our $_pytypes =
          }, # end of hook_in
          hook_out => sub { return chr(shift) },
        }, # end of type 'c_char'
-  C => { name => 'c_uchar' },       # C?
+  C => { # C?
+         name => 'c_uchar'
+         typecode => 'C',
+         sizecode => 'C',
+         packcode => 'C',
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           return ( "c_uchar: cannot take references", undef )
+             if ref($arg);
+           # Ctypes.xs: checks SvIOK / SvNOK flags (so string "0"
+           # to string "9" don't 'look like numbers'
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg % 1 and $arg != 0 ) {
+               $valid = "c_uchar: numeric values must " .
+                         "be integers 0 <= x <= 255";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < 0 or $arg > 255 ) {
+               $valid = "c_uchar: numeric values must " .
+                        "be integers 0 <= x <= 255";
+             }
+           } else {
+             print "Didn't look_like_number!\n" if $Debug == 1;
+             if( length($arg) == 1 ) {
+               print "1 char long, great!\n" if $Debug == 1;
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid = "c_uchar: character values must " .
+                          "be 0 <= ord(x) <= 255";
+               }
+             } else {
+               $valid = "c_uchar: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid .= ", and must be 0 < ord(x) < 255";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+         hook_out => sub { return chr(shift) },
+       },
   s => { name => 'c_char_p' },      # null terminated string, A?
   w => { name => 'c_wchar' },       # U
   z => { name => 'c_wchar_p' },     # U*
