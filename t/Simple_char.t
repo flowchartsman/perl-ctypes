@@ -1,170 +1,283 @@
 #!perl
 
-use Test::More tests => 13;
+use Test::More tests => 19;
 use utf8;
 BEGIN { use_ok( Ctypes ) }
 
-my $c = c_char;
-isa_ok( $c, 'Ctypes::Type::Simple' );
-is( $c->typecode, 'c', 'Correct typecode' );
-is( $c->sizecode, 'c', 'Correct sizecode' );
-is( $c->packcode, 'c', 'Correct packcode' );
-is( $c->name, 'c_char', 'Correct name' );
+my $x = c_char;
+isa_ok( $x, 'Ctypes::Type::Simple' );
+is( $x->typecode, 'c', 'Correct typecode' );
+is( $x->sizecode, 'c', 'Correct sizecode' );
+is( $x->packcode, 'c', 'Correct packcode' );
+is( $x->name, 'c_char', 'Correct name' );
 
-subtest 'c_char will not accept references' => sub {
+my $name = $x->name;
+my $MAX = 127;
+my $MIN = -128;
+my $diff = $MAX - $MIN + 1;
+my $extra = 128;
+my( $input, $like );
+
+subtest "$name will not accept references" => sub {
   plan tests => 3;
-  $$c = 100;
+  $$x = 95;
   $@ = undef;
-  eval{  $$c = [1, 2, 3] };
-  is( $$c, chr(100) );
-  is( unpack('b*',${$c->data}), unpack('b*', pack($c->packcode, 100)) );
-  like( $@, qr/c_char: cannot take references \(got ARRAY.*\)/ );
+  eval{  $$x = [1, 2, 3] };
+  is( $$x, chr(95) );
+  is( unpack('b*',${$x->data}), unpack('b*', pack($x->packcode, 95)) );
+  like( $@, qr/$name: cannot take references \(got ARRAY.*\)/ );
 };
 
-subtest 'c_char: number overflow' => sub {
-  plan tests => 1024;
-  for(-256..-129 ) {
-    $$c = $_;
-    is( $$c, chr($_ + 256) );
-    is( ${$c->data}, pack($c->packcode, ($_ + 256) ) );
-  }
-  for(-128..-1 ) {
-    $$c = $_;
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
-  }
-  for(0..127) {
-    $$c = $_;
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
-  }
-  for(128..255) {
-    $$c = $_;
-    is( $$c, chr($_ - 256) );
-    is( ${$c->data}, pack($c->packcode, ($_ - 256) ) );
-  }
+subtest "$name drops numbers after decimal point" => sub {
+  plan tests => 6;
+  $$x = 95.2;
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  $$x = 95.5;
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  $$x = 95.8;
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
 };
 
-subtest 'c_char: character overflow' => sub {
-  plan tests => 516;
-  for(0..127) {
-    $$c = chr($_);
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
+subtest "$name: number overflow" => sub {
+  for( ($MIN - $extra)..($MIN - 1) ) {
+    $$x = $_;
+    is( $$x, chr($_ + $diff) );
+    is( ${$x->data}, pack($x->packcode, ($_ + $diff) ) );
   }
-  for(128..257) {
-    $$c = chr($_);
-    is( $$c, chr($_ - 256) );
-    is( ${$c->data}, pack($c->packcode, ($_ - 256) ) );
+  for( $MIN..$MAX ) {
+    $$x = $_;
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_ ) );
   }
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    $$x = $_;
+    is( $$x, chr($_ - $diff) );
+    is( ${$x->data}, pack($x->packcode, ($_ - $diff) ) );
+  }
+  done_testing();
 };
 
-$c->strict_input(1);
+subtest "$name: character overflow" => sub {
+  for( 0..$MAX ) {
+    $$x = chr($_);
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_) );
+  }
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    $$x = chr($_);
+    is( $$x, chr($_ - $diff) );
+    is( ${$x->data}, pack($x->packcode, ($_ - $diff) ) );
+  }
+  done_testing();
+};
 
-subtest 'c_char->strict_input prevents numeric overflow' => sub {
-  plan tests => 1536;
-  $$c = 'P';
-  for(-256..-129 ) {
+subtest "$name: characters after first discarded" => sub {
+  for( 0..$MAX ) {
+    $input = chr($_) . 'oubi';
+    $$x = $input;
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_ ) );
+  }
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    $input = chr($_) . 'oubi';
+    $$x = $input;
+    is( $$x, chr($_ - $diff) );
+    is( ${$x->data}, pack($x->packcode, ($_ - $diff) ) );
+  }
+  done_testing();
+};
+
+$x->strict_input(1);
+
+subtest "$name->strict_input prevents dropping decimal places" => sub {
+  plan tests => 9;
+  $$x = 95;
+  undef $@;
+  eval { $$x = 100.2 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.2\)/ );
+  undef $@;
+  eval { $$x = 100.5 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.5\)/ );
+  undef $@;
+  eval { $$x = 100.8 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.8\)/ );
+};
+
+subtest "$name->strict_input prevents numeric overflow" => sub {
+  $$x = 'P';
+  for( ($MIN - $extra)..($MIN - 1) ) {
     undef $@;
-    eval { $$c = $_ };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P')) );
-    like( $@, qr/c_char: numeric values must be integers -128 <= x <= 127 \(got $_\)/ );
+    eval { $$x = $_ };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P')) );
+    like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/ );
   }
-  for(-128..-1) {
+  for( $MIN..$MAX ) {
     undef $@;
-    eval { $$c = $_ };
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
+    eval { $$x = $_ };
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_ ) );
     is( $@, '' );
   }
-  for(0..127) {
+  $$x = $MAX;
+  for( ($MAX + 1)..($MAX + $extra) ) {
     undef $@;
-    eval { $$c = $_ };
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
-    is( $@, '' );
+    eval { $$x = $_ };
+    is( $$x, chr($MAX) );
+    is( ${$x->data}, pack($x->packcode, $MAX) );
+    like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/ );
   }
-  $$c = 'P';
-  for(128..255 ) {
-    undef $@;
-    eval { $$c = $_ };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P')) );
-    like( $@, qr/c_char: numeric values must be integers -128 <= x <= 127 \(got $_\)/ );
-  }
+  done_testing();
 };
 
-subtest 'c_byte->strict_input prevents overflow of characters' => sub {
-  plan tests => 646;
-  for(0..127) {
-    $$c = chr($_);
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_) );
+subtest "$name->strict_input prevents overflow of characters" => sub {
+  for( 0..$MAX ) {
+    $$x = chr($_);
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_ ) );
   }
-  $$c = 'P';
-  for(128..257) {
+  $$x = $MAX;
+  for( ($MAX + 1)..($MAX + $extra) ) {
     $@ = undef;
-    eval { $$c = chr($_) };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P') ) );
-    my $like = chr($_);
-    like( $@, qr/c_char: character values must be 0 <= ord\(x\) <= 127 \(got $like\)/ );
+    $input = chr($_);
+    eval { $$x = $input };
+    is( $$x, chr($MAX) );
+    is( ${$x->data}, pack($x->packcode, $MAX ) );
+    like( $@, qr/$name: character values must be 0 <= ord\(x\) <= $MAX \(got $input\)/ );
   }
+  done_testing();
 };
 
-$c->strict_input(0);
+subtest "$name->strict_input: multi-character error" => sub {
+  $$x = 95;
+  for( 0..$MAX ) {
+    undef $@;
+    $input = chr($_) . 'oubi';
+    eval { $$x = $input };
+    is( $$x, chr(95) );
+    is( ${$x->data}, pack($x->packcode, 95 ) );
+    $like = $name . ': single characters only \(got ' . $input . '\)';
+    # special regex characters cause problems, so escape them...
+    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+      if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    like( $@, qr/$like/ );
+  }
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    undef $@;
+    $input = chr($_) . 'oubi';
+    eval { $$x = $input };
+    is( $$x, chr(95) );
+    is( ${$x->data}, pack($x->packcode, 95 ) );
+    $like = $name . ': single characters only, and must be 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
+    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+      if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    like( $@, qr/$like/ );
+  }
+  done_testing();
+};
+
+$x->strict_input(0);
 Ctypes::Type::strict_input_all(1);
 
-subtest 'c_char: strict_input_all prevents numeric overflow' => sub {
-  plan tests => 1536;
-  $$c = 'P';
-  for(-256..-129 ) {
-    undef $@;
-    eval { $$c = $_ };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P')) );
-    like( $@, qr/c_char: numeric values must be integers -128 <= x <= 127 \(got $_\)/ );
-  }
-  for(-128..-1) {
-    undef $@;
-    eval { $$c = $_ };
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
-    is( $@, '' );
-  }
-  for(0..127) {
-    undef $@;
-    eval { $$c = $_ };
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_ ) );
-    is( $@, '' );
-  }
-  $$c = 'P';
-  for(128..255 ) {
-    undef $@;
-    eval { $$c = $_ };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P')) );
-    like( $@, qr/c_char: numeric values must be integers -128 <= x <= 127 \(got $_\)/ );
-  }
+subtest "$name: strict_input_all prevents dropping decimal places" => sub {
+  plan tests => 9;
+  $$x = 95;
+  undef $@;
+  eval { $$x = 100.2 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.2\)/ );
+  undef $@;
+  eval { $$x = 100.5 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.5\)/ );
+  undef $@;
+  eval { $$x = 100.8 };
+  is( $$x, chr(95) );
+  is( ${$x->data}, pack($x->packcode, 95 ) );
+  like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.8\)/ );
 };
 
-subtest 'c_byte: strict_input_all prevents overflow of characters' => sub {
-  plan tests => 646;
-  for(0..127) {
-    $$c = chr($_);
-    is( $$c, chr($_) );
-    is( ${$c->data}, pack($c->packcode, $_) );
+subtest "$name: strict_input_all prevents numeric overflow" => sub {
+  $$x = 'P';
+  for( ($MIN - $extra)..($MIN - 1) ) {
+    undef $@;
+    eval { $$x = $_ };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P')) );
+    like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/ );
   }
-  $$c = 'P';
-  for(128..257) {
+  for($MIN..$MAX) {
+    undef $@;
+    eval { $$x = $_ };
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_ ) );
+    is( $@, '' );
+  }
+  $$x = 'P';
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    undef $@;
+    eval { $$x = $_ };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P')) );
+    like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/ );
+  }
+  done_testing();
+};
+
+subtest "$name: strict_input_all prevents overflow of characters" => sub {
+  for(0..$MAX) {
+    $$x = chr($_);
+    is( $$x, chr($_) );
+    is( ${$x->data}, pack($x->packcode, $_) );
+  }
+  $$x = 'P';
+  for( ($MAX + 1)..($MAX + $extra) ) {
     $@ = undef;
-    eval { $$c = chr($_) };
-    is( $$c, 'P' );
-    is( ${$c->data}, pack($c->packcode, ord('P') ) );
+    eval { $$x = chr($_) };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P') ) );
     my $like = chr($_);
-    like( $@, qr/c_char: character values must be 0 <= ord\(x\) <= 127 \(got $like\)/ );
+    like( $@, qr/$name: character values must be 0 <= ord\(x\) <= $MAX \(got $like\)/ );
   }
+  done_testing();
+};
+
+subtest "$name: strict_input_all: multi-character error" => sub {
+  $$x = 'P';
+  for( 0..$MAX ) {
+    undef $@;
+    $input = chr($_) . 'oubi';
+    eval { $$x = $input };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P') ) );
+    $like = $name . ': single characters only \(got ' . $input . '\)';
+    # special regex characters cause problems, so escape them...
+    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+      if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    like( $@, qr/$like/ );
+  }
+  for( ($MAX + 1)..($MAX + $extra) ) {
+    undef $@;
+    $input = chr($_) . 'oubi';
+    eval { $$x = $input };
+    is( $$x, 'P' );
+    is( ${$x->data}, pack($x->packcode, ord('P') ) );
+    $like = $name . ': single characters only, and must be 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
+    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+      if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    like( $@, qr/$like/ );
+  }
+  done_testing();
 };
 

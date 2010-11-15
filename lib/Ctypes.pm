@@ -732,6 +732,161 @@ sub find_library($;@) {# from C::DynaLib::new
   }
 }
 
+=item create_range MIN MAX COVER [ WEIGHT WANT_INT ]
+
+=item create_range ARRAYREF, ARRAYREF ...
+
+Used for creating ranges of test values for Ctypes::Type::Simple objects.
+Returns an array of values. For more complex ranges, the basic arguments
+(C<min>, C<max>, C<cover>, C<weight>, C<want_int>) can be repeated in
+as many arrayrefs as you like, and the array returned will be a
+combination of those ranges.
+
+=h3 Arguments:
+
+=over
+
+=item min
+
+The 'minimum' value (but see C<min_ext>).
+
+=item max
+
+The 'maximum' value (but see C<max_ext>).
+
+=item cover
+
+If C<cover> is 1 or more, it will specify the B<exact number> of values
+between C<min> and C<max> to be returned.
+If C<cover> is less than 1 and greater than 0, it will specify a
+B<percentage> of values between C<min> and C<max> to be returned. E.g.
+if C<cover> is 0.1, C<create_range> will return 10% of the values between
+C<min> and C<max>.
+C<create_range> will croak if C<cover> is less than 0.
+
+=back
+
+=cut
+
+#
+# _find_nearest: Used by create_range.
+# When point has been used, find a nearby one
+# (esp. useful for integers)
+#
+sub _find_nearest {
+  my( $point, $min, $max, $opts, $seen ) = @_;
+  $min = $opts->{lowest_available} || $min;
+  $max = $opts->{highest_available} || $max;
+
+  if( $point >= $max ) {
+    $point = $max;
+    $point = exists $opts->{highest_available} ?
+             $opts->{highest_available} : $max;
+    $opts->{got_to_max} = 1;
+  }
+  if( $point <= $min ) {
+    $point = $min;
+    $point = exists $opts->{lowest_available} ?
+             $opts->{lowest_available} : $min;
+    $opts->{got_to_min} = 1;
+  }
+
+  my $try = $opts->{try} || 0;           # offset from desired $point
+
+  $opts->{last_direction} = $opts->{direction} || 0;
+  $opts->{direction} = $try < 0 ? -1 : 1;
+  if( $opts->{direction} == $opts->{last_direction} ) {
+    $opts->{same_direction} += 1;
+  } else {
+    $opts->{same_direction} = 0;
+  }
+  my $thistry = $point + $try;
+  if( $thistry >= $max ) {
+    $thistry = $max;
+    $opts->{cant_go_up} = 1;
+  }
+  if( $thistry <= $min ) {
+    $thistry = $min;
+    $opts->{cant_go_down} = 1;
+  }
+  if( exists $seen->{$thistry} ) {
+    if( exists $opts->{cant_go_up} ) {
+      $opts->{highest_available} = $max - $opts->{same_direction} - 1;
+      $try = abs($try) * -1;
+      $try -= 1 if $opts->{same_direction} > 1;
+    } elsif( exists $opts->{cant_go_down} ) {
+      $opts->{lowest_available} = $min + $opts->{same_direction} + 1;
+      $try = abs($try);
+      $try += 1 if $opts->{same_direction} > 1;
+    } else {
+      $try = $try * -1;
+      $try += $try >= 0 ? 1 : -1;
+    }
+    $opts->{try} = $try;
+    _find_nearest( $point, $min, $max, $opts, $seen );
+  } else {
+    $seen->{$thistry} = 1;
+    $opts->{direction} = 0;
+    $opts->{last_direction} = 0;
+    $opts->{try} = undef;
+    return $thistry;
+  }
+}
+
+sub create_range {
+  if( ref( $_[0] ) eq 'ARRAY' ) {
+    my @res = ();
+    for( @_ ) {
+      push @res, create_range( @$_ );
+    }
+    return @res; 
+  }
+
+  my( $min, $max,
+      $cover,              # number of points OR percentage of points
+      $weight,                   # x>1 skews->$min; 0<x<1 skews->$max
+      $want_int ) = @_;                  # want only integer results?
+
+# $cover
+  $cover || croak( "create_range: Must supply number of points or " .
+                  "percentage cover required" );
+  croak( "create_range: 'cover' must be positive (got $cover)" )
+    if $cover < 0;
+  if( $cover < 1 ) {                          # treat as a percentage
+    $cover = int( ( $max - $min )  * $cover ); # get number of points
+  }
+
+# $weight
+  $weight ||= 1;         # no division by zero! Will make even spread
+  $weight = $weight * -1;  # make +ves tend->$max and -ves tend->$min
+
+# Let's pretend $min is zero
+  my $diff_max = $max - $min;
+  my $x_max = $diff_max ** ( 1 / abs($weight) ); # get x where y=$max
+
+  my $interval = $x_max / $cover;
+
+# Stuff for efficiency in find_nearest()
+  my $opts = {};
+  my $seen = {};
+  my $points = [];
+  my( $point, $nearest );
+
+  for( 1..$cover ) {
+    if( $weight < 0 ) {
+      $point = $max - ( ( $_ * $interval ) ** abs($weight) );
+    } else {
+      $point = $min + ( ( $_ * $interval ) ** $weight );
+    }
+    $nearest = _find_nearest(
+      $want_int ? int( $point ) : $point,
+      $min, $max, $opts, $seen );
+    $point = $nearest;
+    push @$points, $point;
+  }
+  return sort( { $a <=> $b } @$points );
+}
+
 package Ctypes;
 
 =item find_function (libraryhandle, functionname)

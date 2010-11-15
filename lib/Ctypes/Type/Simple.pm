@@ -350,11 +350,11 @@ sub STORE {
     if( ($self->{object}->strict_input == 1)
         or (Ctypes::Type::strict_input_all() == 1)
         or (not defined $result) ) {
-      print "Undef result!\n";
-      croak( $invalid, " (got $arg)");
+      print "Unable to ameliorate input! (strict input or validate couldn't convert)\n";
+      croak( $invalid, ' (got ', $arg, ')');
       return undef;
     } else {
-      carp( $invalid, " (got $arg)");
+      carp( $invalid, ' (got ', $arg, ')');
     }
   }
   print "    2) arg is $result, which is ", unpack('b*', $result), " or ", ord($result), "\n" if $Debug == 1; 

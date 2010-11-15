@@ -83,17 +83,21 @@ our $_pytypes =
          hook_in  => sub {
            my $arg = shift;
            my $valid = undef;
+           my $tc = 'h';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           # my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           # my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
            print "In hook_in\n";
-           return ( "c_byte: cannot take references", undef )
+           return ( "$name: cannot take references", undef )
              if ref($arg);
            if( Ctypes::Type::is_a_number($arg) ) {
-             if( $arg % 1 and $arg != 0 ) {
-               $valid = "c_byte: numeric values must " .
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must " .
                          "be integers -128 <= x <= 127";
                $arg = sprintf("%u",$arg);
              }
              if( $arg < -128 or $arg > 127 ) {
-               $valid = "c_byte: numeric values must " .
+               $valid = "$name: numeric values must " .
                         "be integers -128 <= x <= 127";
              }
            } else {
@@ -101,11 +105,11 @@ our $_pytypes =
                print "    1 char long, good\n";
                $arg = ord($arg);
                if( $arg < 0 or $arg > 127 ) {
-                 $valid = "c_byte: character values must " .
+                 $valid = "$name: character values must " .
                           "be 0 <= ord(x) <= 127";
                }
              } else {
-               $valid = "c_byte: single characters only";
+               $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 127 ) {
                  $valid .= ", and must be 0 <= ord(x) <= 127";
@@ -129,29 +133,32 @@ our $_pytypes =
          hook_in  => sub {
            my $arg = shift;
            my $valid = undef;
-           return ( "c_ubyte: cannot take references", undef )
+           my $tc = 'h';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           # my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           # my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+           return ( "$name: cannot take references", undef )
              if ref($arg);
            if( Ctypes::Type::is_a_number($arg) ) {
-             if( $arg % 1 and $arg != 0 ) {
-               $valid = "c_ubyte: numeric values must " .
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must " .
                          "be integers 0 <= x <= 255";
                $arg = sprintf("%u",$arg);
              }
              if( $arg < 0 or $arg > 255 ) {
-               $valid = "c_ubyte: numeric values must " .
+               $valid = "$name: numeric values must " .
                         "be integers 0 <= x <= 255";
              }
            } else {
              if( length($arg) == 1 ) {
                print "1 char long!\n";
                $arg = ord($arg);
-               
-if( $arg < 0 or $arg > 255 ) {
-                 $valid = "c_ubyte: character values must " .
+               if( $arg < 0 or $arg > 255 ) {
+                 $valid = "$name: character values must " .
                           "be 0 <= ord(x) <= 255";
                }
              } else {
-               $valid = "c_ubyte: single characters only";
+               $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 255 ) {
                  $valid .= ", and must be 0 <= ord(x) <= 255";
@@ -176,18 +183,20 @@ if( $arg < 0 or $arg > 255 ) {
          hook_in  => sub {
            my $arg = shift;
            my $valid = undef;
-           return ( "c_char: cannot take references", undef )
+           my $tc = 'h';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           # my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           # my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+           return ( "$name: cannot take references", undef )
              if ref($arg);
-           # Ctypes.xs: checks SvIOK / SvNOK flags (so string "0"
-           # to string "9" don't 'look like numbers'
            if( Ctypes::Type::is_a_number($arg) ) {
-             if( $arg % 1 and $arg != 0 ) {
-               $valid = "c_char: numeric values must " .
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must " .
                          "be integers -128 <= x <= 127";
                $arg = sprintf("%u",$arg);
              }
              if( $arg < -128 or $arg > 127 ) {
-               $valid = "c_char: numeric values must " .
+               $valid = "$name: numeric values must " .
                         "be integers -128 <= x <= 127";
              }
            } else {
@@ -196,14 +205,14 @@ if( $arg < 0 or $arg > 255 ) {
                print "1 char long, great!\n" if $Debug == 1;
                $arg = ord($arg);
                if( $arg < 0 or $arg > 127 ) {
-                 $valid = "c_char: character values must " .
+                 $valid = "$name: character values must " .
                           "be 0 <= ord(x) <= 127";
                }
              } else {
-               $valid = "c_char: single characters only";
+               $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
-               if( $arg < 0 or $arg > 255 ) {
-                 $valid .= ", and must be 0 < ord(x) < 127";
+               if( $arg < 0 or $arg > 127 ) {
+                 $valid .= ", and must be 0 <= ord(x) <= 127";
                }
              }
            }
@@ -212,25 +221,27 @@ if( $arg < 0 or $arg > 255 ) {
          hook_out => sub { return chr(shift) },
        }, # end of type 'c_char'
   C => { # C?
-         name => 'c_uchar'
+         name => 'c_uchar',
          typecode => 'C',
          sizecode => 'C',
          packcode => 'C',
          hook_in  => sub {
            my $arg = shift;
            my $valid = undef;
-           return ( "c_uchar: cannot take references", undef )
+           my $tc = 'h';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           # my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           # my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+           return ( "$name: cannot take references", undef )
              if ref($arg);
-           # Ctypes.xs: checks SvIOK / SvNOK flags (so string "0"
-           # to string "9" don't 'look like numbers'
            if( Ctypes::Type::is_a_number($arg) ) {
-             if( $arg % 1 and $arg != 0 ) {
-               $valid = "c_uchar: numeric values must " .
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must " .
                          "be integers 0 <= x <= 255";
                $arg = sprintf("%u",$arg);
              }
              if( $arg < 0 or $arg > 255 ) {
-               $valid = "c_uchar: numeric values must " .
+               $valid = "$name: numeric values must " .
                         "be integers 0 <= x <= 255";
              }
            } else {
@@ -239,14 +250,14 @@ if( $arg < 0 or $arg > 255 ) {
                print "1 char long, great!\n" if $Debug == 1;
                $arg = ord($arg);
                if( $arg < 0 or $arg > 255 ) {
-                 $valid = "c_uchar: character values must " .
+                 $valid = "$name: character values must " .
                           "be 0 <= ord(x) <= 255";
                }
              } else {
-               $valid = "c_uchar: single characters only";
+               $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 255 ) {
-                 $valid .= ", and must be 0 < ord(x) < 255";
+                 $valid .= ", and must be 0 <= ord(x) <= 255";
                }
              }
            }
@@ -257,9 +268,151 @@ if( $arg < 0 or $arg > 255 ) {
   s => { name => 'c_char_p' },      # null terminated string, A?
   w => { name => 'c_wchar' },       # U
   z => { name => 'c_wchar_p' },     # U*
-  h => { name => 'c_short' },       # s
-  H => { name => 'c_ushort' },      # S
-  i => { name => 'c_int' },         # Alias to c_long where equal, i
+  h => { # s
+         name     => 'c_short',
+         sizecode => 's',
+         packcode => 's',
+         typecode => 'h',
+#         MIN      => Ctypes::constant('PERL_SHORT_MIN'),
+#         MAX      => Ctypes::constant('PERL_SHORT_MAX'),
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           my $tc = 'h';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+           print "In hook_in\n";
+           return ( "$name: cannot take references", undef )
+             if ref($arg);
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "$MIN <= x <= $MAX";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < $MIN or $arg > $MAX ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "$MIN <= x <= $MAX"
+                 if not defined $valid;
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "    1 char long, good\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid = "$name: character values must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             } else {
+               $valid = "$name: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid .= ", and must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+       }, # end of type 'c_short'
+  H => { # S
+         name => 'c_ushort',
+         sizecode => 'S',
+         packcode => 'S',
+         typecode => 'H',
+#         MIN      => Ctypes::constant('PERL_USHORT_MIN'),
+#         MAX      => Ctypes::constant('PERL_USHORT_MAX'),
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           my $tc = 'H';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+           print "In hook_in\n";
+           return ( "$name: cannot take references", undef )
+             if ref($arg);
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "0 <= x <= $MAX";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < 0 or $arg > $MAX ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "0 <= x <= $MAX";
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "    1 char long, good\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid = "$name: character values must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             } else {
+               $valid = "$name: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid .= ", and must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+       },
+  i => { # Alias to c_long where equal; i
+         name     => 'c_int',
+         sizecode => 'i',
+         packcode => 'i',
+         typecode => 'i',
+#         MIN      => Ctypes::constant('PERL_INT_MIN'),
+#         MAX      => Ctypes::constant('PERL_INT_MAX'),
+         hook_in  => sub {
+           my $arg = shift;
+           my $valid = undef;
+           my $tc = 'i';
+           my $name = $Ctypes::Type::_types->{$tc}->{name};
+           my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
+           my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
+         $MIN      = Ctypes::constant('PERL_INT_MIN');
+         $MAX      = Ctypes::constant('PERL_INT_MAX');
+           print "In hook_in\n";
+           return ( "$name: cannot take references", undef )
+             if ref($arg);
+           if( Ctypes::Type::is_a_number($arg) ) {
+             if( $arg !~ /^[+-]?\d+$/ ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "$MIN <= x <= $MAX";
+               $arg = sprintf("%u",$arg);
+             }
+             if( $arg < $MIN or $arg > $MAX ) {
+               $valid = "$name: numeric values must be integers " . 
+                        "$MIN <= x <= $MAX"
+                 if not defined $valid;
+             }
+           } else {
+             if( length($arg) == 1 ) {
+               print "    1 char long, good\n";
+               $arg = ord($arg);
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid = "$name: character values must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             } else {
+               $valid = "$name: single characters only";
+               $arg = ord(substr($arg, 0, 1));
+               if( $arg < 0 or $arg > $MAX ) {
+                 $valid .= ", and must be integers " . 
+                          "0 <= ord(x) <= $MAX";
+               }
+             }
+           }
+           return ($valid, $arg);
+         }, # end of hook_in
+       }, # end of type 'c_int'
   I => { name => 'c_uint' },        # ''                           I
   l => { name => 'c_long' },        # l
   L => { name => 'c_ulong' },       # L
@@ -283,6 +436,7 @@ if( $arg < 0 or $arg > 255 ) {
          }, # end of hook_in
        }, # end of type 'v'
 };
+
 our $_types = USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
 sub strict_input_all;
