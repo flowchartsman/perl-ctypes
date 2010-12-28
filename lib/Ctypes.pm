@@ -621,6 +621,7 @@ sub new {
 package Ctypes::Util;
 use strict;
 use warnings;
+use Carp;
 
 =head1 Utility Functions
 
@@ -848,11 +849,13 @@ sub create_range {
       $want_int ) = @_;                  # want only integer results?
 
 # $cover
-  $cover || croak( "create_range: Must supply number of points or " .
-                  "percentage cover required" );
-  croak( "create_range: 'cover' must be positive (got $cover)" )
+  $cover = $max - $min unless defined $cover;
+  croak ( "create_range: 'cover' must be positive (got $cover)" )
     if $cover < 0;
-  if( $cover < 1 ) {                          # treat as a percentage
+  croak ( "create_range: can't return $cover integer points " .
+          "between $min and $max" )
+    if $want_int == 1 and $cover > ($max - $min);
+  if ( $cover < 1 ) {                          # treat as a percentage
     $cover = int( ( $max - $min )  * $cover ); # get number of points
   }
 
@@ -872,11 +875,11 @@ sub create_range {
   my $points = [];
   my( $point, $nearest );
 
-  for( 1..$cover ) {
+  for( my $i = 1; $i <= $cover; $i++ ) {
     if( $weight < 0 ) {
-      $point = $max - ( ( $_ * $interval ) ** abs($weight) );
+      $point = $max - ( ( $i * $interval ) ** abs($weight) );
     } else {
-      $point = $min + ( ( $_ * $interval ) ** $weight );
+      $point = $min + ( ( $i * $interval ) ** $weight );
     }
     $nearest = _find_nearest(
       $want_int ? int( $point ) : $point,

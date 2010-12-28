@@ -1,25 +1,24 @@
 #!perl
 
 use Test::More tests => 19;
-use utf8;
 BEGIN { use_ok( Ctypes ) }
 
-my $x = c_int;
+my $x = c_uint;
 isa_ok( $x, 'Ctypes::Type::Simple' );
-is( $x->typecode, 'i', 'Correct typecode' );
+is( $x->packcode, 'I', 'Correct packcode' );
 is( $x->sizecode, 'i', 'Correct sizecode' );
-is( $x->packcode, 'i', 'Correct packcode' );
-is( $x->name, 'c_int', 'Correct name' );
+is( $x->typecode, 'I', 'Correct typecode' );
+is( $x->name, 'c_uint', 'Correct name' );
 
 my $range = \&Ctypes::Util::create_range;
 my $name = $x->name;
-my $MAX = Ctypes::constant('PERL_INT_MAX');
-my $MIN = Ctypes::constant('PERL_INT_MIN');
+my $MAX = Ctypes::constant('PERL_UINT_MAX');
+my $MIN = Ctypes::constant('PERL_UINT_MIN');
 my $cover = 100;
 my $weight = 1;
 my $want_int = 1;
 my $diff = $MAX - $MIN + 1;
-my $extra = 50;
+my $extra = 100;
 my( $input, $like );
 
 subtest "$name will not accept references" => sub {
@@ -45,13 +44,10 @@ subtest "$name drops numbers after decimal point" => sub {
   is( ${$x->data}, pack($x->packcode, 95 ) );
 };
 
-# Exceeding range on _signed_ variables is undefined in the standard,
-# so these tests can't really be any better.
 subtest "$name: number overflow" => sub {
   for( $range->( $MIN - $extra, $MIN - 1 ) ) {
     $$x = $_;
-    isnt( $$x, $_ );
-    ok( $$x >= $MIN );
+    ok( $$x == $MIN, "$name can't go below $MIN" );
   }
   for( $range->( $MIN, $MAX, $cover, $weight, $want_int ) ) {
     $$x = $_;
@@ -60,8 +56,7 @@ subtest "$name: number overflow" => sub {
   }
   for( $range->( $MAX + 1, $MAX + $extra ) ) {
     $$x = $_;
-    isnt( $$x, $_ );
-    ok( $$x <= $MAX );
+    ok( $$x == $MAX, "$name can't go above $MAX" );
   }
   done_testing();
 };
@@ -152,12 +147,13 @@ subtest "$name->strict_input prevents overflow with characters" => sub {
     eval { $$x = $input };
     is( $$x, $MAX );
     is( ${$x->data}, pack($x->packcode, $MAX ) );
-    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX/ );
+    # going over UINT_MAX just caps at UINT_MAX
   }
   done_testing();
 };
 
 subtest "$name->strict_input: multi-character error" => sub {
+  use bytes;
   $$x = 95;
   for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
     undef $@;
@@ -165,10 +161,10 @@ subtest "$name->strict_input: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, 95 );
     is( ${$x->data}, pack($x->packcode, 95 ) );
-    $like = $name . ': single characters only';
     # special regex characters cause problems, so escape them...
-    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+    substr( $input, ( index($input, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    $like = $name . ': single characters only \(got ' . $input . '\)';
     like( $@, qr/$like/ );
   }
   for( $range->( $MAX + 1, $MAX + $extra ) ) {
@@ -177,9 +173,9 @@ subtest "$name->strict_input: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, 95 );
     is( ${$x->data}, pack($x->packcode, 95 ) );
-    $like = $name . ': single characters only, and must be integers ' . $MIN . ' <= ord\(x\) <= ' . $MAX;
-    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+    substr( $input, ( index($input, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    $like = $name . ': single characters only \(got ' . $input . '\)';
     like( $@, qr/$like/ );
   }
   done_testing();
@@ -248,12 +244,13 @@ subtest "$name: strict_input_all prevents overflow with characters" => sub {
     eval { $$x = $input };
     is( $$x, $MAX );
     is( ${$x->data}, pack($x->packcode, $MAX ) );
-    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX/ );
+    # going over UINT_MAX just caps at UINT_MAX
   }
   done_testing();
 };
 
 subtest "$name: strict_input_all: multi-character error" => sub {
+  use bytes;
   $$x = 95;
   for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
     undef $@;
@@ -261,10 +258,10 @@ subtest "$name: strict_input_all: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, 95 );
     is( ${$x->data}, pack($x->packcode, 95 ) );
-    $like = $name . ': single characters only';
     # special regex characters cause problems, so escape them...
-    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+    substr( $input, ( index($input, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    $like = $name . ': single characters only \(got ' . $input . '\)';
     like( $@, qr/$like/ );
   }
   for( $range->( $MAX + 1, $MAX + $extra ) ) {
@@ -273,11 +270,11 @@ subtest "$name: strict_input_all: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, 95 );
     is( ${$x->data}, pack($x->packcode, 95 ) );
-    $like = $name . ': single characters only, and must be integers ' . $MIN . ' <= ord\(x\) <= ' . $MAX;
-    substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
+    substr( $input, ( index($input, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
+    $like = $name . ': single characters only \(got ' . $input . '\)';
     like( $@, qr/$like/ );
   }
   done_testing();
 };
-  
+

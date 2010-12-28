@@ -302,7 +302,7 @@ sub STORE {
   croak("STORE must take a value") if scalar @_ != 2;
   my $self = shift;
   my $arg = shift;
-  print "In ", $self->{object}{_name}, "'s STORE with arg [ $arg ],\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug == 1;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
   croak("Simple Types can only be assigned a single value") if @_;
 
@@ -339,7 +339,7 @@ sub STORE {
 
   my $typecode = $self->{object}{_typecode};
   print "    Using typecode $typecode\n" if $Debug == 1;
-  print "    1) arg is ", $arg, ", which is ", unpack('b*', $arg), " or ", ord($arg), "\n" if $Debug == 1;
+  print "    1) arg is ", $arg, "\n" if $Debug == 1;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
 #  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   print "    Calling validate...\n";

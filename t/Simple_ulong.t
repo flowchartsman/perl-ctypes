@@ -4,17 +4,17 @@ use Test::More tests => 19;
 use utf8;
 BEGIN { use_ok( Ctypes ) }
 
-my $x = c_int;
+my $x = c_ulong;
 isa_ok( $x, 'Ctypes::Type::Simple' );
-is( $x->typecode, 'i', 'Correct typecode' );
-is( $x->sizecode, 'i', 'Correct sizecode' );
-is( $x->packcode, 'i', 'Correct packcode' );
-is( $x->name, 'c_int', 'Correct name' );
+is( $x->typecode, 'L', 'Correct typecode' );
+is( $x->sizecode, 'l', 'Correct sizecode' );
+is( $x->packcode, 'L', 'Correct packcode' );
+is( $x->name, 'c_ulong', 'Correct name' );
 
 my $range = \&Ctypes::Util::create_range;
 my $name = $x->name;
-my $MAX = Ctypes::constant('PERL_INT_MAX');
-my $MIN = Ctypes::constant('PERL_INT_MIN');
+my $MAX = Ctypes::constant('PERL_ULONG_MAX');
+my $MIN = Ctypes::constant('PERL_ULONG_MIN');
 my $cover = 100;
 my $weight = 1;
 my $want_int = 1;
@@ -152,7 +152,7 @@ subtest "$name->strict_input prevents overflow with characters" => sub {
     eval { $$x = $input };
     is( $$x, $MAX );
     is( ${$x->data}, pack($x->packcode, $MAX ) );
-    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX/ );
+    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX \(got .*\)/ );
   }
   done_testing();
 };
@@ -248,7 +248,7 @@ subtest "$name: strict_input_all prevents overflow with characters" => sub {
     eval { $$x = $input };
     is( $$x, $MAX );
     is( ${$x->data}, pack($x->packcode, $MAX ) );
-    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX/ );
+    like( $@, qr/$name: character values must be integers $MIN <= ord\(x\) <= $MAX \(got .*\)/ );
   }
   done_testing();
 };
