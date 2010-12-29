@@ -106,13 +106,13 @@ our $_pytypes =
                $arg = ord($arg);
                if( $arg < 0 or $arg > 127 ) {
                  $valid = "$name: character values must " .
-                          "be 0 <= ord(x) <= 127";
+                          "be integers 0 <= ord(x) <= 127";
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 127 ) {
-                 $valid .= ", and must be 0 <= ord(x) <= 127";
+                 $valid .= ", and must be integers 0 <= ord(x) <= 127";
                }
              }
            }
@@ -155,13 +155,13 @@ our $_pytypes =
                $arg = ord($arg);
                if( $arg < 0 or $arg > 255 ) {
                  $valid = "$name: character values must " .
-                          "be 0 <= ord(x) <= 255";
+                          "be integers 0 <= ord(x) <= 255";
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 255 ) {
-                 $valid .= ", and must be 0 <= ord(x) <= 255";
+                 $valid .= ", and must be integers 0 <= ord(x) <= 255";
                }
              }
            }
@@ -206,13 +206,13 @@ our $_pytypes =
                $arg = ord($arg);
                if( $arg < 0 or $arg > 127 ) {
                  $valid = "$name: character values must " .
-                          "be 0 <= ord(x) <= 127";
+                          "be integers 0 <= ord(x) <= 127";
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 127 ) {
-                 $valid .= ", and must be 0 <= ord(x) <= 127";
+                 $valid .= ", and must be integers 0 <= ord(x) <= 127";
                }
              }
            }
@@ -251,13 +251,13 @@ our $_pytypes =
                $arg = ord($arg);
                if( $arg < 0 or $arg > 255 ) {
                  $valid = "$name: character values must " .
-                          "be 0 <= ord(x) <= 255";
+                          "be integers 0 <= ord(x) <= 255";
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
                if( $arg < 0 or $arg > 255 ) {
-                 $valid .= ", and must be 0 <= ord(x) <= 255";
+                 $valid .= ", and must be integers 0 <= ord(x) <= 255";
                }
              }
            }
@@ -346,18 +346,18 @@ our $_pytypes =
                print "    1 char long, good\n" if $Debug == 1;
                $arg = ord($arg);
                print "      arg is now $arg\n";
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid = "$name: character values must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid .= ", and must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
@@ -444,18 +444,18 @@ our $_pytypes =
                print "    1 char long, good\n" if $Debug == 1;
                $arg = ord($arg);
                print "      arg is now $arg\n";
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid = "$name: character values must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid .= ", and must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
@@ -496,18 +496,18 @@ our $_pytypes =
                print "    1 char long, good\n" if $Debug == 1;
                $arg = ord($arg);
                print "      arg is now $arg\n";
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid = "$name: character values must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid .= ", and must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
@@ -548,18 +548,18 @@ our $_pytypes =
                print "    1 char long, good\n" if $Debug == 1;
                $arg = ord($arg);
                print "      arg is now $arg\n";
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid = "$name: character values must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
              } else {
                $valid = "$name: single characters only";
                $arg = ord(substr($arg, 0, 1));
-               if( $arg < $MIN or $arg > $MAX ) {
+               if( $arg < 0 or $arg > $MAX ) {
                  $valid .= ", and must be integers " . 
-                          "$MIN <= ord(x) <= $MAX";
+                          "0 <= ord(x) <= $MAX";
                } else {
                  print "    Arg is within range\n" if $Debug == 1;
                }
