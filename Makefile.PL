@@ -31,7 +31,7 @@ if  (eval {require ExtUtils::Constant; 1}) {
                  PERL_USHORT_MAX PERL_INT_MIN PERL_INT_MAX PERL_UINT_MIN
                  PERL_UINT_MAX PERL_LONG_MIN PERL_LONG_MAX PERL_ULONG_MIN
                  PERL_ULONG_MAX DBL_MIN DBL_MAX FLT_MIN FLT_MAX LDBL_MIN
-                 LDBL_MAX|,
+                 LDBL_MAX PERL_UCHAR_MIN PERL_UCHAR_MAX|,
               {name=>"FFI_BAD_ABI", macro=>"1"},
               {name=>"FFI_BAD_TYPEDEF", macro=>"1"},
               {name=>"FFI_OK", macro=>"1"});

@@ -646,24 +646,32 @@ MODULE = Ctypes		PACKAGE = Ctypes
 
 int 
 sizeof(type)
-    char type;
+    char* type;
 CODE:
-  switch (type) {
-  case 'v': RETVAL = 0;           break;
-  case 'c':
-  case 'C': RETVAL = 1;           break;
-  case 's':
-  case 'S': RETVAL = 2;           break;
-  case 'i': 
-  case 'I': RETVAL = sizeof(int); break;
-  case 'l': 
-  case 'L': RETVAL = sizeof(long);  break;
-  case 'f': RETVAL = sizeof(float); break;
-  case 'd': RETVAL = sizeof(double);     break;
-  case 'D': RETVAL = sizeof(long double);break;
-  case 'p': RETVAL = sizeof(void*);      break;
-  default: croak( "Unrecognised type: %c", type );
+  debug_warn( "#[%s:%i] Ctypes::sizeof entered with typecode %c",
+              __FILE__, __LINE__, *type );
+  SV* sizecode_sv = get_types_info( *type, "sizecode", 8 );
+  STRLEN len = 1;
+  char* sizecode = SvPV( sizecode_sv, len );
+  debug_warn( "#    Got sizecode: %c!", *sizecode );
+
+  switch (*sizecode) {
+    case 'v': RETVAL = 0;           break;
+    case 'c':
+    case 'C': RETVAL = 1;           break;
+    case 's':
+    case 'S': RETVAL = 2;           break;
+    case 'i': 
+    case 'I': RETVAL = sizeof(int); break;
+    case 'l': 
+    case 'L': RETVAL = sizeof(long);  break;
+    case 'f': RETVAL = sizeof(float); break;
+    case 'd': RETVAL = sizeof(double);     break;
+    case 'D': RETVAL = sizeof(long double);break;
+    case 'p': RETVAL = sizeof(void*);      break;
+    default: croak( "Unrecognised type: %c", *type );
   }
+  debug_warn( "# Ctypes::sizeof returning size %i", RETVAL );
 OUTPUT:
   RETVAL
 
@@ -679,96 +687,62 @@ CODE:
   debug_warn("#[%s:%i] Entered _valid_for_type with type %c",
     __FILE__, __LINE__, type);
   if( !SvOK(arg_sv) || !type ) { XSRETURN_UNDEF; }
+  SV* typecode_sv = get_types_info( type, "sizecode", 8 );
+  STRLEN len = 1;
+  type = *SvPV( typecode_sv, len );
   switch (type) {
     case 'v': break;
     case 'c':
     case 'C':
-      debug_warn("#    A char type...");
-    /* We want the real value, not implicit conversion */
-      if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
-        arg_nv = SvNV(arg_sv);
-        debug_warn("#[%i]    Numeric value of arg was %g", __LINE__, arg_nv);
-        if( arg_nv < CHAR_MIN || arg_nv > CHAR_MAX ) {
-          /* no wrap-around: higher bits discarded for char */
-          debug_warn("#    ... out of range, needs cast");
-          RETVAL = 0; break;
-        }
-      } else if( SvPOK(arg_sv) ) {
-        debug_warn("#    arg was SvPOK, will be converted to int in cast");
+      arg_nv = SvNV(arg_sv);  /* no wrap-around: higher bits discarded */
+      if( arg_nv < CHAR_MIN || arg_nv > CHAR_MAX ) {
+        debug_warn("#    ... out of range, needs cast");
         RETVAL = 0; break;
-      } else {
-        croak("[%s:%i] Ctypes::_cast error: arg for type %c not IOK, NOK or POK",
-          __FILE__, __LINE__, type);
       }
       RETVAL = 1; break;
     case 's':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_SHORT_MIN || arg_nv > PERL_SHORT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'S':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_USHORT_MIN || arg_nv > PERL_USHORT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'i':
-      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
-      /* XXX Why do we need private check for values
-             from Type::Simple->copy() ??            */
-        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
-        break;
-      }
-      debug_warn("#    Got scalar integer...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_INT_MIN || arg_nv > PERL_INT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'I':
-      if( !SvIOK(arg_sv) && !SvIOKp(arg_sv) ) {
-      /* XXX Why do we need private check for values
-             from Type::Simple->copy() ??            */
-        debug_warn("#    arg_sv was not Sv(I|N)OKp*...");
-        break;
-      }
-      debug_warn("#    Got type I...");
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_UINT_MIN || arg_nv > PERL_UINT_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'l':
-    /* ??? Are Longs always guaranteed to be IV rather than NV? */
-      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_LONG_MIN || arg_nv > PERL_LONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'L':
-      if( !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( arg_nv < PERL_ULONG_MIN || arg_nv > PERL_ULONG_MAX ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'f':
-      // if( !SvNOK(arg_sv) ) break;
-    /* ??? Is NV, usually double, alright to use here?
-       Also, any Perl vars to use instead of stdlib ones? */
-      debug_warn("#    Got a float...");
       arg_nv = SvNV(arg_sv);
-      debug_warn("#    got %f", (float)arg_nv);
       if( ( FLT_MIN - arg_nv) > FLT_EPSILON || (arg_nv - FLT_MAX) > FLT_EPSILON ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
     case 'd':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( (DBL_MIN - arg_nv) > DBL_EPSILON || (arg_nv - DBL_MAX) > DBL_EPSILON ) {
         RETVAL = -1; break;  /* XXX Wtf... what's going wrong here??? */
@@ -776,7 +750,6 @@ CODE:
       RETVAL = 1; break;
 #ifdef HAS_LONG_DOUBLE
     case 'D':
-      if( !SvNOKp(arg_sv) && !SvIOK(arg_sv) ) break;
       arg_nv = SvNV(arg_sv);
       if( (LDBL_MIN - arg_nv) > LDBL_EPSILON || (arg_nv - LDBL_MAX) > LDBL_EPSILON ) {
         RETVAL = -1; break;
@@ -787,7 +760,7 @@ CODE:
     /* Pointers can be just about anything
        ??? Could this be improved? */
       if( !SvPOK(arg_sv) && !SvNOK(arg_sv) && !SvIOK(arg_sv) ) {
-        debug_warn("#[%s:%i] _valid_for_type: arg_sv wasn't Anything. What did you pass??",
+        debug_warn("#[%s:%i] _valid_for_type 'p' needs plain scalar value",
                    __FILE__, __LINE__ );
         RETVAL = 0; break;
       }
@@ -1011,6 +984,78 @@ CODE:
   Safefree(retval);
 OUTPUT:
   RETVAL
+
+
+MODULE=Ctypes   PACKAGE=Ctypes::Type
+
+int
+is_a_number(arg_sv)
+  SV* arg_sv
+CODE:
+  debug_warn("#[%s:%i] Entered is_a_number", __FILE__, __LINE__);
+  if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+    debug_warn("#    WAS IOK/NOK");
+    RETVAL = 1;
+  } else {
+    debug_warn("#    NOT IOK/NOK");
+    RETVAL = 0;
+  }
+OUTPUT:
+  RETVAL
+
+void
+validate(arg_sv, typecode)
+  SV* arg_sv;
+  char typecode;
+PPCODE:
+  SV* valid_sv = &PL_sv_undef;
+  SV* converted = newSVsv(arg_sv);
+  NV arg_nv;
+  STRLEN len;
+  debug_warn("#[%s:%i] Entered _valid_for_type with typecode %c",
+    __FILE__, __LINE__, typecode);
+/*  SV* typecode_sv = get_types_info( typecode, "sizecode", 8 ); */
+//  typecode = *SvPV( typecode_sv, len );
+  switch (typecode) {
+    case 'v': break;
+    case 'c':
+      debug_warn("#    Got to 'c' switch");
+      if( SvROK(arg_sv) ) {
+        len = 30;
+        valid_sv = newSVpvn("c_char: cannot take references", len);
+        converted = &PL_sv_undef;
+        break;
+      }
+      if( SvIOK(arg_sv) || SvNOK(arg_sv) ) {
+        arg_nv = SvNV(arg_sv);
+/*        if( arg_nv != 0 && (NV)arg_nv % (NV)1 ) {
+          len = 56;
+          valid_sv = newSVpvn("c_char: numeric values must be integers \
+                               -128 <= x <= 127", len);
+          arg_nv = sprintf("%u", (double)arg_nv);
+        } */
+        if( arg_nv < CHAR_MIN || arg_nv > CHAR_MAX ) {
+          len = 56;
+          valid_sv = newSVpvn("c_char: numeric values must be integers \
+                               -128 <= x <= 127", len);
+          break;
+        }
+      }
+      if( SvPOK(arg_sv) ) {
+        debug_warn("#    SvI-Not-OK!");
+        if( SvLEN(arg_sv) == 0 ) {
+          SvIV_set(converted, 0); /* will be IV scalar 0 -> char null */
+          break;
+        }
+        if( SvLEN(arg_sv) > 1 ) {
+          len = 30;
+          valid_sv = newSVpvn("c_char: single characters only", len);
+        }
+      }
+  }
+  XPUSHs(valid_sv);
+  XPUSHs(converted);
+
 
 MODULE=Ctypes	PACKAGE=Ctypes::Callback
 
