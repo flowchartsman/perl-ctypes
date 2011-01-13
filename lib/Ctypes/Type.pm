@@ -6,9 +6,10 @@ use Carp;
 require Exporter;
 our @ISA = qw|Exporter|;
 our @EXPORT_OK = qw|&_types &strict_input_all|;
-our $VERSION = 0.002;
-use constant USE_PERLTYPES => 0; # so far use only perl pack-style types,
-                                 # not the full python ctypes types
+# our $VERSION = 0.003;
+# This should be customizable, should it?
+use constant USE_PERLTYPES => 0; # full python ctypes types,
+				 # or the simplier perl pack-style types
 use Ctypes;
 use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
@@ -54,6 +55,9 @@ our $_perltypes =
   C =>  {
           name => 'c_char',
         }, # end of type 'C'
+  c =>  {
+          name => 'c_byte',
+        }, # same as b, but compatible to pack-style c
   s =>  { name => 'c_short', sizecode => 's' },
   S =>  { name => 'c_ushort', sizecode => 's' },
   i =>  { name => 'c_int', sizecode => 'i' },
@@ -175,7 +179,7 @@ our $_pytypes =
          }, # end of hook_out
        }, # end of type 'c_ubyte'
   X => { name => 'c_bstr' },        # a?
-  c => { # single character, c?
+  c => { # single character, c signed, possibly a multi-char (?)
          name => 'c_char',
          sizecode => 'c',
          typecode => 'c',
@@ -595,23 +599,23 @@ sub strict_input_all;
 
 =head1 SYNOPSIS
 
-use Ctypes;
+    use Ctypes;
 
-my $int = c_int(10);
+    my $int = c_int(10);
 
-$$int = 15;                          # Note the double sigil
-$$int += 3;
-print $int->size;                    # sizeof(int) in C
-print $int->name;                    # 'c_int'
+    $$int = 15;                          # Note the double sigil
+    $$int += 3;
+    print $int->size;                    # sizeof(int) in C
+    print $int->name;                    # 'c_int'
 
-my $array = Array( 7, 6, 5, 4, 3 );  #Create array (of c_ushort)
-my $dblarray = Array( c_double, [ 2, 1, 0, -1, -2 ] );
-$$dblarray[2] = $$int;               # Again, note sigils
-print $dblarray->size;               # sizeof(type) * #members
+    my $array = Array( 7, 6, 5, 4, 3 );  #Create array (of c_ushort)
+    my $dblarray = Array( c_double, [ 2, 1, 0, -1, -2 ] );
+    $$dblarray[2] = $$int;               # Again, note sigils
+    print $dblarray->size;               # sizeof(type) * #members
 
-# Create int-type pointer to double-type array
-my $intp = Pointer( c_int, $dblarray );
-print $$intp[2];                     # 1073741824 on my system
+    # Create int-type pointer to double-type array
+    my $intp = Pointer( c_int, $dblarray );
+    print $$intp[2];                     # 1073741824 on my system
 
 =head1 ABSTRACT
 
@@ -620,10 +624,22 @@ simple C types, as well as L<Arrays|Ctypes::Type::Array>,
 L<Pointers|Ctypes::Type::Pointer>, L<Structs|Ctypes::Type::Struct>
 and L<Unions|Ctypes::Type::Union> (although there are functions for
 all of them in the main L<Ctypes> namespace, so you can normally
-just C<use Ctypes>).
+just C<use Ctypes;>).
 
 Common methods are documented here. See the relevant documentation
 for the above packages for more detailed information.
+
+=head1 Base types
+
+Base types:
+
+    c_char c_wchar c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
+    c_longlong c_ulonglong c_float c_double c_longdouble c_char_p c_wchar_p
+    c_size_t c_ssize_t c_bool c_void_p
+
+Implemented as aliases:
+
+   c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64
 
 =cut
 
@@ -676,10 +692,10 @@ our @_allnames = keys %_defined;
 
 =head1 METHODS
 
-Apart from its value or values, each Ctypes::Type object holds various
-pieces of information about itself, which you can access via the methods
-below. Some are only 'getters', but some could be misused to greatly
-confuse the object internals, so you shouldn't assign to them lightly.
+Apart from its value or values, each Ctypes::Type object holds various pieces of
+information about itself, which you can access via the methods below. Some are
+only I<get methods> (read-only), but some could be misused to greatly confuse
+the object internals, so you shouldn't assign to them lightly.
 
 =over
 
@@ -807,8 +823,8 @@ for how to do this to individual objects
 {
   my $strict_input_all = 0;
   sub strict_input_all {
-# ??? This could be improved; could still be called as a class method
-# with an object instead of a 1 or 0 and user would not be notified
+    # ??? This could be improved; could still be called as a class method
+    # with an object instead of a 1 or 0 and user would not be notified
     my $arg = shift;
     if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
       croak("Usage: allow_overflow_all(x) (1 or 0)");

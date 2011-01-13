@@ -39,9 +39,9 @@ note( 'Ordered construction (arrayref)' );
 
 isa_ok( $alignedstruct, 'Ctypes::Type::Struct' );
 is( $alignedstruct->name, 'Struct' );
-is( chr($$alignedstruct->{o1}), 'Q' );
-is( $$alignedstruct->{o2}, 20 );
-is( $$alignedstruct->{o3}, 180000 );
+is( $alignedstruct->{o1}, 'Q' );
+is( $alignedstruct->{o2}, 20 );
+is( $alignedstruct->{o3}, 180000 );
 $size = 0;
 my $delta = 0;
 for(qw|c i l|) {
@@ -63,10 +63,10 @@ subtest 'Positional parameterised initialisation' => sub {
   plan tests => 6;
   isa_ok( $point, 't_POINT' );
   is( $point->name, 't_POINT_Struct' );
-  is( $$point->{x}, 30 );
-  is( $$point->{y}, 40 );
-  is( $$point->[0], 30 );
-  is( $$point->[1], 40 );
+  is( $point->{x}, 30 );
+  is( $point->{y}, 40 );
+  is( $point->[0], 30 );
+  is( $point->[1], 40 );
 };
 
 my $point_2 = new t_POINT([ y => 30, x => 40 ]);
@@ -76,33 +76,33 @@ note( 'Named parameter initialisation' );
 
 isa_ok( $point_2, 't_POINT' );
 isa_ok( $point_2, 'Ctypes::Type::Struct' );
-is( $$point_2->{x}, 40 );
-is( $$point_2->{y}, 30 );
+is( $point_2->{x}, 40 );
+is( $point_2->{y}, 30 );
 isa_ok( $point_3, 't_POINT' );
 isa_ok( $point_3, 'Ctypes::Type::Struct' );
-is( $$point_3->{y}, 50 );
-is( $$point_3->{x}, 0 );
+is( $point_3->{y}, 50 );
+is( $point_3->{x}, 0 );
 
 note( 'Data access' );
 
-is( $$struct->{f2}, 10 );
+is( $struct->{f2}, 10 );
 is( $struct->fields->{f2}->name, 'c_int' );
-$$struct->{f2} = 30;
-is( $$struct->{f2}, 30 );
+$struct->{f2} = 30;
+is( $struct->{f2}, 30 );
 $struct->values->{f2} = 50;
-is( $$struct->{f2}, 50 );
-is( $$struct->[1], 50 );
-$$struct->[1] = 10;
-is( $$struct->[1], 10 );
+is( $struct->{f2}, 50 );
+is( $struct->[1], 50 );
+$struct->[1] = 10;
+is( $struct->[1], 10 );
 $struct->values->[1] = 30;
-is( $$struct->[1], 30 );
+is( $struct->[1], 30 );
 
 my $data = pack('C',80) . pack('i',30) . pack('l',90000);
 is( ${$struct->data}, $data, '->data looks alright' );
 my $twentyfive = pack('i',25);
 my $dataref = $struct->data;
 substr( ${$dataref}, 1, length($twentyfive) ) = $twentyfive;
-is( $$struct->[1], 25, 'Members call up for fresh data' );
+is( $struct->[1], 25, 'Members call up for fresh data' );
 
 note( 'Attribute access' );
 
@@ -127,7 +127,7 @@ is( $struct->fields->{f3}->name, 'c_long'  );
 is( $struct->fields->{f1}->size, 1 );
 is( $struct->fields->{f2}->size, 4 );
 is( $struct->fields->{f3}->size, 4 );
-is( $struct->fields->{f1}->typecode, 'C' );
+is( $struct->fields->{f1}->typecode, 'C', "typecode field f1 - C unsigned char from pack" );
 is( $struct->fields->{f2}->typecode, 'i' );
 is( $struct->fields->{f3}->typecode, 'l' );
 is( $struct->fields->{f1}->owner, $struct );
@@ -141,7 +141,7 @@ is( $struct->fields->[2]->name, 'c_long'  );
 is( $struct->fields->[0]->size, 1 );
 is( $struct->fields->[1]->size, 4 );
 is( $struct->fields->[2]->size, 4 );
-is( $struct->fields->[0]->typecode, 'C' );
+is( $struct->fields->[0]->typecode, 'C', "typecode field 0 - C unsigned char from pack" );
 is( $struct->fields->[1]->typecode, 'i' );
 is( $struct->fields->[2]->typecode, 'l' );
 is( $struct->fields->[0]->owner, $struct );

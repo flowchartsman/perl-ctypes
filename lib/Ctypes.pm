@@ -79,6 +79,37 @@ datamangler who wants to quickly script together a couple of functions
 from different native libraries as for the Perl module author who wants
 to expose the full functionality of a large C/C++ project.
 
+=head2 Typecodes
+
+Here are the currently supported low-level signature typecode characters, with
+the matching Ctypes and perl-style packcodes.
+As you can see, there is some overlap with Perl's L<pack|perlfunc/pack> notation,
+they're not identical (v, h, H), and furthermore B<WILL CHANGE> to offer a
+wider range of types, as on the python ctypes typecodes (s,w,z,...)
+
+Typecode: Ctype                  perl Packcode
+  'v': void
+  'b': c_byte (signed char)      c
+  'B': c_ubyte (unsigned char)   C
+  'c': c_char (signed char)      c
+  'C': c_uchar (unsigned char)   C
+
+  'h': c_short (signed short)    s
+  'H': c_ushort (unsigned short) S
+  'i': c_int (signed int)        i
+  'I': c_uint (unsigned int)     I
+  'l': c_long (signed long)      l
+  'L': c_ulong (unsigned long)   L
+  'f': c_float                   f
+  'd': c_double                  d
+  'g': c_longdouble              D
+  'q': c_longlong                q
+  'Q': c_ulonglong               Q
+
+  's': c_char_p (ASCIIZ string) A?
+  'w': c_wchar                  U
+  'z': c_wchar_p                U*
+
 =cut
 
 
@@ -101,7 +132,7 @@ calling-convention: s for stdcall, c for cdecl (or 64-bit fastcall).
 The second character specifies the typecode for the return type
 of the function, and the subsequent characters specify the argument types.
 
-'Typecodes' are single character designations for various C data types.
+L<Typecodes> are single character designations for various C data types.
 They're similar in concept to the codes used by Perl's
 L<pack|perlfunc/pack> and L<unpack|perlfunc/unpack> functions, but they
 are B<not> the same codes!
@@ -111,25 +142,6 @@ L<DynaLoader::dl_find_symbol>.
 
 I<ARGS> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
-
-Here are the currently supported signature typecode characters. As you can
-see, there is some overlap with Perl's L<pack|perlfunc/pack> notation,
-they're not identical (v), and furthermore B<WILL CHANGE> to offer a wider
-range of types:
-
-  'v': void
-  'c': signed char
-  'C': unsigned char
-  's': signed short
-  'S': unsigned short
-  'i': signed int
-  'I': unsigned int
-  'l': signed long
-  'L': unsigned long
-  'f': float
-  'd': double
-  'D': long double
-  'p': pointer
 
 =cut
 
@@ -373,8 +385,8 @@ and B<argtypes> is a multi-character string representing the argument
 types the function will receive from C. All types are represented
 in L<typecode|/"call SIG, ADDR, [ ARGS ... ]"> format.
 
-B<Note> that the interface for Callback->new() will be updated
-to be more consistent with Function->new().
+B<Note> that the interface for C<Callback->new()> will be updated
+to be more consistent with C<Function->new()>.
 
 =cut
 
@@ -682,7 +694,8 @@ sub find_library($;@) {# from C::DynaLib::new
       }
       # python has a different logic: The version+subversion is taken from
       # msvcrt dll used in the python.exe
-      # We search in the systempath for the first found.
+      # We search in the systempath for the first found. This is really tricky,
+      # as we only should take the run-time used in perl itself. (objdump/nm/ldd or the perl.dll)
       push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
 	   "MSVCRT60","MSVCRT40","MSVCRT20");
     }
@@ -1282,13 +1295,13 @@ carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
 # lowest common demoninator, if you will (will you?)
 sub _check_type_needed (@) {
   # XXX This needs changed when we support more typecodes
-  print "In _check_type_needed\n" if $Debug == 1;
+  print "In _check_type_needed\n" if $Debug;
   my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
   my $low = 0;
   my $char = 0;
   my $string = 0;
   for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
-  print "    Now looking at: $_\n" if $Debug == 1;
+  print "    Now looking at: $_\n" if $Debug;
    if( $char == 1 or !looks_like_number($_) ) {
       $char = 1;
       $string = 1 if length( $_ ) > 1;
@@ -1309,7 +1322,7 @@ sub _check_type_needed (@) {
   } else {
     $ret = $numtypes[$low];
   }
-  print "  Returning: $ret\n" if $Debug == 1;
+  print "  Returning: $ret\n" if $Debug;
   return $ret;
 }
 

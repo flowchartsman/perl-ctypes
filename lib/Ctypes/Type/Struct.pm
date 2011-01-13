@@ -58,7 +58,7 @@ sub _hash_overload {
   if( caller =~ /^Ctypes::Type/ ) {
     return $_[0];
   }
-  print "Structs's HASH ovld\n" if $Debug == 1;
+  print "Structs's HASH ovld\n" if $Debug;
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
@@ -127,8 +127,8 @@ Structs is not yet implemented.
 
 sub new {
   my $class = ref($_[0]) || $_[0];  shift;
-  print "In Struct::new constructor...\n" if $Debug == 1;
-  print "    args:\n" if $Debug == 1;
+  print "In Struct::new constructor...\n" if $Debug;
+  print "    args:\n" if $Debug;
   # Try to determine if ::new was called by a class that inherits
   # from Struct, and get the name of that class
   # XXX Later, the [non-]existence of $progeny is used to make an
@@ -137,7 +137,7 @@ sub new {
   # Q: What are some of the ways the following logic fails?
   my( $progeny, $extra_fields ) = undef;
   my $caller = caller;
-  print "    caller is ", $caller, "\n" if $caller and $Debug == 1;
+  print "    caller is ", $caller, "\n" if $caller and $Debug;
   if( $caller->isa('Ctypes::Type::Struct') ) {
     no strict 'refs';
     $progeny = $caller;
@@ -152,8 +152,8 @@ sub new {
           $extra_fields->[$_] = $_fields_->[$_];
         }
       }
-      print "    Got these extra fields:\n" if $Debug == 1;
-      print Dumper( $extra_fields ) if $Debug == 1;
+      print "    Got these extra fields:\n" if $Debug;
+      print Dumper( $extra_fields ) if $Debug;
       if( scalar @$extra_fields % 2 ) {
         croak( "_fields_ must be key => value pairs!" );
       }
@@ -183,7 +183,7 @@ sub new {
     for( 0 .. (( $#$extra_fields - 1 ) / 2) ) {
       $key = shift @{$extra_fields};
       $val = shift @{$extra_fields};
-      print "    Adding extra field '$key'...\n" if $Debug == 1;
+      print "    Adding extra field '$key'...\n" if $Debug;
       $self->{_fields}->_add_field( $key, $val );
     }
   }
@@ -196,7 +196,7 @@ sub new {
         croak( '\'align\' parameter must be 2, 4, 8, 16, 32 or 64' );
       }
       $self->{_alignment} = $in->{align};
-      print "    My alignment is now ", $self->{_alignment}, "\n" if $Debug == 1;
+      print "    My alignment is now ", $self->{_alignment}, "\n" if $Debug;
       delete $in->{align};
     }
     if( exists $in->{fields} ) {
@@ -214,12 +214,12 @@ sub new {
     }
     for( 0 .. $#{$self->{_fields}->{_array}} ) {
       my $arg = shift;
-      print "  Assigning $arg to ", $_, "\n" if $Debug == 1;
+      print "  Assigning $arg to ", $_, "\n" if $Debug;
       $self->{_values}->[$_] = $arg;
     }
   }
 
-  print "    Struct constructor returning\n" if $Debug == 1;
+  print "    Struct constructor returning\n" if $Debug;
   return $self;
 }
 
@@ -237,12 +237,12 @@ sub copy {
 
 sub data {
   my $self = shift;
-  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
   my @data;
   if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
-    print "    _data already defined and safe\n" if $Debug == 1;
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+    print "    _data already defined and safe\n" if $Debug;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
     return \$self->{_data};
   }
 # TODO This is where a check for an endianness property would come in.
@@ -251,8 +251,8 @@ sub data {
       push @data, $_->{_data};
     }
     $self->{_data} = join('',@data);
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
+    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug;
     $self->_datasafe(0);
     return \$self->{_data};
 #  } else {
@@ -262,29 +262,29 @@ sub data {
 
 sub _update_ {
   my($self, $arg, $index) = @_;
-  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
-  print "  self is: ", $self, "\n" if $Debug == 1;
-  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-  print "  arg is: $arg" if $arg and $Debug == 1;
-  print $arg ? (",  which is\n", unpack('b*',$arg), "\n  to you and me\n") : ('') if $Debug == 1;
-  print "  and index is: $index\n" if defined $index and $Debug == 1;
+  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug;
+  print "  self is: ", $self, "\n" if $Debug;
+  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+  print "  arg is: $arg" if $arg and $Debug;
+  print $arg ? (",  which is\n", unpack('b*',$arg), "\n  to you and me\n") : ('') if $Debug;
+  print "  and index is: $index\n" if defined $index and $Debug;
   if( not defined $arg ) {
-    print "    Arg wasn't defined!\n" if $Debug == 1;
+    print "    Arg wasn't defined!\n" if $Debug;
     if( $self->{_owner} ) {
-    print "      Getting data from owner...\n" if $Debug == 1;
+    print "      Getting data from owner...\n" if $Debug;
     $self->{_data} = substr( ${$self->{_owner}->data},
                              $self->{_index},
                              $self->{_size} );
     }
   } else {
     if( defined $index ) {
-      print "     Got an index...\n" if $Debug == 1;
+      print "     Got an index...\n" if $Debug;
       my $pad = $index + length($arg) - length($self->{_data});
       if( $pad > 0 ) {
-        print "    pad was $pad\n" if $Debug == 1;
+        print "    pad was $pad\n" if $Debug;
         $self->{_data} .= "\0" x $pad;
       }
-      print "    Setting chunk of self->data\n" if $Debug == 1;
+      print "    Setting chunk of self->data\n" if $Debug;
       substr( $self->{_data},
               $index,
               length($arg)
@@ -298,10 +298,10 @@ sub _update_ {
   # ... or do we? Send our _index, plus #bytes updated member starts at?
   # Could C::B::C help with this???
   if( defined $arg and $self->{_owner} ) {
-    print "    Need to update my owner...\n" if $Debug == 1;
+    print "    Need to update my owner...\n" if $Debug;
     my $success = undef;
-    print "  Sending data back upstream:\n" if $arg and $Debug == 1;
-    print "    Index is ", $self->{_index}, "\n" if $arg and $Debug == 1;
+    print "  Sending data back upstream:\n" if $arg and $Debug;
+    print "    Index is ", $self->{_index}, "\n" if $arg and $Debug;
     $success =
       $self->{_owner}->_update_(
         $self->{_data},
@@ -317,10 +317,10 @@ sub _update_ {
   if( defined $arg or $self->{_owner} ) { # otherwise nothing's changed
     $self->_set_owned_unsafe;
   }
-  print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-  print "    updating size...\n" if $Debug == 1;
+  print "  data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+  print "    updating size...\n" if $Debug;
   $self->{_size} = length($self->{_data});
-  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
+  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug;
   return 1;
 }
 
@@ -425,10 +425,10 @@ for my $func (keys(%access)) {
     my $arg = shift;
     croak("The $key method only takes one argument") if @_;
     if(defined $access{$func}[1] and defined($arg)){
-      print "Validating...\n" if $Debug == 1;
+      print "Validating...\n" if $Debug;
       my $res;
       eval{ $res = $access{$func}[1]->($arg); };
-      print "res: $res\n" if $Debug == 1;
+      print "res: $res\n" if $Debug;
       if( $@ or $res == 0 ) {
         croak("Invalid argument for $key method: $arg");
       }
@@ -454,10 +454,10 @@ sub _datasafe {
 
 sub _set_owned_unsafe {
   my $self = shift;
-  print "Setting _owned_unsafe\n" if $Debug == 1;
+  print "Setting _owned_unsafe\n" if $Debug;
   for( @{$self->{_fields}->{_rawarray}} ) {
     $_->_datasafe(0);
-    print "    He now knows his data's ", $_->_datasafe, "00% safe\n" if $Debug == 1;
+    print "    He now knows his data's ", $_->_datasafe, "00% safe\n" if $Debug;
   }
   return 1;
 }
@@ -496,7 +496,7 @@ sub _hash_overload {
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
-#  print "_Fields' HashOverload\n" if $Debug == 1;
+#  print "_Fields' HashOverload\n" if $Debug;
   my $ret = $self->{_hash};
   bless $self => $class;
   return $ret;
@@ -518,9 +518,9 @@ sub new {
 
 sub _add_field {
   my( $self, $key, $val ) = ( shift, shift, shift );
-  print "In ", $self->{_obj}->{_name}, "'s _add_field(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-  print "    key is $key\n" if $Debug == 1;
-  print "    value is $val\n" if $Debug == 1;
+  print "In ", $self->{_obj}->{_name}, "'s _add_field(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
+  print "    key is $key\n" if $Debug;
+  print "    value is $val\n" if $Debug;
   if( exists $self->{_hash}->{$key} ) {
     croak( "Trying to add already extant key!" );
   }
@@ -532,29 +532,29 @@ sub _add_field {
   $align = 1 if $align == 0;
 
   if( $newfieldindex > 0 ) {
-    print "    Already stuff in array\n" if $Debug == 1;
+    print "    Already stuff in array\n" if $Debug;
     my $lastindex = $#{$self->{_array}};
-    print "    lastindex is $lastindex\n" if $Debug == 1;
-    print "    lastindex index: ", $self->{_array}->[$lastindex]->index, "\n" if $Debug == 1;
-    print "    lastindex size: ", $self->{_array}->[$lastindex]->size, "\n" if $Debug == 1;
+    print "    lastindex is $lastindex\n" if $Debug;
+    print "    lastindex index: ", $self->{_array}->[$lastindex]->index, "\n" if $Debug;
+    print "    lastindex size: ", $self->{_array}->[$lastindex]->size, "\n" if $Debug;
     $offset = $self->{_array}->[$lastindex]->index
               + $self->{_array}->[$lastindex]->size;
-    print "    alignment is $align\n" if $Debug == 1;
+    print "    alignment is $align\n" if $Debug;
     my $offoff = abs( $offset - $align ) % $align;
     if( $offoff ) { # how much the 'off'set is 'off' by.
-      print "  offoff was $offoff off!\n" if $Debug == 1;
+      print "  offoff was $offoff off!\n" if $Debug;
       $offset += $offoff;
     }
   }
-  print "    offset will be ", $offset, "\n" if $Debug == 1;
-  print "  Creating Field...\n" if $Debug == 1;
+  print "    offset will be ", $offset, "\n" if $Debug;
+  print "  Creating Field...\n" if $Debug;
   my $field = new Ctypes::Type::Field( $key, $val, $offset, $self->{_obj} );
-  print "    setting array...\n" if $Debug == 1;
+  print "    setting array...\n" if $Debug;
   $self->{_array}->[$newfieldindex] = $field;
-  print "    setting hash...\n" if $Debug == 1;
+  print "    setting hash...\n" if $Debug;
   $self->{_hash}->{$key} = $field;
 
-  print "    _ADD_FIELD returning!\n" if $Debug == 1;
+  print "    _ADD_FIELD returning!\n" if $Debug;
   return $self->{_hash}->{$key};
 }
 
@@ -570,8 +570,8 @@ use overload
   fallback => 'TRUE';
 
 sub _array_overload {
-  print "_Values's ARRAY ovld\n" if $Debug == 1;
-  print "    ", ref( $_[0]->{_array} ), "\n" if $Debug == 1;
+  print "_Values's ARRAY ovld\n" if $Debug;
+  print "    ", ref( $_[0]->{_array} ), "\n" if $Debug;
   my $self = shift;
   return $self->{_array};
 }
@@ -581,7 +581,7 @@ sub _hash_overload {
   if( $caller =~ /^Ctypes::Type::Struct/ ) {
     return $_[0];
   }
-  print "_Values's HASH ovld\n" if $Debug == 1;
+  print "_Values's HASH ovld\n" if $Debug;
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
@@ -591,7 +591,7 @@ sub _hash_overload {
 }
 
 sub new {
-  print "In _Values constructor!\n" if $Debug == 1;
+  print "In _Values constructor!\n" if $Debug;
   my $class = ref($_[0]) || $_[0];  shift;
   my $obj = shift;
   my $self = {
@@ -607,7 +607,7 @@ sub new {
   $self->{_rawarray} = tie @{$self->{_array}},
                   'Ctypes::Type::Struct::_Fields::_array', $self->{_fields};
   bless $self => $class;
-  print "    _VALUES constructor returning ok\n" if $Debug == 1;
+  print "    _VALUES constructor returning ok\n" if $Debug;
   return $self;
 }
 
@@ -634,16 +634,16 @@ sub STORE {
   my $self = shift;
   my $index = shift;
   my $val = shift;
-  print "In _Fields::_array::STORE\n" if $Debug == 1;
-  print "    index is $index\n" if $Debug == 1;
-  print "    val is $val\n" if $Debug == 1;
+  print "In _Fields::_array::STORE\n" if $Debug;
+  print "    index is $index\n" if $Debug;
+  print "    val is $val\n" if $Debug;
   $self->{_fields}->{_array}->[$index]->{_contents} = $val;
   return $self->{_fields}->{_array}->[$index]->{_contents};
 }
 
 sub FETCH {
   my( $self, $index ) = (shift, shift);
-  print "In _array::FETCH, index $index, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In _array::FETCH, index $index, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
   return $self->{_fields}->{_array}->[$index]->{_contents};
 }
 
@@ -673,17 +673,17 @@ sub STORE {
   my $self = shift;
   my $key = shift;
   my $val = shift;
-  print "In _Fields::_hash::STORE\n" if $Debug == 1;
-  print "    key is $key\n" if $Debug == 1;
-  print "    val is $val\n" if $Debug == 1;
+  print "In _Fields::_hash::STORE\n" if $Debug;
+  print "    key is $key\n" if $Debug;
+  print "    val is $val\n" if $Debug;
   $self->{_fields}->{_hash}->{$key}->{_contents} = $val;
   return $self->{_fields}->{$key};
 }
 
 sub FETCH {
   my( $self, $key ) = (shift, shift);
-  print "In _hash::FETCH, key $key, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-  print "    ", ref($self->{_fields}->{_hash}->{$key}), "\n" if $Debug == 1;
+  print "In _hash::FETCH, key $key, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
+  print "    ", ref($self->{_fields}->{_hash}->{$key}), "\n" if $Debug;
   return $self->{_fields}->{_hash}->{$key}->{_contents};
 }
 
@@ -722,12 +722,12 @@ sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
 #
 #  sub AUTOLOAD {
 #    our $AUTOLOAD;
-#    print "In _Finder::AUTOLOAD\n" if $Debug == 1;
-#    print "    AUTOLOAD is $AUTOLOAD\n" if $Debug == 1;
+#    print "In _Finder::AUTOLOAD\n" if $Debug;
+#    print "    AUTOLOAD is $AUTOLOAD\n" if $Debug;
 #    if ( $AUTOLOAD =~ /.*::(.*)/ ) {
 #      return if $1 eq 'DESTROY';
 #      my $wantfield = $1;
-#      print "     Trying to AUTOLOAD for $wantfield\n" if $Debug == 1;
+#      print "     Trying to AUTOLOAD for $wantfield\n" if $Debug;
 #      my $self = $_[0];
 #      my $instance = $self->[0]->{_obj};
 #      if( defined $instance->{_subclass}
@@ -738,16 +738,16 @@ sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
 #      my $found = 0;
 #      if( exists $self->[0]->{_hash}->{$wantfield} ) {
 #        $found = 1;
-#        print "    Found it!\n" if $Debug == 1;
+#        print "    Found it!\n" if $Debug;
 #        my $object = $self->[0]->{_obj};
 #        my $func = sub {
 #          my $caller = shift;
 #          my $arg = shift;
-#          print "In $wantfield accessor\n" if $Debug == 1;
+#          print "In $wantfield accessor\n" if $Debug;
 #          croak("Too many arguments") if @_;
 #          if( not defined $arg ) {
 #            if(ref($caller)) {
-#              print "    Returning value...\n" if $Debug == 1;
+#              print "    Returning value...\n" if $Debug;
 #              my $ret = $self->[0]->{_hash}->{$wantfield};
 #              if( ref($ret) eq 'Ctypes::Type::Simple' ) {
 #                return ${$ret};
@@ -769,10 +769,10 @@ sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
 #          goto &{"${subclass}::$wantfield"};
 #        }
 #      } else { # didn't find field
-#        print "    Didn't find it\n" if $Debug == 1;
-#        print "    Here's what we had:\n" if $Debug == 1;
-#        print Dumper( $self->[0]->{_hash} ) if $Debug == 1;
-#        print Dumper( $self->[0]->{_array} ) if $Debug == 1;
+#        print "    Didn't find it\n" if $Debug;
+#        print "    Here's what we had:\n" if $Debug;
+#        print Dumper( $self->[0]->{_hash} ) if $Debug;
+#        print Dumper( $self->[0]->{_array} ) if $Debug;
 #        croak( "Couldn't find field '$wantfield' in ",
 #          $self->[0]->{_obj}->name );
 #      }

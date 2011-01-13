@@ -319,11 +319,11 @@ sub copy {
 
 sub data {
   my $self = shift;
-  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
 if( defined $self->{_data}
       and $self->_datasafe == 1 ) {
-    print "    _data already defined and safe\n" if $Debug == 1;
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+    print "    _data already defined and safe\n" if $Debug;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
     return \$self->{_data};
   }
 # TODO This is where a check for an endianness property would come in.
@@ -335,7 +335,7 @@ if( defined $self->{_data}
         ${$_->_as_param_};
     }
     $self->{_data} = join('',@data);
-    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug == 1;
+    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug;
     $self->_datasafe(0);
     return \$self->{_data};
   } else {
@@ -368,12 +368,12 @@ sub _as_param_ { return $_[0]->data(@_) }
 
 sub _update_ {
   my($self, $arg, $index) = @_;
-  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
-  print "  self is: ", $self, "\n" if $Debug == 1;
-  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-  print "  arg is: $arg\n" if $arg and $Debug == 1;
-  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $arg and $Debug == 1;
-  print "  and index is: $index\n" if $index and $Debug == 1;
+  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug;
+  print "  self is: ", $self, "\n" if $Debug;
+  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+  print "  arg is: $arg\n" if $arg and $Debug;
+  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $arg and $Debug;
+  print "  and index is: $index\n" if $index and $Debug;
   if( not defined $arg ) {
     if( $self->{_owner} ) {
     $self->{_data} = substr( ${$self->{_owner}->data},
@@ -386,15 +386,15 @@ sub _update_ {
       if( $pad > 0 ) {
         $self->{_data} .= "\0" x $pad;
       }
-      print "  Putting arg where I think it should go...\n" if $Debug == 1;
+      print "  Putting arg where I think it should go...\n" if $Debug;
       substr( $self->{_data},
               $index,
               length($arg)
             ) = $arg;
-      print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+      print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
     } else {
       $self->{_data} = $arg; # if data given with no index, replaces all
-  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
     }
   }
 
@@ -403,8 +403,8 @@ sub _update_ {
   # Could C::B::C help with this???
   if( defined $arg and $self->{_owner} ) {
   my $success = undef;
-  print "  Sending data back upstream:\n" if $arg and $Debug == 1;
-  print "    Index is ", $self->{_index}, "\n" if $arg and $Debug == 1;
+  print "  Sending data back upstream:\n" if $arg and $Debug;
+  print "    Index is ", $self->{_index}, "\n" if $arg and $Debug;
     $success =
       $self->{_owner}->_update_(
         $self->{_data},
@@ -417,13 +417,13 @@ sub _update_ {
     }
   }
   $self->_datasafe(1);
-  print "BLARG: ", $self->{_rawmembers}, "\n" if $Debug == 1;
+  print "BLARG: ", $self->{_rawmembers}, "\n" if $Debug;
   for(@{$self->{_rawmembers}->{VALUES}}) {
-    print "    Telling $_ it's not safe\n" if $Debug == 1;
+    print "    Telling $_ it's not safe\n" if $Debug;
     $_->_datasafe(0);
   }
-  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
-  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug == 1;
+  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug;
   return 1;
 }
 
@@ -456,7 +456,7 @@ sub TIEARRAY {
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
-  print "In ", $self->{object}{_name}, "'s STORE, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s STORE, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
 
   if( $index > ($self->{object}{_length} - 1)
       and $self->{object}{_can_resize} = 0 ) {
@@ -502,12 +502,12 @@ sub STORE {
 # one would make use of the disappearing object's _needsfree attribute.
   }
   my $datum = ${$val->data}; # BEFORE setting owner, that's important!
-  print "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n" if $Debug == 1;
-  print "    ", __PACKAGE__ . ":" . __LINE__, ": In data form, that's\n",unpack('b*',$datum),"\n" if $Debug == 1;
+  print "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n" if $Debug;
+  print "    ", __PACKAGE__ . ":" . __LINE__, ": In data form, that's\n",unpack('b*',$datum),"\n" if $Debug;
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index}
     = $index * $self->{object}->{_member_size};
-  print "    Setting {VALUES}[$index] to $val\n" if $Debug == 1;
+  print "    Setting {VALUES}[$index] to $val\n" if $Debug;
   $self->{VALUES}[$index] = $val;
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index} = $index * $self->{object}->{_member_size};
@@ -524,22 +524,22 @@ sub STORE {
 
 sub FETCH {
   my($self, $index) = @_;
-  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
   if( defined $self->{object}{_owner}
       or $self->{object}{_datasafe} == 0 ) {
-    print "    Can't trust data, updating...\n" if $Debug == 1;
+    print "    Can't trust data, updating...\n" if $Debug;
     $self->{object}->_update_; # Don't need to update member we're FETCHing;
                                # it will pull from us, because we _owner it
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
   if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
-  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
-  carp "    ", $self->{object}{_name}, "\n" if $Debug == 1;
-  carp "    ", $self->{VALUES}[$index], "\n" if $Debug == 1;
+  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
+  carp "    ", $self->{object}{_name}, "\n" if $Debug;
+  carp "    ", $self->{VALUES}[$index], "\n" if $Debug;
     return ${$self->{VALUES}[$index]};
   } else {
-    print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug == 1;
-    print "\n" if $Debug == 1;
+    print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
+    print "\n" if $Debug;
     return $self->{VALUES}[$index];
   }
 }
