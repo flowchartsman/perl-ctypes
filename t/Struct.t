@@ -19,9 +19,9 @@ note( 'Simple construction (arrayref)' );
 
 isa_ok( $struct, 'Ctypes::Type::Struct' );
 is( $struct->name, 'Struct' );
-is( chr( $$struct->{f1} ), 'P' );
-is( $$struct->{f2}, 10 );
-is( $$struct->{f3}, 90000 );
+is( $struct->{f1}, 'P' );
+is( $struct->{f2}, 10 );
+is( $struct->{f3}, 90000 );
 my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
            + Ctypes::sizeof('l');
 is( $struct->size, $size );
