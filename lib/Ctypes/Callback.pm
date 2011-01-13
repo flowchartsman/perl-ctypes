@@ -50,7 +50,7 @@ TODO: new() documentation
 
 sub new {
   my ($class, @args) = @_;
-  # Default positional args are coderef, sig. 
+  # Default positional args are coderef, sig.
   # Will never make sense to pass restype or argtypes positionally
   my @attrs = qw(coderef restype argtypes);
   our $self  =  Ctypes::Function::_get_args(@args, @attrs);

@@ -59,7 +59,7 @@ Pointer object, or the C<contents> object method.
 
   my $int = c_int(10);
   my $ptr = Pointer( $int );
-  
+
   print $ptr;             # SCALAR(0xb1ab1aa), the Pointer object
   print $$prt;            # SCALAR(0xf00f000), the c_int object
   print $ptr->contents;   # the c_int object again
@@ -129,7 +129,7 @@ sub _array_overload {
 
 sub _scalar_overload {
   print "We are One ^_^\n" if $Debug == 1;
-  return \shift->{_contents}; 
+  return \shift->{_contents};
 }
 
 sub _subtract_overload {
@@ -253,12 +253,12 @@ sub data { &_as_param_(@_) }
 sub _as_param_ {
   my $self = shift;
   print "In ", $self->{_name}, "'s _As_param_, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
-  if( defined $self->{_data} 
+  if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
     print "already have _as_param_:\n" if $Debug == 1;
     print "  ", $self->{_data}, "\n" if $Debug == 1;
     print "   ", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
-    return \$self->{_data} 
+    return \$self->{_data}
   }
 # Can't use $self->{_contents} as FETCH will bork at _datasafe
 # use $self->{_raw}{DATA} instead
@@ -279,9 +279,9 @@ sub _update_ {
 
   my $success = $self->{_rawcontents}{DATA}->_update_($arg);
   if(!$success) {
-    croak($self->{_name}, ": Error updating contents!");
+    croak($self->{_name}, ": Error updating contents");
   }
-# 
+#
 #  $self->{_data} = $self->_as_param_;
   $self->{_datasafe} = 1;
   return 1;
@@ -382,12 +382,12 @@ sub TIESCALAR {
 sub STORE {
   my( $self, $arg ) = @_;
   print "In ", $self->{_owner}{_name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug == 1;
-  if( not Ctypes::is_ctypes_compat($arg) ) {                              
-    if ( $arg =~ /^\d*$/ ) {                                              
+  if( not Ctypes::is_ctypes_compat($arg) ) {
+    if ( $arg =~ /^\d*$/ ) {
 croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
-    }                                                                     
-  croak("Pointers are to Ctypes compatible objects only")                 
-  }          
+    }
+  croak("Pointers are to Ctypes compatible objects only")
+  }
   $self->{_owner}{_data} = undef;
   $self->{_owner}{_offset} = 0; # makes sense to reset offset
   print "  ", $self->{_owner}{_name}, "'s content STORE returning ok...\n" if $Debug == 1;
@@ -401,9 +401,9 @@ sub FETCH {
       or $self->{_owner}{_datasafe} == 0 ) {
     print "    Woop... _as_param_ is ", unpack('b*',$self->{_owner}{_data}),"\n" if $Debug == 1;
     my $success = $self->{_owner}->_update_(${$self->{_owner}->_as_param_});
-    croak($self->{_name},": Could not update contents!") if not $success;
+    croak($self->{_name},": Could not update contents") if not $success;
   }
-  croak("Error! Data not safe!") if $self->{_owner}{_datasafe} != 1;
+  croak("Error: Data not safe") if $self->{_owner}{_datasafe} != 1;
   print "  ", $self->{_owner}{_name}, "'s content FETCH returning ok...\n" if $Debug == 1;
   print "  Returning ", ${$self->{DATA}}, "\n" if $Debug == 1;
   return $self->{DATA};

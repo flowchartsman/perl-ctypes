@@ -15,7 +15,7 @@ sub SimpleTest {
 
   ok( defined $typehash, "OK!" );
 
-# Required arguments
+  # Required arguments
 
   croak( "instantiator required" ) unless defined $typehash->{instantiator};
   my $instantiator = $typehash->{instantiator};
@@ -38,7 +38,7 @@ sub SimpleTest {
   croak( "MIN required" ) unless defined $typehash->{MIN};
   my $MIN = $typehash->{MIN};
 
-# Optional arguments
+  # Optional arguments
 
   my $extra = $typehash->{extra} or 100;
   my $weight = $typehash->{weight} or 1;
@@ -46,8 +46,8 @@ sub SimpleTest {
   my $want_int = $typehash->{want_int} or 1;
 
 
-# Is the type signed or unsigned?
-# (Matters for overflow)
+  # Is the type signed or unsigned?
+  # (Matters for overflow)
 
   my( $is_signed, $is_unsigned );
   $is_signed = 1 if exists $typehash->{is_signed};
@@ -55,10 +55,10 @@ sub SimpleTest {
   croak( "Types cannot be both signed and unsigned" )
     if $is_signed && $is_unsigned;
 
-# What does this type return?
+  # What does this type return?
 
-my( $ret_input, $ret_char, $ret_num,
-    $is_float, $is_integer );
+  my( $ret_input, $ret_char, $ret_num,
+      $is_float, $is_integer );
 
   $ret_input = 1 if exists $typehash->{ret_input};
   $ret_char = 1 if exists $typehash->{ret_char};
@@ -73,9 +73,9 @@ my( $ret_input, $ret_char, $ret_num,
     if $ret_total > 1;
 
   $ret_num = 1 if $ret_total < 1;
-  print "ret_num: $ret_num\n";
-  print "ret_char: $ret_char\n";
-  print "ret_input: $ret_input\n";
+  diag "ret_num: $ret_num" if $Ctypes::Type::Simple::Debug;
+  diag "ret_char: $ret_char" if $Ctypes::Type::Simple::Debug;
+  diag "ret_input: $ret_input" if $Ctypes::Type::Simple::Debug;
 
   $is_integer = 1 if exists $typehash->{is_integer};
   $is_float = 1 if exists $typehash->{is_float};
@@ -83,9 +83,9 @@ my( $ret_input, $ret_char, $ret_num,
     if $is_integer && $is_float;
 
   $is_integer = 1 unless $is_float;
-  print "is integer: $is_integer\n";
-  print "is float: $is_float\n";
-  
+  diag "is integer: $is_integer\n" if $Ctypes::Type::Simple::Debug;
+  diag "is float: $is_float\n" if $Ctypes::Type::Simple::Debug;
+
   my $get_return = sub {
     my $input = shift;
     if( $ret_input ) {
@@ -103,7 +103,7 @@ my( $ret_input, $ret_char, $ret_num,
       if( Ctypes::Type::is_a_number($input) ){
         return chr($input);
       } else {
-        print "O HAI\n";
+        diag "O HAI\n" if $Ctypes::Type::Simple::Debug;
         return substr($input, 0, 1);
       }
     }
@@ -122,10 +122,10 @@ my( $ret_input, $ret_char, $ret_num,
   my ( $input, $like );
   my $range = \&Ctypes::Util::create_range;
 
-{
-  no strict 'refs';
-  $x = &$instantiator;  # 'c_int()', etc
-}
+  {
+    no strict 'refs';
+    $x = &$instantiator;  # 'c_int()', etc
+  }
 
   $x->strict_input(0);
   Ctypes::Type::strict_input_all(0);
@@ -135,7 +135,7 @@ my( $ret_input, $ret_char, $ret_num,
   is( $x->sizecode, $sizecode, 'Correct sizecode' );
   is( $x->packcode, $packcode, 'Correct packcode' );
   is( $x->name, $name, 'Correct name' );
-  
+
   subtest "$name will not accept references" => sub {
     plan tests => 3;
     $input = 95;
@@ -146,7 +146,7 @@ my( $ret_input, $ret_char, $ret_num,
     is( unpack('b*',${$x->data}), unpack('b*', pack($x->packcode, 95)) );
     like( $@, qr/$name: cannot take references \(got ARRAY.*\)/ );
   };
-  
+
   subtest "$name drops numbers after decimal point" => sub {
     plan tests => 4;
     $input = 95.2;
@@ -158,7 +158,7 @@ my( $ret_input, $ret_char, $ret_num,
     is( $$x, $get_return->($input) );
     is( ${$x->data}, pack($x->packcode, 95 ) );
   };
-  
+
   # Exceeding range on _signed_ variables is undefined in the standard,
   # so these tests can't really be any better.
   subtest "$name: number overflow" => sub {
@@ -203,7 +203,7 @@ my( $ret_input, $ret_char, $ret_num,
       };
     }
   };
-  
+
   subtest "$name: character overflow" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_);
@@ -219,7 +219,7 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   subtest "$name: characters after first discarded" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_) . 'oubi';
@@ -229,9 +229,9 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   $x->strict_input(1);
-  
+
   subtest "$name->strict_input prevents dropping decimal places" => sub {
     plan tests => 6;
     $input = 95;
@@ -247,7 +247,7 @@ my( $ret_input, $ret_char, $ret_num,
     is( ${$x->data}, pack($x->packcode, 95 ) );
     like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.8\)/ );
   };
-  
+
   subtest "$name->strict_input prevents numeric overflow" => sub {
     $$x = 95;
     for( $range->( $MIN - $extra, $MIN - 1 ) ) {
@@ -274,7 +274,7 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   subtest "$name->strict_input prevents overflow with characters" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_);
@@ -293,7 +293,7 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   subtest "$name->strict_input: multi-character error" => sub {
     $$x = 95;
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
@@ -321,10 +321,10 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   $x->strict_input(0);
   Ctypes::Type::strict_input_all(1);
-  
+
   subtest "$name: strict_input_all prevents dropping decimal places" => sub {
     plan tests => 6;
     $$x = 95;
@@ -339,7 +339,7 @@ my( $ret_input, $ret_char, $ret_num,
     is( ${$x->data}, pack($x->packcode, 95 ) );
     like( $@, qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got 100\.8\)/ );
   };
-  
+
   subtest "$name: strict_input_all prevents numeric overflow" => sub {
     $$x = 95;
     for( $range->( $MIN - $extra, $MIN - 1 ) ) {
@@ -366,7 +366,7 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   subtest "$name: strict_input_all prevents overflow with characters" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_);
@@ -385,7 +385,7 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-  
+
   subtest "$name: strict_input_all: multi-character error" => sub {
     $$x = 95;
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
@@ -413,7 +413,6 @@ my( $ret_input, $ret_char, $ret_num,
     }
     done_testing();
   };
-    
 
 }
 

@@ -41,7 +41,7 @@ Version 0.002
 Ctypes::Function objects abstracts the raw Ctypes::call() API.
 
 Functions are also created as methods of DLL objects, such as
-C<< CDLL->c->toupper({sig=>"cii"})->(ord "Y") >>, but with DLL's 
+C<< CDLL->c->toupper({sig=>"cii"})->(ord "Y") >>, but with DLL's
 the abi is not needed, as it is taken from the library definition.
 See L<Ctypes::DLL>.
 
@@ -68,7 +68,7 @@ sub PF_INDEF0 () { 4; }
 }
 
 # For which members will AUTOLOAD provide mutators?
-my $_setable = { name => 1, sig => 1, abi => 1, 
+my $_setable = { name => 1, sig => 1, abi => 1,
 		 restype => 1, argtypes => 1, lib => 1,
 		 errcheck => 1, callable => 1, ArgumentError => 1};
 # For abi_default():
@@ -80,7 +80,7 @@ sub AUTOLOAD {
     return if $1 eq 'DESTROY';
     my $mem = $1; # member
     no strict 'refs';
-    *$AUTOLOAD = sub { 
+    *$AUTOLOAD = sub {
       my $self = shift;
       if($_setable->{$mem}) {
         if(@_) {
@@ -93,7 +93,7 @@ sub AUTOLOAD {
         if(@_) {
           warn("$mem not setable"); }
         if( defined $self->{$mem} ) {
-          return $self->{$mem}; 
+          return $self->{$mem};
         } else { return undef; }
       }
     };
@@ -129,7 +129,7 @@ sub _build_callargs ($\@\$\$\$) {
 # 2 = output param
 # 4 = input param defaulting to 0
     SWITCH: {
-      if( $flag & (PF_IN | PF_INDEF0) ) { 
+      if( $flag & (PF_IN | PF_INDEF0) ) {
 # /* ['in', 'lcid'] parameter.  Always taken from defval,
 #    if given, else the integer 0. */
         if( !$defval ) {
@@ -147,7 +147,7 @@ sub _build_callargs ($\@\$\$\$) {
       # and we'd have less logic in ours (no kwds), so just inlined it
         if($inargs_index <= scalar @$inargs) {
           ++$inargs_index;
-          $ob = @$inargs[$inargs_index]; 
+          $ob = @$inargs[$inargs_index];
         } elsif( $defval ) {
           $ob = $defval;
         } elsif( $name ) {
@@ -163,7 +163,7 @@ sub _build_callargs ($\@\$\$\$) {
           $callargs[$i] = $defval;
           $outmask |= ( 1 << $i ); # mark as out arg
           $numretvals++;
-          last SWITCH; 
+          last SWITCH;
         }
         $ob = $self->{argtypes}[$i];
         if( $ob->{proto} ) {
@@ -300,7 +300,7 @@ sub call {
 # /* For cdecl functions, we allow more actual arguments
 #    than the length of the argtypes tuple.               */
 # XXX Not sure yet if above logic allows this behaviour
-# Py checks it by number of converters? (_ctypes.c:3334-3360) 
+# Py checks it by number of converters? (_ctypes.c:3334-3360)
 
 #ctypes-1.0.2/source/ctypes.h:238
 # Currently, CFuncPtr types have 'converters' and 'checker'
@@ -358,7 +358,7 @@ sub _form_sig {
       return undef; # Can't take typecodes for non Type objects
     }
   } else {
-    $sig_parts[1] = $self->{restype} or 
+    $sig_parts[1] = $self->{restype} or
       die("Return type not defined (even void must be defined with '_')");
   }
   if(defined $self->{argtypes}) {
@@ -419,7 +419,7 @@ avoid confusion, the C<func> reference is immutible after instantiation:
 if you want a new function, make a new Function object.
 
 Most of a Function's attributes can be accessed with a getter like this:
-C<$obj->attr>, and set with a setter like this C<$obj->attr('value')> 
+C<$obj->attr>, and set with a setter like this C<$obj->attr('value')>
 (apart from C<func>, which only has the getter). Each attribute's precise
 meanings are explained below.
 
@@ -433,19 +433,19 @@ be one of three things:
 =over
 
 =item A linker argument style string, e.g. '-lc' for libc.
- 
+
 For Win32, mingw and cygwin special rules are used:
 "c" resolves on Win32 to msvcrt<ver>.dll.
--llib will probably find an import lib ending with F<.a> or F<.dll.a>), 
-so C<dllimport> is called to find the DLL behind. 
-DLL are usually versioned, import libs not, 
+-llib will probably find an import lib ending with F<.a> or F<.dll.a>),
+so C<dllimport> is called to find the DLL behind.
+DLL are usually versioned, import libs not,
 so specifying the unversioned library name will find the most recent DLL.
 
 =item A path to a shared library.
 
 =item A L<Ctypes::Library> object.
 
-=item A library handle as returned by DynaLoader, or the C<_handle> 
+=item A library handle as returned by DynaLoader, or the C<_handle>
 property of a Ctypes::Library object, such as C<CDLL>.
 
 C<< $lib = CDLL->c; $lib->{_handle} >>
@@ -458,7 +458,7 @@ check with a regex to make sure they look like a string of
 numbers - what a DL handle normally looks like. This means that
 yes, you could do yourself a mischief by passing any string of numbers
 as a library reference, even though that would be a Silly Thing To Do.
-Thankfully there are no dll's consisting only of numbers, but if so, 
+Thankfully there are no dll's consisting only of numbers, but if so,
 add the extension.
 
 =item name
@@ -506,7 +506,7 @@ in the vast majority of cases).
 
 =item restype
 
-The result type is often defined as default if the function 
+The result type is often defined as default if the function
 is defined as library method.
 
 The return type of the function can be represented as
@@ -526,13 +526,13 @@ The return type of the function can be represented as
 This is a single character representing the desired Application Binary
 Interface for the call, here used to mean the calling convention. It can
 be 'c' for C<cdecl> or 's' for C<stdcall>. Other values will fail.
-'f' for C<fastcall> is for now used implicitly with 'c' on WIN64 
+'f' for C<fastcall> is for now used implicitly with 'c' on WIN64
 and UNIX64 architectures, not yet on 64bit libraries.
 
 =item argtypes
 
 A string of the type-code characters, or a list reference of the types
-of arguments the function takes. These can be specified as type-codes 
+of arguments the function takes. These can be specified as type-codes
 ('i', 'd', etc.)  or with L<Ctypes>'s Type objects (c_int, c_double,
 etc.).
 
@@ -657,7 +657,7 @@ Don't try to set the argtypes with it by passing an array ref, like
 you can in new(). Use argtypes() instead.
 
 =cut
- 
+
 sub sig {
   my $self = shift;
   my $arg = shift;
@@ -701,7 +701,7 @@ sub argtypes : lvalue method {
         splice(@{$self->{argtypes}},$offset,$#$new_argtypes,@$new_argtypes);
       } else {
         carp("Offset received but there were no pre-existing argtypes");
-        $self->{argtypes} = $new_argtypes; 
+        $self->{argtypes} = $new_argtypes;
       }
     } else {
       $self->{argtypes} = Ctypes::_make_arrayref( @_ );

@@ -66,7 +66,7 @@ sub _set_whichmem {
 
 sub _as_param_ { return $_[0]->data(@_) }
 
-sub data { 
+sub data {
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   my @data;
@@ -148,14 +148,14 @@ sub _update_ {
   return 1;
 }
 
-#  
+#
 #  package Ctypes::Type::Union::Fields;
 #  use warnings;
 #  use strict;
 #  use Ctypes;
 #  use Carp;
 #  use Data::Dumper;
-#  
+#
 #  sub new {
 #    my $class = ref($_[0]) || $_[0];  shift;
 #    my $owner = shift;
@@ -165,15 +165,15 @@ sub _update_ {
 #                   _rawfields => {},
 #                 } => $class;
 #  }
-#  
+#
 #  sub owner { return $_[0]->{_owner} }
-#  
+#
 #  sub add_field {
 #    my $self = shift;
 #    my $field = shift;
 #    print "IN ADD FIELD\n" if $Debug == 1;
 #    print "    offset will be ", $self->owner->size, "\n" if $Debug == 1;
-#    $self->{_rawfields}->{$_->[0]} = 
+#    $self->{_rawfields}->{$_->[0]} =
 #      tie $self->{_fields}->{$_->[0]},
 #        'Ctypes::Type::Field',
 #        $_->[0],
@@ -181,15 +181,15 @@ sub _update_ {
 #        $self->owner->size,
 #        $self->owner;
 #  }
-#  
+#
 #  sub set_value {
 #    my( $self, $key, $val ) = @_;
 #    $self->{_fields}->{$key} = $val;
 #    return 1;
 #  }
-#  
+#
 #  sub raw { return $_[0]->{_rawfields} }
-#  
+#
 #  sub AUTOLOAD {
 #    our $AUTOLOAD;
 #    if ( $AUTOLOAD =~ /.*::(.*)/ ) {

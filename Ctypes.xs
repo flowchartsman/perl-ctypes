@@ -17,8 +17,8 @@
 #include "ffi.h"
 #include "limits.h"
 #include "Ctypes.h"
-#include "src/obj_util.c"
-#include "src/util.c"
+#include "obj_util.c"
+#include "util.c"
 
 #include "const-c.inc"
 

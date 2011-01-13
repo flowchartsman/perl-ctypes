@@ -42,7 +42,7 @@ Create a C callable function (a callback function) from a Perl callable.
 
 =item $prototype->(func_spec[, paramflags])
 
-Returns a foreign function exported by a shared library. 
+Returns a foreign function exported by a shared library.
 
 B<func_spec> must be a ARRAYREF of [name_or_ordinal, library]. The
 first item is the name of the exported function as string, or the
@@ -84,7 +84,7 @@ The optional third item is the default value for this parameter.
 =head1 SYNOPSIS
 
   my $prototype  = WINFUNCTYPE(c_int, HWND, LPCSTR, LPCSTR, UINT);
-  my $paramflags = [[1, "hwnd", 0], [1, "text", "Hi"], 
+  my $paramflags = [[1, "hwnd", 0], [1, "text", "Hi"],
 	           [1, "caption", undef], [1, "flags", 0]];
   my $MessageBox = $prototype->(["MessageBoxA", WinDLL->user32], $paramflags);
   $MessageBox->({text=>"Spam, spam, spam")});
@@ -98,7 +98,7 @@ The optional third item is the default value for this parameter.
 =head2 new ( ... )
 
 Create a function prototype instance. This is usually called by the functions
-L<WINFUNCTYPE|CTypes/WINFUNCTYPE>, L<CFUNCTYPE|CTypes/CFUNCTYPE> or 
+L<WINFUNCTYPE|CTypes/WINFUNCTYPE>, L<CFUNCTYPE|CTypes/CFUNCTYPE> or
 L<PERLFUNCTYPE|CTypes/PERLFUNCTYPE>.
 
 =cut

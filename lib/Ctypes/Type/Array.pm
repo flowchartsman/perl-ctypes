@@ -50,7 +50,7 @@ sub _arg_to_type {
   if( !ref($arg) ) {     # Perl native type
     # new() will handle casting and blow up if inappropriate
     $out =  Ctypes::Type::Simple->new( $type, $arg );
-  } 
+  }
   # Second simplest case: input is a Type object
   if( ref($arg) eq 'Ctypes::Type::Simple' ) {
     if( $arg->{_typecode} eq $type ) {
@@ -317,7 +317,7 @@ sub copy {
   return new Ctypes::Type::Array( @arr );
 }
 
-sub data { 
+sub data {
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
 if( defined $self->{_data}
@@ -518,7 +518,7 @@ sub STORE {
 #    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
 #  }
   $self->{object}->_update_($datum, $index * $self->{object}{_member_size});
-  
+
   return $self->{VALUES}[$index]; # success
 }
 

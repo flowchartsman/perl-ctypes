@@ -1,20 +1,72 @@
+# perl Makefile.PL INCDIR=/usr/src/libffi-3.0.9/include LIBDIR=/usr/src/libffi-3.0.9/lib
 use 5.010000;
 use ExtUtils::MakeMaker;
+use Config;
+use File::Copy 'cp';
+use File::Spec;
 
+our $libffi_version = "3.0.10rc0";
+
+# check the installed version of libffi and override default libdir and incdir
 use lib qw(inc);
 use Devel::CheckLib;
-check_lib_or_exit( lib => 'ffi', header => 'ffi.h' );
+my ($libdir, $incdir);
+if (grep /INCDIR[ =](\S+)/,join(" ", @ARGV)) {
+  $incdir=$1;
+}
+if (grep /LIBDIR[ =](\S+)/,join(" ", @ARGV)) {
+  $libdir=$1;
+}
+if ($libdir or $incdir) {
+  eval qq/assert_lib( lib => 'ffi', header => 'ffi.h', libpath => $libdir, incpath => $incdir )/;
+} else {
+  eval q/assert_lib( lib => 'ffi', header => 'ffi.h' )/;
+}
+if ($@) {
+  use File::Spec;
+  warn "libffi not installed or failing. Use our own libffi $libffi_version\n";
+  if ($^O ne 'MSWin32') {
+    use Cwd;
+    my $tar = $Config{tar} ? $Config{tar} : "tar";
+    system ($tar, "xfz", "libffi.tar.gz");
+    chdir "libffi";
+    my $cwd = getcwd;
+    system ($ENV{SHELL},"./configure PREFIX=/");
+    system ("make");
+    system ("make install DESTDIR=$cwd"); # abspath. install into libffi/lib, bin and include
+    $incdir = "$cwd/include";
+    $libdir = "$cwd/lib";
+    if ($^O eq 'cygwin') { # copy the bin/*.dll
+      mkdir "bin";
+      cp('bin/libffi-*.dll', 'bin/');
+    }
+    chdir "..";
+  } else {
+    warn "Using the builtin win32 binaries $libffi_version\n";
+    # built with mingw32
+    # install via http://sourceforge.net/projects/mingw/files/Automated%20MinGW%20Installer/mingw-get-inst/
+    my $cwd = getcwd;
+    $libdir = "win32";
+    $incdir = File::Spec->catfile($cwd, "win32","include");
+    # be sure to install the dll on site, because we link only to the import lib
+    mkdir "bin";
+    cp(File::Spec->catfile('win32', "libffi-5.dll"), "bin");
+  }
+} else {
+  warn "Using system libffi.\n";
+  warn "If too old (failing tests) install libffi.tar.gz and use INCDIR and LIBDIR.\n";
+  warn "  tar xfz libffi.tar.gz; cd libffi; ./configure DESTDIR=`cwd`; make && make install\n";
+  warn "  perl Makefile.PL INCDIR=libffi/include LIBDIR=libffi/lib\n";
+}
 
 WriteMakefile(
     NAME              => 'Ctypes',
     VERSION_FROM      => 'lib/Ctypes.pm',
+    ABSTRACT_FROM     => 'lib/Ctypes.pm',
+    AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com',
     PREREQ_PM         => {},
-    ($] >= 5.005 ?  
-     (ABSTRACT_FROM     => 'lib/Ctypes.pm',
-      AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com', )
-     : () ),
-    LIBS              => $^O eq 'MSWin32' ? ['-Lwin32 -lffi'] : [ '-Llibffi -lffi' ],
-    INC               => '-I. -I./include -I./src',
+    LIBS              => $libdir ? [ "-L$libdir -lffi" ] : [ "-lffi" ],
+    INC               => $incdir ? "-I. -I$incdir" : "-I.",
 );
 
 if  (eval {require ExtUtils::Constant; 1}) {
@@ -45,10 +97,8 @@ if  (eval {require ExtUtils::Constant; 1}) {
 
 }
 else {
-  use File::Copy;
-  use File::Spec;
   foreach my $file ('const-c.inc', 'const-xs.inc') {
-    my $fallback = File::Spec->catfile('fallback', $file);
+    my $fallback = File::Spec->catfile('win32', $file);
     copy ($fallback, $file) or die "Can't copy $fallback to $file: $!";
   }
 }

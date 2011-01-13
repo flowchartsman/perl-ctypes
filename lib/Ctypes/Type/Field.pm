@@ -56,7 +56,7 @@ sub new {
 #
 # Accessor generation - DIFFERENT to most!
 #
-my %access = ( 
+my %access = (
   typecode          => ['_typecode'],
   name              => ['_name'],
   size              => ['_size'],

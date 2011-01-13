@@ -6,7 +6,7 @@ use Ctypes;
 use Ctypes::Type::Field;
 use Carp;
 use Data::Dumper;
-use overload 
+use overload
   '${}'    => \&_scalar_overload,
   '%{}'    => \&_hash_overload,
   '@{}'    => \&_array_overload,
@@ -23,7 +23,7 @@ Ctypes::Type::Struct - C Structures
 
   use Ctypes;
 
-  my 
+  my
 
 =head1 ABSTRACT
 
@@ -235,7 +235,7 @@ sub copy {
   my $self = shift;
 }
 
-sub data { 
+sub data {
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug == 1;
   my @data;
@@ -325,7 +325,7 @@ sub _update_ {
 }
 
 sub _valid_align {
-  
+
 }
 
 # XXX partial alignment NYI
@@ -530,7 +530,7 @@ sub _add_field {
   $newfieldindex = scalar @{$self->{_array}};
   my $align = $self->{_obj}->{_alignment};
   $align = 1 if $align == 0;
-  
+
   if( $newfieldindex > 0 ) {
     print "    Already stuff in array\n" if $Debug == 1;
     my $lastindex = $#{$self->{_array}};
@@ -704,12 +704,12 @@ sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
 #  use Ctypes;
 #  use Carp;
 #  use Data::Dumper;
-#  
+#
 #  #
 #  # This was designed to allow method-style access to Struct members
 #  # Removed and not yet re-integrated
 #  #
-#  
+#
 #  sub new {
 #    if( caller ne 'Ctypes::Type::Struct::_Fields' ) {
 #      our $AUTOLOAD = '_Finder::new';
@@ -719,7 +719,7 @@ sub SCALAR { scalar %{$_[0]->{_fields}->{_hash}} }
 #    my $fields = shift;
 #    return bless [ $fields ] => $class;
 #  }
-#  
+#
 #  sub AUTOLOAD {
 #    our $AUTOLOAD;
 #    print "In _Finder::AUTOLOAD\n" if $Debug == 1;

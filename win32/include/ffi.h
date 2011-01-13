@@ -1,5 +1,5 @@
 /* -----------------------------------------------------------------*-C-*-
-   libffi 3.0.9 - Copyright (c) 1996-2003, 2007, 2008  Red Hat, Inc.
+   libffi 3.0.10rc0 - Copyright (c) 1996-2003, 2007, 2008  Red Hat, Inc.
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -57,7 +57,9 @@ extern "C" {
 #endif
 
 /* Specify which architecture libffi is configured for. */
+#ifndef X86_WIN32
 #define X86_WIN32
+#endif
 
 /* ---- System configuration information --------------------------------- */
 
@@ -251,6 +253,9 @@ size_t ffi_java_raw_size (ffi_cif *cif);
 
 #if FFI_CLOSURES
 
+#ifdef _MSC_VER
+__declspec(align(8))
+#endif
 typedef struct {
   char tramp[FFI_TRAMPOLINE_SIZE];
   ffi_cif   *cif;

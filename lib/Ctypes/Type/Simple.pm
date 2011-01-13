@@ -14,7 +14,7 @@ use overload '${}' => \&_scalar_overload,
              fallback => 'TRUE';
        # TODO Multiplication will have to be overridden
        # to implement Python's Array contruction with "type * x"???
-my $Debug = 1;
+our $Debug;
 
 =head1 NAME
 
@@ -140,10 +140,11 @@ sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my $typecode = shift;
   my $arg = shift;
-  print "In Type::Simple constructor, typecode [ $typecode ]", $arg ? "arg [ $arg ]" : '', "\n" if $Debug == 1;
-  croak("Ctypes::Type::Simple error: Need typecode!") if not defined $typecode;
+  print "In Type::Simple constructor, typecode [ $typecode ]",
+    $arg ? "arg [ $arg ]" : '', "\n" if $Debug;
+  croak("Ctypes::Type::Simple error: Need typecode") if not defined $typecode;
   my $self = $class->SUPER::_new;
-  my $attrs = { 
+  my $attrs = {
     _typecode        => $typecode,
     _name            => Ctypes::Type::_types()->{$typecode}->{name},
     _strict_input    => 0,
@@ -189,11 +190,11 @@ Return a copy of the object.
 =cut
 
 sub copy {
-  print "In Simple::copy\n" if $Debug == 1;
+  print "In Simple::copy\n" if $Debug;
   my $value = $_[0]->value;
   my $tmp = $value;
   $value = $tmp;
-  print "    Value is $value\n" if $Debug == 1;
+  print "    Value is $value\n" if $Debug;
   return Ctypes::Type::Simple->new( $_[0]->typecode, $value );
 }
 
@@ -220,23 +221,23 @@ L<Ctypes>
 
 =cut
 
-sub data { 
+sub data {
   my $self = shift;
-  print "In ", $self->{_name}, "'s _DATA_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug == 1;
+  print "In ", $self->{_name}, "'s _DATA_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug;
   if( defined $self->owner
       or $self->_datasafe == 0 ) {
-    print "    Can't trust data, updating...\n" if $Debug == 1;
+    print "    Can't trust data, updating...\n" if $Debug;
     $self->_update_;
   }
   if( defined $self->{_data}
       and $self->{_datasafe} == 1 ) {
-    print "    asparam already defined\n" if $Debug == 1;
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+    print "    asparam already defined\n" if $Debug;
+    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
     return \$self->{_data};
   }
   $self->{_data} =
     pack( $self->{_typecode}, $self->{_rawvalue}{VALUE} );
-  print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug == 1;
+  print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
   $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_data};
 }
@@ -245,23 +246,23 @@ sub _as_param_ { &data(@_) }
 
 sub _update_ {
   my( $self, $arg ) = @_;
-  print "In ", $self->{_name}, "'s _UPDATE_...\n" if $Debug == 1;
-  print "    I am pwnd by ", $self->{_owner}->{_name}, "\n" if $self->{_owner} and $Debug == 1;
+  print "In ", $self->{_name}, "'s _UPDATE_...\n" if $Debug;
+  print "    I am pwnd by ", $self->{_owner}->{_name}, "\n" if $self->{_owner} and $Debug;
   if( not defined $arg ) {
     if( $self->{_owner} ) {
-      print "    Have owner, getting updated data...\n" if $Debug == 1; 
+      print "    Have owner, getting updated data...\n" if $Debug;
       my $owners_data = ${$self->{_owner}->data};
-      print "    Here's where I think I am in my pwner's data:\n" if $Debug == 1;
-      print " " x ($self->{_index} * 8), "v\n" if $Debug == 1;
-      print "12345678" x length($owners_data), "\n" if $Debug == 1;
-      print unpack('b*', $owners_data), "\n" if $Debug == 1;
-      print "    My index is ", $self->{_index}, "\n" if $Debug == 1;
-      print "    My size is ", $self->size, "\n" if $Debug == 1;
+      print "    Here's where I think I am in my pwner's data:\n" if $Debug;
+      print " " x ($self->{_index} * 8), "v\n" if $Debug;
+      print "12345678" x length($owners_data), "\n" if $Debug;
+      print unpack('b*', $owners_data), "\n" if $Debug;
+      print "    My index is ", $self->{_index}, "\n" if $Debug;
+      print "    My size is ", $self->size, "\n" if $Debug;
       $self->{_data} = substr( ${$self->{_owner}->data},
                                $self->{_index},
                                $self->size );
-      print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug == 1;
-      print "    Which is ", unpack($self->{_typecode},$self->{_data}), " as a number\n" if $Debug == 1;
+      print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug;
+      print "    Which is ", unpack($self->{_typecode},$self->{_data}), " as a number\n" if $Debug;
   $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
     }
   } else {
@@ -271,9 +272,9 @@ sub _update_ {
     }
   }
   $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
-  print "    VALUE is _update_d to ", $self->{_rawvalue}{VALUE}, "\n" if $Debug == 1;
+  print "    VALUE is _update_d to ", $self->{_rawvalue}{VALUE}, "\n" if $Debug;
   $self->{_datasafe} = 1;
-  return 1; 
+  return 1;
 }
 
 sub _set_undef { $_[0]->{_value} = 0 }
@@ -302,12 +303,12 @@ sub STORE {
   croak("STORE must take a value") if scalar @_ != 2;
   my $self = shift;
   my $arg = shift;
-  print "In ", $self->{object}{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug == 1;
-  print "    called from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug;
+  print "    called from ", (caller(1))[0..3], "\n" if $Debug;
   croak("Simple Types can only be assigned a single value") if @_;
 
-# The following section may be removed completely to allow different
-# Types full discretion of their own input validation via hook_in().
+  # The following section may be removed completely to allow different
+  # Types full discretion of their own input validation via hook_in().
 
   # Deal with being assigned other Type objects and the like...
 #    if(my $ref = ref($arg)) {
@@ -319,7 +320,7 @@ sub STORE {
 #        } else {
 #    # ??? Would you ever want to store an object/reference as the value
 #    # of a type? What would get pack()ed in the end?
-#          croak("Ctypes Types can only be made from native types or " . 
+#          croak("Ctypes Types can only be made from native types or " .
 #                "Ctypes compatible objects");
 #        }
 #      }
@@ -328,7 +329,7 @@ sub STORE {
   # Object's Value set to undef: {_val} becomes undef, {_data} filled
   # with null (i.e. numeric zero) , update owners, return early.
   if( not defined $arg ) {
-    print "    Assigned undef! All goes null!\n" if $Debug == 1;
+    print "    Assigned undef. All goes null.\n" if $Debug;
     $self->{VALUE} = 0;
     $self->{object}{_data} = "\0" x 8 x $self->{object}{_size}; # stay right length
     if( $self->{object}{_owner} ) {
@@ -338,48 +339,51 @@ sub STORE {
   }
 
   my $typecode = $self->{object}{_typecode};
-  print "    Using typecode $typecode\n" if $Debug == 1;
-  print "    1) arg is ", $arg, "\n" if $Debug == 1;
+  print "    Using typecode $typecode\n" if $Debug;
+  print "    1) arg is ", $arg, "\n" if $Debug;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
-#  my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  print "    Calling validate...\n";
+  #my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
+  print "    Calling validate...\n" if $Debug;
   my ($invalid, $result) = $self->{object}->validate($arg);
-  print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug == 1;
+  print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug;
   if( defined $invalid ) {
     no strict 'refs';
     if( ($self->{object}->strict_input == 1)
         or (Ctypes::Type::strict_input_all() == 1)
         or (not defined $result) ) {
-      print "Unable to ameliorate input! (strict input or validate couldn't convert)\n";
+      print "Unable to ameliorate input! (strict input or validate couldn't convert)\n" if $Debug;
       croak( $invalid, ' (got ', $arg, ')');
       return undef;
     } else {
       carp( $invalid, ' (got ', $arg, ')');
     }
   }
-  print "    2) arg is $result, which is ", unpack('b*', $result), " or ", ord($result), "\n" if $Debug == 1; 
+  print "    2) arg is $result, which is ",
+    unpack('b*', $result), " or ", ord($result), "\n" if $Debug;
   $self->{object}{_data} =
     pack( $self->{object}->packcode, $result );
   $self->{VALUE} = unpack( $self->{object}->packcode, $self->{object}{_data} );
   $self->{object}->{_input} = $arg;
   if( $self->{object}{_owner} ) {
-    print "    Have owner, updating with\n", unpack('b*', $self->{object}{_data}), "\n    or ", unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug == 1;
+    print "    Have owner, updating with\n",
+      unpack('b*', $self->{object}{_data}), "\n    or ",
+      unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug;
     $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
   }
-  print "  Returning ok...\n" if $Debug == 1;
+  print "  Returning ok...\n" if $Debug;
   return $self->{VALUE};
 }
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{object}{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug == 1;
+  print "In ", $self->{object}{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug;
   if ( defined $self->{object}{_owner}
        or $self->{object}{_datasafe} == 0 ) {
-    print "    Can't trust data, updating...\n" if $Debug == 1;
+    print "    Can't trust data, updating...\n" if $Debug;
     $self->{object}->_update_;
   }
   croak("Error updating value!") if $self->{object}{_datasafe} != 1;
-  print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug == 1;
+  print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug;
   if( exists $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out} ) {
     return $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out}->($self->{VALUE}, $self->{object});
   } else {

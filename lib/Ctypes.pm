@@ -9,11 +9,11 @@ Ctypes - Call and wrap C libraries and functions from Perl, using Perl
 
 =head1 VERSION
 
-Version 0.002
+Version 0.003
 
 =cut
 
-our $VERSION = '0.002';
+our $VERSION = '0.003';
 
 use AutoLoader;
 use Carp;
@@ -27,7 +27,7 @@ use Scalar::Util qw|blessed looks_like_number|;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL 
+our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError byref is_ctypes_compat
                    Array Pointer Struct Union
@@ -68,11 +68,11 @@ functions in dlls/shared libraries.
 
 =head1 DESCRIPTION
 
-Ctypes is designed to let module authors wrap native C libraries in
-a pure Perly way. Authors can benefit by not having to deal with any
-XS or C code. Users benefit from not having to have a compiler properly
-installed and configured - they simply download the necessary binaries
-and run the Ctypes-based Perl modules written against them.
+Ctypes is designed to let module authors wrap native C libraries in a pure Perly
+(or Python) way. Authors can benefit by not having to deal with any XS or C
+code. Users benefit from not having to have a compiler properly installed and
+configured - they simply download the necessary binaries and run the
+Ctypes-based Perl modules written against them.
 
 The module should also be as useful for the admin, scientist or general
 datamangler who wants to quickly script together a couple of functions
@@ -97,7 +97,7 @@ capabilities. Most of the time you'll probably prefer the
 abstractions provided by L<Ctypes::Function>.
 
 I<SIG> is the signature string. The first character specifies the
-calling-convention: s for stdcall, c for cdecl (or 64-bit fastcall). 
+calling-convention: s for stdcall, c for cdecl (or 64-bit fastcall).
 The second character specifies the typecode for the return type
 of the function, and the subsequent characters specify the argument types.
 
@@ -105,14 +105,14 @@ of the function, and the subsequent characters specify the argument types.
 They're similar in concept to the codes used by Perl's
 L<pack|perlfunc/pack> and L<unpack|perlfunc/unpack> functions, but they
 are B<not> the same codes!
- 
+
 I<ADDR> is the function address, the return value of L<find_function> or
 L<DynaLoader::dl_find_symbol>.
 
 I<ARGS> are the optional arguments for the external function. The types
 are converted as specified by sig[2..].
 
-Here are the urrently supported signature typecode characters. As you can
+Here are the currently supported signature typecode characters. As you can
 see, there is some overlap with Perl's L<pack|perlfunc/pack> notation,
 they're not identical (v), and furthermore B<WILL CHANGE> to offer a wider
 range of types:
@@ -140,7 +140,7 @@ sub call {
   my @argtypes = ();
   @argtypes = split( //, substr( $sig, 2 ) ) if length $sig > 2;
   for(my $i=0 ; $i<=$#args ; $i++) {
-    if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and 
+    if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and
         not looks_like_number($args[$i]) ) {
       die "$i-th argument $args[$i] is no number";
     }
@@ -218,7 +218,7 @@ sub Union {
 
 Searches the dll/so loadpath for the given library, architecture dependently.
 
-The lib argument is either part of a filename (e.g. "kernel32") with 
+The lib argument is either part of a filename (e.g. "kernel32") with
 platform specific path and extension defaults,
 a full pathname to the shared library
 or the same as for L<DynaLoader::dl_findfile>:
@@ -226,14 +226,14 @@ or the same as for L<DynaLoader::dl_findfile>:
 
 Returns a libraryhandle, to be used for find_function.
 Uses L<Ctypes::Util::find_library> to find the path.
-See also the L<LoadLibrary> method for a DLL object, 
-which also returns a handle.
+See also the L<LoadLibrary> method for a DLL object,
+which also returns a handle and L<DynaLoader::dl_load_file>.
 
 With C<mode> optional dynaloader args can be specified:
 
 =over
 
-=item RTLD_GLOBAL 
+=item RTLD_GLOBAL
 
 Flag to use as mode parameter. On platforms where this flag is not
 available, it is defined as the integer zero.
@@ -243,7 +243,7 @@ available, it is defined as the integer zero.
 Flag to use as mode parameter. On platforms where this is not
 available, it is the same as RTLD_GLOBAL.
 
-=item DEFAULT_MODE 
+=item DEFAULT_MODE
 
 The default mode which is used to load shared libraries. On OSX 10.3,
  this is RTLD_GLOBAL, otherwise it is the same as RTLD_LOCAL.
@@ -254,15 +254,15 @@ The default mode which is used to load shared libraries. On OSX 10.3,
 
 sub load_library($;@) {
   my $path = Ctypes::Util::find_library( shift, @_ );
-  # This might trigger a Windows MessageBox
+  # XXX This might trigger a Windows MessageBox on error.
+  # We might want to suppress it as done in cygwin.
   return DynaLoader::dl_load_file($path, @_) if $path;
 }
 
-
 =item CDLL (library, [mode])
 
-Searches the library search path for the given name, and 
-returns a library object which defaults to the C<cdecl> ABI, with 
+Searches the library search path for the given name, and
+returns a library object which defaults to the C<cdecl> ABI, with
 default restype C<i>.
 
 For B<mode> see L<load_library>.
@@ -275,8 +275,8 @@ sub CDLL {
 
 =item WinDLL (library, [mode])
 
-Windows only: Searches the library search path for the given name, and 
-returns a library object which defaults to the C<stdcall> ABI, 
+Windows only: Searches the library search path for the given name, and
+returns a library object which defaults to the C<stdcall> ABI,
 with default restype C<i>.
 
 For B<mode> see L<load_library>.
@@ -324,19 +324,19 @@ The returned L<C function prototype|Ctypes::FuncProto::C> creates a
 function that use the standard C calling convention. The function will
 release the library during the call.
 
-restype and argtypes are L<Ctype::Type> objects, such as c_int, 
-c_void_p, c_char_p etc..
+C<restype> and C<argtypes> are L<Ctype::Type> objects, such as C<c_int>,
+C<c_void_p>, C<c_char_p> etc..
 
 =item WINFUNCTYPE (restype, argtypes...)
 
-Windows only: The returned L<Windows function prototype|Ctypes::FuncProto::Win> 
-creates a function that use the C<stdcall> calling convention. 
+Windows only: The returned L<Windows function prototype|Ctypes::FuncProto::Win>
+creates a function that use the C<stdcall> calling convention.
 The function will release the library during the call.
 
 B<SYNOPSIS>
 
   my $prototype  = WINFUNCTYPE(c_int, HWND, LPCSTR, LPCSTR, UINT);
-  my $paramflags = [[1, "hwnd", 0], [1, "text", "Hi"], 
+  my $paramflags = [[1, "hwnd", 0], [1, "text", "Hi"],
 	           [1, "caption", undef], [1, "flags", 0]];
   my $MessageBox = $prototype->(("MessageBoxA", WinDLL->user32), $paramflags);
   $MessageBox->({text=>"Spam, spam, spam")});
@@ -367,11 +367,11 @@ sub PERLFUNCTYPE {
 Creates a callable, an external function which calls back into perl,
 specified by the signature and a reference to a perl sub.
 
-B<perlfunc> is a named (or anonymous?) subroutine reference. B<restype>
-is a single character string representing the return type, and
-B<argtypes> is a multi-character string representing the argument
+B<perlfunc> is a named (or anonymous?) subroutine reference.
+B<restype> is a single character string representing the return type,
+and B<argtypes> is a multi-character string representing the argument
 types the function will receive from C. All types are represented
-in typecode format.
+in L<typecode|/"call SIG, ADDR, [ ARGS ... ]"> format.
 
 B<Note> that the interface for Callback->new() will be updated
 to be more consistent with Function->new().
@@ -388,21 +388,21 @@ sub callback($$$) {
 
 Define objects for shared libraries and its abi.
 
-Subclasses are CDLL, WinDLL, OleDLL and PerlDLL, returning objects
+Subclasses are B<CDLL>, B<WinDLL>, B<OleDLL> and B<PerlDLL>, returning objects
 defining the path, handle, restype and abi of the found shared library.
 
-Submethods are LoadLibrary and the functions and variables inside the library. 
+Submethods are B<LoadLibrary> and the functions and variables inside the library.
 
-Properties are _name, _path, _abi, _handle.
+Properties are C<_name>, C<_path>, C<_abi>, C<_handle>.
 
   $lib = CDLL->msvcrt;
 
-is the same as CDLL->new("msvcrt"),
-but CDLL->libc should be used for cross-platform compat.
+is the same as C<CDLL->new("msvcrt")>,
+but C<CDLL->libc> should be used for cross-platform compat.
 
   $func = CDLL->c->toupper;
 
-returns the function for the libc function toupper, 
+returns the function for the libc function C<toupper()>,
 on Windows and Posix.
 
 Functions within libraries can be declared.
@@ -421,7 +421,7 @@ use Carp;
 
 # This AUTOLOAD is used to define the dll/soname for the library,
 # or access a function in the library.
-# $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper; 
+# $lib = CDLL->msvcrt; $func = CDLL->msvcrt->toupper;
 # Indexed with CDLL->msvcrt[0] (tied array?) on windows only
 # or named with WinDLL->kernel32->GetModuleHandle({sig=>"sll"})->(32)
 sub AUTOLOAD {
@@ -431,7 +431,7 @@ sub AUTOLOAD {
   return if $name eq 'DESTROY';
   # property
   if ($name =~ /^_(abi|handle|path|name)$/) {
-    *$AUTOLOAD = sub { 
+    *$AUTOLOAD = sub {
       my $self = shift;
       # only _abi is setable
       if ($name eq 'abi') {
@@ -460,8 +460,8 @@ sub AUTOLOAD {
       return $lib;
     } else { # name is a ->function
       my $props = { lib => $lib->{_handle},
-		    abi => $lib->{_abi}, 
-		    restype => $lib->{_restype}, 
+		    abi => $lib->{_abi},
+		    restype => $lib->{_restype},
 		    name => $name };
       if (@_ and ref $_[0] eq 'HASH') { # declare the sig or restype via HASHREF
 	my $arg = shift;
@@ -480,8 +480,8 @@ sub AUTOLOAD {
 
 =head1 LoadLibrary (name [mode])
 
-A DLL method which loads the given shared library, 
-and on success sets the new object properties path and handle, 
+A DLL method which loads the given shared library,
+and on success sets the new object properties path and handle,
 and returns the library handle.
 
 =cut
@@ -501,8 +501,8 @@ sub LoadLibrary($;@) {
 
   $lib = CDLL->msvcrt;
 
-is a fancy name for Ctypes::CDLL->new("msvcrt"). 
-Note that you should really use the platform compatible 
+is a fancy name for Ctypes::CDLL->new("msvcrt").
+Note that you should really use the platform compatible
 CDLL->c for the current libc, which can be any msvcrtxx.dll
 
   $func = CDLL->msvcrt->toupper;
@@ -518,7 +518,7 @@ or call the function like
 
   $ret = CDLL->msvcrt->toupper({sig=>"cii"})->(ord("y"));
 
-On windows you can also define and call functions by their 
+On windows you can also define and call functions by their
 ordinal in the library.
 
 Define:
@@ -680,7 +680,7 @@ sub find_library($;@) {# from C::DynaLib::new
       if ($lib = DynaLoader::dl_load_file($so, @_)) {
 	      return $so;
       }
-      # python has a different logic: The version+subversion is taken from 
+      # python has a different logic: The version+subversion is taken from
       # msvcrt dll used in the python.exe
       # We search in the systempath for the first found.
       push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
@@ -711,7 +711,7 @@ sub find_library($;@) {# from C::DynaLib::new
       }
     }
     if ($found) {
-      # resolve the .a or .dll.a to the dll. 
+      # resolve the .a or .dll.a to the dll.
       # dllimport from binutils must be in the path
       $found = system("dllimport -I $found") if $found =~ /\.a$/;
       return $found if $found;
@@ -724,7 +724,7 @@ sub find_library($;@) {# from C::DynaLib::new
       my $fh;
       open($fh, "<", $so);
       my $slurp = <$fh>;
-      # for now the first in the GROUP. We should use ld 
+      # for now the first in the GROUP. We should use ld
       # or /sbin/ldconfig -p or objdump
       if ($slurp =~ /^\s*GROUP\s*\(\s*(\S+)\s+/m) {
 	return $1;
@@ -840,7 +840,7 @@ sub create_range {
     for( @_ ) {
       push @res, create_range( @$_ );
     }
-    return @res; 
+    return @res;
   }
 
   my( $min, $max,
@@ -854,7 +854,7 @@ sub create_range {
     if $cover < 0;
   croak ( "create_range: can't return $cover integer points " .
           "between $min and $max" )
-    if $want_int == 1 and $cover > ($max - $min);
+    if $want_int and $cover > ($max - $min);
   if ( $cover < 1 ) {                          # treat as a percentage
     $cover = int( ( $max - $min )  * $cover ); # get number of points
   }
@@ -905,7 +905,7 @@ sub find_function($$) {
 
 =item load_error ()
 
-Returns the error description of the last L<load_library> call, 
+Returns the error description of the last L<load_library> call,
 via L<DynaLoader::dl_error>.
 
 =cut
@@ -930,7 +930,7 @@ sub addressof($) {
 
 =item alignment(obj_or_type)
 
-Returns the alignment requirements of a Ctypes type. 
+Returns the alignment requirements of a Ctypes type.
 obj_or_type must be a Ctypes type or instance.
 
 =cut
@@ -952,7 +952,7 @@ construction is a lot faster.
 =cut
 
 sub byref {
-  return \$_[0];  
+  return \$_[0];
 }
 
 =item is_ctypes_compat($obj)
@@ -1101,7 +1101,7 @@ string is assumed to be zero-terminated.
 =item WinError( { code=>undef, descr=>undef } )
 
 Windows only: this function is probably the worst-named thing in
-Ctypes. It creates an instance of WindowsError. 
+Ctypes. It creates an instance of WindowsError.
 
 If B<code> is not specified, GetLastError is called to determine the
 error code. If B<descr> is not spcified, FormatError is called to get
@@ -1203,11 +1203,11 @@ sub _make_arrayref {
   my $output = [];
   # Turn single arg or LIST into arrayref...
   if( ref($inputs[0]) ne 'ARRAY' ) {
-    if( $#inputs > 0 ) {      # there is a list of inputs 
+    if( $#inputs > 0 ) {      # there is a list of inputs
       for(@inputs) {
         push @{$output}, $_;
-      }    
-    } else {   # there is only one input 
+      }
+    } else {   # there is only one input
       if( !ref($inputs[0]) ) {
       # We can make list of argtypes from string of type codes...
         $output = [ split(//,$inputs[0]) ];
@@ -1256,11 +1256,11 @@ sub _check_invalid_types ($) {
           }
         }
         eval{ Ctypes::sizeof($typecode) };
-        if( $@ ) { 
+        if( $@ ) {
           carp( @_ );
           return $i;
         }
-      } 
+      }
     } else {
     # Not a ref; make sure it's a valid 1-char typecode...
       if( length($_) > 1 ) {
@@ -1268,7 +1268,7 @@ carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
         return $i;
       }
       eval{ Ctypes::sizeof($_); };
-      if( $@ ) { 
+      if( $@ ) {
         carp( @_ );
         return $i;
       }
@@ -1288,7 +1288,7 @@ sub _check_type_needed (@) {
   my $char = 0;
   my $string = 0;
   for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
-  print "    Now looking at: $_\n" if $Debug == 1; 
+  print "    Now looking at: $_\n" if $Debug == 1;
    if( $char == 1 or !looks_like_number($_) ) {
       $char = 1;
       $string = 1 if length( $_ ) > 1;
@@ -1309,7 +1309,7 @@ sub _check_type_needed (@) {
   } else {
     $ret = $numtypes[$low];
   }
-  print "  Returning: $ret\n" if $Debug == 1; 
+  print "  Returning: $ret\n" if $Debug == 1;
   return $ret;
 }
 
