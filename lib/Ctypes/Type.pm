@@ -58,16 +58,16 @@ our $_perltypes =
   c =>  {
           name => 'c_byte',
         }, # same as b, but compatible to pack-style c
-  s =>  { name => 'c_short', sizecode => 's' },
+  s =>  { name => 'c_short' },
   S =>  { name => 'c_ushort', sizecode => 's' },
-  i =>  { name => 'c_int', sizecode => 'i' },
+  i =>  { name => 'c_int' },
   I =>  { name => 'c_uint', sizecode => 'i' },
-  l =>  { name => 'c_long', sizecode => 'l' },
+  l =>  { name => 'c_long' },
   L =>  { name => 'c_ulong', sizecode => 'l' },
-  f =>  { name => 'c_float', sizecode => 'f' },
-  d =>  { name => 'c_double', sizecode => 'd' },
-  D =>  { name => 'c_longdouble', sizecode => 'D' },
-  p =>  { name => 'c_void_p', sizecode => 'p' },
+  f =>  { name => 'c_float' },
+  d =>  { name => 'c_double' },
+  D =>  { name => 'c_longdouble' },
+  p =>  { name => 'c_void_p' },
 };
 
 # c_char c_wchar c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
