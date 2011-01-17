@@ -109,6 +109,6 @@ const-xs.inc: $0 \$(CONFIGDEP)
 
 const-c.inc: $0 \$(CONFIGDEP)
 
-Ctypes.c: \$(XSUBPPDEPS) const-xs.inc
+Ctypes.c: \$(XSUBPPDEPS) const-xs.inc \$(XS_FILES) util.c obj_util.c
 ";
 }
