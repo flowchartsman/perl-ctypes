@@ -9,7 +9,7 @@ use overload '@{}'    => \&_array_overload,
              fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug = 0;
+my $Debug;
 
 =head1 NAME
 
@@ -60,8 +60,8 @@ sub _arg_to_type {
     }
   }
   if( ref($arg) and ref($arg) ne 'Ctypes::Type::Simple') {
-  # This is the long shot: some other kind of object.
-  # In theory it Should work. TODO: a good test for this!
+    # This is the long shot: some other kind of object.
+    # In theory it Should work. TODO: a good test for this!
     my $datum = $arg->{_data} ?
       $arg->{_data} :
       $arg->can("_as_param_") ? $arg->_as_param_ : undef;
@@ -108,55 +108,58 @@ sub _get_members_typed {
   return $members;
 }
 
-# Scenario B: Type not defined. Here come the best guesses!
+# Scenario B: Type not defined, try best guesses.
 # First get values of inputs, plus some info...
 sub _get_members_untyped {
   my $in = shift;
-  my $members = [];
+  my( $found_type, $invalid, $found_string);
 
-  my( $found_type, $invalid, $found_string) = undef;
-
-  for(my $i=0;defined(local $_ = $$in[$i]);$i++) {
+  for(my $i=0; defined(local $_ = $$in[$i]); $i++) {
     if( defined $found_type ) {
-      if( ref ne $found_type ) {
-        carp("Arrays must be all of the same type: "
-             . " new type found at position $i");
+      my $ref = ref $_;
+      if( $ref ne $found_type ) {
+        carp("Array elements must be all of the same type: "
+             . " new type $ref at $i different to $found_type.");
         return undef;
       } else {
         next;
       }
     }
-    if( ref ) {
-      if( $i > 0 ) {
-        carp("Arrays must be all of the same type: "
-           . " new type found at position $i");
+    if( ref $_ ) {
+      my $ref = ref $_;
+      if ( $i > 0 ) {
+        carp("Array elements must be all of the same type: "
+           . " new type $ref at $i different to undef.");
         return undef;
       }
-      if( ref ne 'Ctypes::Type::Simple' ) {
-      $invalid = Ctypes::_check_invalid_types( [ $_ ] );
+      if( $ref ne 'Ctypes::Type::Simple' ) {
+        $invalid = Ctypes::_check_invalid_types( [ $_ ] );
         if( not $invalid ) {
-          $found_type = ref;
+          $found_type = $ref;
         } else {
           carp("Arrays can only store Ctypes compatible objects:"
-               . " type " . ref() . " is not valid");
+               . " type $ref is not valid");
           return undef;
         }
       }
-      $found_type = ref;
+      $found_type = $ref;
     }
-    if( not looks_like_number($_) ) { $found_string = 1 };
+    #if( not looks_like_number($_) ) { $found_string = 1 }; # XXX checked in _check_type_needed
   }
 
   if( $found_type ) {
     return $in;
   }
 
-# Now, check for non-numerics...
+  my $members = [];
+  # Now, check for non-numerics...
   my $lcd = Ctypes::_check_type_needed(@$in);   # 'lowest common denomenator'
+  croak "no lcd of @$in" unless $lcd;
   # Now create type objects for all members...
-  for(my $i = 0; defined( local $_ = $$in[$i]); $i++ ) {
+  for(my $i = 0; defined($$in[$i]); $i++ ) {
     $members->[$i] =
       Ctypes::Type::Simple->new($lcd, $$in[$i]);
+    croak "lcd=$lcd: no type for $$in[$i] at index $i" unless $members->[$i];
   }
   return $members;
 }
@@ -223,8 +226,7 @@ sub new {
   my $name = $deftype->name;
   $name =~ s/^c_//;
 
-  my $self = $class->SUPER::_new;
-  my $attrs = {
+  my $self = $class->_new( {
     _name         => lc($name) . '_Array',
     _typecode     => 'p',
     _can_resize   => 0,
@@ -232,9 +234,7 @@ sub new {
     _length       => $#$in + 1,
     _member_type  => $deftype->typecode,
     _member_size  => $deftype->size,
-               };
-  for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
-  bless $self => $class;
+  } );
   $self->{_name} =~ s/::/_/g;
   $self->{_size} = $deftype->size * ($#$in + 1);
   $self->{_rawmembers} =

@@ -130,9 +130,9 @@ sub _code_overload {
 =item new TYPECODE
 
 The Ctypes::Type::Simple constructor. See the main L<Ctypes|Ctypes/call>
-module for an explanation of typecodes. ARG is the optional
-initialiser for your Type. Try to make it something sensible. Numbers
-and characters usually go down well.
+module for an explanation of typecodes. ARG is the optional value
+initialisation for your Type. Try to make it something sensible.
+Numbers and characters usually go down well.
 
 =cut
 
@@ -140,21 +140,20 @@ sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my $typecode = shift;
   my $arg = shift;
-  print "In Type::Simple constructor, typecode [ $typecode ]",
-    $arg ? "arg [ $arg ]" : '', "\n" if $Debug;
+  print "In Type::Simple constructor: typecode [ $typecode ]",
+    $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
   croak("Ctypes::Type::Simple error: Need typecode") if not defined $typecode;
-  my $self = $class->SUPER::_new;
-  my $attrs = {
+  my $self = $class->_new( {
     _typecode        => $typecode,
     _name            => Ctypes::Type::_types()->{$typecode}->{name},
     _strict_input    => 0,
-              };
-  for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
-  bless $self => $class;
+  } );
+  #for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
+  #bless $self => $class;
   $arg = 0 unless defined $arg;
-  $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
   $self->{_value} = $arg;
-  return undef if not defined $self->{_rawvalue}{VALUE};
+  $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
+  $self->{_rawvalue}{VALUE} = $arg if not defined $self->{_rawvalue}{VALUE};
   return $self;
 }
 
@@ -162,7 +161,7 @@ sub new {
 =item strict_input
 
 Mutator setting and/or returning a flag (1 or 0) indicating how
-fussy this object should be about values given it to store. Defaults
+fuzzy this object should be about values given it to store. Defaults
 to 0, meaning Ctypes will do its best to make a sensible value of
 the correct type out of any value it gets (although its ability to do
 so is not always guaranteed). You'll probably get a warning about it.
@@ -279,10 +278,19 @@ sub _update_ {
 
 sub _set_undef { $_[0]->{_value} = 0 }
 
-sub size { Ctypes::sizeof($Ctypes::Type::_types->{$_[0]->{_typecode}}->{sizecode}); }
-sub sizecode { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{sizecode}; }
-sub packcode { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{packcode}; }
-sub validate { $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in}->($_[1]); }
+sub size { Ctypes::sizeof($_[0]->sizecode) };
+sub sizecode {
+  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
+  defined $t->{sizecode} ? $t->{sizecode} : $_[0]->{_typecode};
+}
+sub packcode {
+  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
+  defined $t->{packcode} ? $t->{packcode} : $_[0]->{_typecode};
+}
+sub validate {
+  my $h = $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in};
+  defined $h ? $h->($_[1]) : ("", 1);
+}
 
 package Ctypes::Type::Simple::value;
 use strict;

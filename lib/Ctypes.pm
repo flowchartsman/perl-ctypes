@@ -1,7 +1,7 @@
 package Ctypes;
 use strict;
 use warnings;
-my $Debug = 0;
+my $Debug;
 
 =head1 NAME
 
@@ -1243,11 +1243,11 @@ sub _make_arrayref {
 # Returns the index of the failing thingy on failure
 sub _check_invalid_types ($) {
   my $typesref = shift;
-  # Now check supplied args are valid...
+  # Check if supplied args are valid
   my $typecode = undef;
   for( my $i=0; $i<=$#{$typesref}; $i++ ) {
     $_ = $typesref->[$i];
-    # Check objects fulfil all the requirements...
+    # Check if all objects fulfill all requirements
     if( ref($_) ) {
       if( !blessed($_) ) {
         carp("No unblessed references as types");
@@ -1275,9 +1275,9 @@ sub _check_invalid_types ($) {
         }
       }
     } else {
-    # Not a ref; make sure it's a valid 1-char typecode...
+      # Not a ref; make sure it's a valid 1-char typecode...
       if( length($_) > 1 ) {
-carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
+        carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
         return $i;
       }
       eval{ Ctypes::sizeof($_); };
@@ -1290,37 +1290,38 @@ carp("types must be valid objects or 1-char typecodes (perldoc Ctypes)");
   return undef;
 }
 
-# Take an list of Perl natives, return the typecode of
+# Take an list of Perl natives. Return the typecode of
 # the smallest C type needed to hold all the data - the
-# lowest common demoninator, if you will (will you?)
+# lowest common demoninator.
+# char C => string s => short h => int => long => double
 sub _check_type_needed (@) {
-  # XXX This needs changed when we support more typecodes
+  # XXX This needs to be changed when we support more typecodes
   print "In _check_type_needed\n" if $Debug;
-  my @numtypes = qw|s i l d|; #  1.short 2.int 3.long 4.double
+  my @types = Ctypes::Type::USE_PERLTYPES ? qw|C p s i l d| : qw|C s h i l d|;
+  my @numtypes = @types[2..6]; #  0: short 1: int 2: long 3: double
   my $low = 0;
   my $char = 0;
   my $string = 0;
+  my $reti = 0;
+  my $ret = $types[$reti];
   for(my $i = 0; defined( local $_ = $_[$i]); $i++ ) {
-  print "    Now looking at: $_\n" if $Debug;
-   if( $char == 1 or !looks_like_number($_) ) {
-      $char = 1;
-      $string = 1 if length( $_ ) > 1;
-      last if $string == 1;
+    if( $char or !looks_like_number($_) ) {
+      $char++; $reti = 1;
+      $string++ if length( $_ ) > 1;
+      $reti = 2 if $string;
+      $ret = $types[$reti];
+      print "    $i: $_ => $ret\n" if $Debug;
+      last if $string;
       next;
     } else {
+      print "  $i: $_ => $ret\n" if $Debug and $low == 3;
       next if $low == 3;
       $low = 1 if $_ > Ctypes::constant('PERL_SHORT_MAX') and $low < 1;
-      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX') and $low < 2;
-      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX') and $low < 3;
+      $low = 2 if $_ > Ctypes::constant('PERL_INT_MAX')   and $low < 2;
+      $low = 3 if $_ > Ctypes::constant('PERL_LONG_MAX')  and $low < 3;
+      $ret = $numtypes[$low];
+      print "    $i: $_ => $ret\n" if $Debug;
     }
-  }
-  my $ret;
-  if( $string == 1 ) {
-    $ret = 'p';
-  } elsif( $char == 1 ) {
-    $ret = 'C';
-  } else {
-    $ret = $numtypes[$low];
   }
   print "  Returning: $ret\n" if $Debug;
   return $ret;

@@ -18,7 +18,7 @@ use Ctypes::Type::Struct;
 use Scalar::Util qw|looks_like_number|;
 use B qw|svref_2object|;
 use Encode;
-my $Debug = 0;
+my $Debug;
 use utf8;
 
 =head1 NAME
@@ -644,8 +644,11 @@ Implemented as aliases:
 =cut
 
 # Ctypes::Type::_new: Abstract base class for all Ctypes objects
+# CLASS [ HASHREF ]
 sub _new {
-  return bless my $self = {
+  my $class = ref($_[0]) || $_[0];
+  my $init = $_[1] if @_ > 1;
+  my $self = {
     _data       =>  "\0",             # raw (binary) memory block
     _needsfree  =>  0,             # does object own its data? (not used yet, 0.002)
     _owner      =>  undef,         # ref to object that owns this one
@@ -660,7 +663,9 @@ sub _new {
                                    # or must it update its _data?
     _name       => undef,
     _typecode   => undef,
-     } => ref($_[0]) || $_[0];
+  };
+  for(keys(%{$init})) { $self->{$_} = $init->{$_}; };
+  return bless $self, $class;
 }
 
 # Pod for these functions is on down below

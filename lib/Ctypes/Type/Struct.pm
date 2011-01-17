@@ -13,7 +13,7 @@ use overload
   fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug = 0;
+my $Debug;
 
 =head1 NAME
 
@@ -170,11 +170,12 @@ sub new {
                _data       => '', };
   $self->{_fields} = new Ctypes::Type::Struct::_Fields($self);
   $self->{_values} = new Ctypes::Type::Struct::_Values($self);
-  bless $self => $class;
-  my $base = $class->SUPER::_new;
-  for( keys(%$base) ) {
-    $self->{$_} = $base->{$_};
-  }
+  $self = $class->_new( $self );
+  #bless $self => $class;
+  #my $base = Ctypes::Type->_new;
+  #for( keys(%$base) ) {
+  #  $self->{$_} = $base->{$_};
+  #}
   $self->{_name} = $progeny ? $progeny . '_Struct' : 'Struct';
   $self->{_name} =~ s/.*:://;
 

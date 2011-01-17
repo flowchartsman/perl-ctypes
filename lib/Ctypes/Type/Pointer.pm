@@ -11,7 +11,7 @@ use overload
   fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug = 0;
+my $Debug;
 
 =head1 NAME
 
@@ -185,7 +185,7 @@ on a Big-endian system would be a friendly greeting.
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
   my( $type, $contents );
-#  return undef unless defined($contents);  # No null pointers plz :)
+  #  return undef unless defined($contents);  # No null pointers plz :)
 
   if( scalar @_ == 1 ) {
     $type = $contents = shift;
@@ -194,7 +194,7 @@ sub new {
     $contents = shift;
   }
 
-  carp("Useage: Pointer( [type, ] \$object )") if @_;
+  carp("Usage: Pointer( [type, ] \$object )") if @_;
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
@@ -203,8 +203,7 @@ sub new {
     carp("Invalid Array type specified (first position argument)");
     return undef;
   }
-  my $self = $class->SUPER::_new;
-  my $attrs = {
+  my $self = $class->_new( {
      _name        => $type.'_Pointer',
      _size        => Ctypes::sizeof('p'),
      _offset      => 0,
@@ -212,10 +211,7 @@ sub new {
      _bytes       => undef,
      _orig_type   => $type,
      _typecode  => 'p',
-               };
-  for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
-  bless $self => $class;
-
+  } );
   $self->{_rawcontents} =
     tie $self->{_contents}, 'Ctypes::Type::Pointer::contents', $self;
   $self->{_rawbytes} =
