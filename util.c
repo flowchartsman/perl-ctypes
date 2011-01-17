@@ -56,7 +56,7 @@ get_ffi_type(char type)
     case 'd': return &ffi_type_double;       break;
     case 'D': return &ffi_type_longdouble;   break;
     case 'p': return &ffi_type_pointer;      break;
-    default: croak( "Unrecognised type: %c!", type );
+    default: croak( "Unrecognised type: %c", type );
   }
 }
 
@@ -74,27 +74,27 @@ get_types_info( char typecode, const char* datum, int datum_len )
 
   _types_sv = get_sv( "Ctypes::Type::_types", 0 );
   if( _types_sv == NULL )
-    croak( "Couldn't find $Ctypes::Type::_types hashref!" );
+    croak( "get_types_info: Couldn't find $Ctypes::Type::_types hashref" );
   if( !SvROK(_types_sv) || SvTYPE(SvRV(_types_sv)) != SVt_PVHV )
-    croak( "_types was something other than a hashref!" );
+    croak( "get_types_info: $_types not a hashref" );
 
   _types_hv = (HV*)SvRV(_types_sv);
 
   klen = 1;
   fetched = hv_fetch( _types_hv, tc, klen, 0 );
   if( fetched == NULL )
-    croak( "Couldn't find type info for type %c!", typecode );
+    croak( "get_types_info: Couldn't find type info for typecode %c", typecode );
   typeinfo_sv = *fetched;
 
   if( !SvROK(_types_sv) || SvTYPE(SvRV(_types_sv)) != SVt_PVHV )
-    croak( "_types was something other than a hashref!" );
+      croak( "get_types_info: $_types->{%c} not a hashref", typecode );
   typeinfo_hv = (HV*)SvRV(typeinfo_sv);
 
   fetched = NULL;
   klen = datum_len;
   fetched = hv_fetch( typeinfo_hv, datum, klen, 0 );
-  if( fetched == NULL )
-    croak( "Couldn't find datum '%s' for type %c!", datum, typecode );
+  if( !fetched )
+    croak( "get_types_info: Couldn't find key '%s' in $_types->{%c}", datum, typecode );
   info_sv = *fetched;
 
   return info_sv;
