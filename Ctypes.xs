@@ -644,18 +644,13 @@ _call(self, ...)
 
 MODULE = Ctypes		PACKAGE = Ctypes
 
-int 
+int
 sizeof(type)
     char* type;
 CODE:
   debug_warn( "#[%s:%i] Ctypes::sizeof entered with typecode %c",
               __FILE__, __LINE__, *type );
-  SV* sizecode_sv = get_types_info( *type, "sizecode", 8 );
-  STRLEN len = 1;
-  char* sizecode = SvPV( sizecode_sv, len );
-  debug_warn( "#    Got sizecode: %c!", *sizecode );
-
-  switch (*sizecode) {
+  switch (*type) {
     case 'v': RETVAL = 0;           break;
     case 'c':
     case 'C': RETVAL = 1;           break;
@@ -669,7 +664,7 @@ CODE:
     case 'd': RETVAL = sizeof(double);     break;
     case 'D': RETVAL = sizeof(long double);break;
     case 'p': RETVAL = sizeof(void*);      break;
-    default: croak( "Unrecognised type: %c", *type );
+    default: croak( "Unrecognised type '%c'", *type );
   }
   debug_warn( "# Ctypes::sizeof returning size %i", RETVAL );
 OUTPUT:
