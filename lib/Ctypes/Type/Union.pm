@@ -7,7 +7,7 @@ use base qw|Ctypes::Type::Struct|;
 use Carp;
 use Data::Dumper;
 
-my $Debug = 0;
+my $Debug;
 
 ###########################################
 # TYPE::UNION : PUBLIC FUNCTIONS & VALUES #
@@ -36,11 +36,11 @@ sub new {
   $newname = 'Union' if $newname eq 'Union_Union';
   $self->_set_name($newname);
 
-  # ??? Will this be ok or need to explicitly undef all?
+  # XXX Will this be ok or need to explicitly undef all?
   for( keys %{$self->fields} ) {
     if( defined $self->fields->{$_} ) {
-    $self->fields->{$_}->_datasafe(0);
-    $self->fields->{$_}->_set_owner($self);
+      $self->fields->{$_}->_datasafe(0);
+      $self->fields->{$_}->_set_owner($self);
     }
   }
 
@@ -76,8 +76,8 @@ sub data {
     print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
     return \$self->{_data};
   }
-# TODO This is where a check for an endianness property would come in.
-#  if( $self->{_endianness} ne 'b' ) {
+  # TODO This is where a check for an endianness property would come in.
+  #  if( $self->{_endianness} ne 'b' ) {
     for(@{$self->{_fields}->{_rawarray}}) {
       push @data, $_->{_data};
     }

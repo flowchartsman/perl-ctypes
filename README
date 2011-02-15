@@ -3,24 +3,20 @@ Ctypes
 Call and wrap native C functions and libraries from Perl, using only
 Perl.
 
-This module requires the C library libffi to run. If you're on a unix-
-like system, you should install this via your favoured package
-manager. If you're on Win32 (using Strawberry Perl) you should go
-download the libffi-3.0.9 sources yourself from the following URL,
-compile the libraries and put them somewhere your Strawberry compiler
-toolchain will find them when it needs to. I can't remember just now
-whether the Strawberry toolchain is sufficient to compile libffi; you
-might be lucky.
-
-http://sourceware.org/libffi/
-
-Ctypes (current v0.001) is based on libffi to provide a way of calling
+Ctypes (current v0.003) is based on libffi to provide a way of calling
 native C library functions directly from Perl, using only Perl, and
 hence not requiring a compiler.
 
-Of course, the Ctypes module itself is written with XS. Haven't really
-thought that one through entirely. Perhaps we'll provide binaries? Or
-perhaps (wonder of wonders) it could someday be rolled into Perl5 core?
+Of course, the Ctypes module itself is written with XS, so you need 
+a compiler to install this module from source.
+Orperhaps (wonder of wonders) it could someday be rolled into Perl5 core?
+
+This module requires the C library libffi to run. If you're on a POSIX
+system, libffi should have been installed this via your favoured package
+manager, otherwise we will build and install it for you into /usr/local. 
+If you're on Win32 there are pre-compiled libffi binaries included.
+
+http://sourceware.org/libffi/
 
 INSTALLATION
 
@@ -29,7 +25,7 @@ get Module::Build to compile stuff the way I wanted. Module::Install
 is currently still a bit limited for this fancy stuff too. So what
 you do is:
 
-	perl Makefile.PL
+	perl Makefile.PL [INCDIR=libffi-include-path LIBDIR=libffi-lib-path]
 	make
 	make test
 	make install

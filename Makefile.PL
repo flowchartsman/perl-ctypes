@@ -1,21 +1,23 @@
-# perl Makefile.PL INCDIR=/usr/src/libffi-3.0.9/include LIBDIR=/usr/src/libffi-3.0.9/lib
-use 5.010000;
+# Usage:
+# perl Makefile.PL INCDIR=/usr/src/libffi-3.0.10/include LIBDIR=/usr/src/libffi-3.0.10/lib
+
+#use 5.010000;
 use ExtUtils::MakeMaker;
 use Config;
-use File::Copy 'cp';
+use File::Copy;
 use File::Spec;
 
-our $libffi_version = "3.0.10rc0";
+our $libffi_version = "3.0.10rc3";
 
 # check the installed version of libffi and override default libdir and incdir
 use lib qw(inc);
 use Devel::CheckLib;
 my ($libdir, $incdir);
 if (grep /INCDIR[ =](\S+)/,join(" ", @ARGV)) {
-  $incdir=$1;
+  $incdir = $1;
 }
 if (grep /LIBDIR[ =](\S+)/,join(" ", @ARGV)) {
-  $libdir=$1;
+  $libdir = $1;
 }
 if ($libdir or $incdir) {
   eval qq/assert_lib( lib => 'ffi', header => 'ffi.h', libpath => $libdir, incpath => $incdir )/;
@@ -24,8 +26,8 @@ if ($libdir or $incdir) {
 }
 if ($@) {
   use File::Spec;
-  warn "libffi not installed or failing. Use our own libffi $libffi_version\n";
-  if ($^O ne 'MSWin32') {
+  if ($^O !~ /MSWin32|msys/) {
+    warn "libffi not installed or failing. Use our own libffi $libffi_version\n";
     use Cwd;
     my $tar = $Config{tar} ? $Config{tar} : "tar";
     system ($tar, "xfz", "libffi.tar.gz");
@@ -38,19 +40,19 @@ if ($@) {
     $libdir = "$cwd/lib";
     if ($^O eq 'cygwin') { # copy the bin/*.dll
       mkdir "bin";
-      cp('bin/libffi-*.dll', 'bin/');
+      File::Copy::cp('bin/libffi-*.dll', 'bin/');
     }
     chdir "..";
-  } else {
+  } else { # MSWin32
     warn "Using the builtin win32 binaries $libffi_version\n";
     # built with mingw32
     # install via http://sourceforge.net/projects/mingw/files/Automated%20MinGW%20Installer/mingw-get-inst/
     my $cwd = getcwd;
     $libdir = "win32";
-    $incdir = File::Spec->catfile($cwd, "win32","include");
+    $incdir = File::Spec->catfile($cwd, $libdir,"include");
     # be sure to install the dll on site, because we link only to the import lib
     mkdir "bin";
-    cp(File::Spec->catfile('win32', "libffi-5.dll"), "bin");
+    File::Copy::cp(File::Spec->catfile($libdir, "libffi-5.dll"), "bin");
   }
 } else {
   warn "Using system libffi.\n";
@@ -99,7 +101,7 @@ if  (eval {require ExtUtils::Constant; 1}) {
 else {
   foreach my $file ('const-c.inc', 'const-xs.inc') {
     my $fallback = File::Spec->catfile('win32', $file);
-    copy ($fallback, $file) or die "Can't copy $fallback to $file: $!";
+    File::Copy::cp ($fallback, $file) or die "Can't copy $fallback to $file: $!";
   }
 }
 

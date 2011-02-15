@@ -106,14 +106,14 @@ Typecode: Ctype                  perl Packcode
   'q': c_longlong                q
   'Q': c_ulonglong               Q
 
-  's': c_char_p (ASCIIZ string) A?
-  'w': c_wchar                  U
-  'z': c_wchar_p                U*
+  's': c_char_p (ASCIIZ string)  A?
+  'w': c_wchar                   U
+  'z': c_wchar_p                 U*
 
 =cut
 
 
-=head1 SUBROUTINES
+=head1 FUNCTIONS
 
 =over
 
@@ -545,7 +545,7 @@ Call:
 
   $lib = WinDLL->kernel32;
 
-Windows only: Returns a library object for the Windows kernel32.dll.
+Windows only: Returns a library object for the Windows F<kernel32.dll>.
 
 =head1 OleDLL
 
@@ -646,6 +646,7 @@ Searches the dll/so loadpath for the given library, architecture dependently.
 The lib argument is either part of a filename (e.g. "kernel32"),
 a full pathname to the shared library
 or the same as for L<DynaLoader::dl_findfile>:
+
 "-llib" or "-Lpath -llib", with -L for the optional path.
 
 Returns the path of the found library or undef.
@@ -929,7 +930,7 @@ sub load_error() {
 
 =item addressof (obj)
 
-Returns the address of the memory buffer as integer. obj must be an
+Returns the address of the memory buffer as integer. C<obj> must be an
 instance of a ctypes type.
 
 =cut
@@ -944,7 +945,7 @@ sub addressof($) {
 =item alignment(obj_or_type)
 
 Returns the alignment requirements of a Ctypes type.
-obj_or_type must be a Ctypes type or instance.
+C<obj_or_type> must be a Ctypes type or instance.
 
 =cut
 
@@ -957,9 +958,9 @@ sub alignment($) {
 
 =item byref(obj)
 
-Returns a light-weight pointer to obj, which must be an instance of a
-ctypes type. The returned object can only be used as a foreign
-function call parameter. It behaves similar to pointer(obj), but the
+Returns a light-weight pointer to C<obj>, which must be an instance of a
+Ctypes type. The returned object can only be used as a foreign
+function call parameter. It behaves similar to C<pointer(obj)>, but the
 construction is a lot faster.
 
 =cut
@@ -968,11 +969,11 @@ sub byref {
   return \$_[0];
 }
 
-=item is_ctypes_compat($obj)
+=item is_ctypes_compat(obj)
 
-Returns 1 if object is Ctypes compatible - that is, it has a
-_as_param_, _update_ and _typecode_ methods, and the value returned
-by _typecode_ is valid. Returns undef otherwise.
+Returns 1 if C<obj> is Ctypes compatible - that is, it has a
+C<_as_param_>, C<_update_> and C<_typecode_> methods, and the value returned
+by C<_typecode_> is valid. Returns C<undef> otherwise.
 
 =cut
 
@@ -994,16 +995,16 @@ sub is_ctypes_compat (\$) {
 =item cast(obj, type)
 
 This function is similar to the cast operator in C. It returns a new
-instance of type which points to the same memory block as obj. type
+instance of type which points to the same memory block as C<obj>. C<type>
 must be a pointer type, and obj must be an object that can be
 interpreted as a pointer.
 
 =item create_string_buffer(init_or_size[, size])
 
 This function creates a mutable character buffer. The returned object
-is a ctypes array of c_char.
+is a Ctypes array of C<c_char>.
 
-init_or_size must be an integer which specifies the size of the array,
+C<init_or_size> must be an integer which specifies the size of the array,
 or a string which will be used to initialize the array items.
 
 If a string is specified as first argument, the buffer is made one
@@ -1013,14 +1014,14 @@ second argument which allows to specify the size of the array if the
 length of the string should not be used.
 
 If the first parameter is a unicode string, it is converted into an
-8-bit string according to ctypes conversion rules.
+8-bit string according to Ctypes conversion rules.
 
 =item create_unicode_buffer(init_or_size[, size])
 
 This function creates a mutable unicode character buffer. The returned
-object is a ctypes array of C<c_wchar>.
+object is a Ctypes array of C<c_wchar>.
 
-init_or_size must be an integer which specifies the size of the array,
+C<init_or_size> must be an integer which specifies the size of the array,
 or a unicode string which will be used to initialize the array items.
 
 If a unicode string is specified as first argument, the buffer is made
@@ -1030,19 +1031,19 @@ as second argument which allows to specify the size of the array if
 the length of the string should not be used.
 
 If the first parameter is a 8-bit string, it is converted into an
-unicode string according to ctypes conversion rules.
+unicode string according to Ctypes conversion rules.
 
 =item DllCanUnloadNow()
 
 Windows only: This function is a hook which allows to implement
-inprocess COM servers with ctypes. It is called from the
-DllCanUnloadNow function that the Ctypes XS extension dll exports.
+in-process COM servers with Ctypes. It is called from the
+C<DllCanUnloadNow> function that the Ctypes XS extension dll exports.
 
 =item DllGetClassObject()
 
 Windows only: This function is a hook which allows to implement
-inprocess COM servers with ctypes. It is called from the
-DllGetClassObject function that the Ctypes XS extension dll exports.
+in-process COM servers with ctypes. It is called from the
+C<DllGetClassObject> function that the Ctypes XS extension dll exports.
 
 =item FormatError([code])
 
@@ -1056,74 +1057,74 @@ Windows only: Returns the last error code set by Windows in the calling thread.
 
 =item memmove(dst, src, count)
 
-Same as the standard C memmove library function: copies count bytes
-from src to dst. dst and src must be integers or ctypes instances that
-can be converted to pointers.
+Same as the standard C memmove library function: copies count bytes from C<src>
+to C<dst>. C<dst> and C<src> must be integers or Ctypes instances that can be
+converted to pointers.
 
 =item memset(dst, c, count)
 
 Same as the standard C memset library function: fills the memory block
-at address dst with count bytes of value c. dst must be an integer
-specifying an address, or a ctypes instance.
+at address C<dst> with C<count> bytes of value C<c>. C<dst> must be an integer
+specifying an address, or a Ctypes instance.
 
 =item POINTER(type)
 
-This factory function creates and returns a new ctypes pointer
+This factory function creates and returns a new Ctypes pointer
 type. Pointer types are cached an reused internally, so calling this
-function repeatedly is cheap. type must be a ctypes type.
+function repeatedly is cheap. C<type> must be a Ctypes type.
 
 =item pointer(obj)
 
-This function creates a new pointer instance, pointing to obj. The
-returned object is of the type POINTER(type(obj)).
+This function creates a new pointer instance, pointing to C<obj>. The
+returned object is of the type C<POINTER(type(obj))>.
 
 Note: If you just want to pass a pointer to an object to a foreign
-function call, you should use byref(obj) which is much faster.
+function call, you should use C<byref(obj)> which is much faster.
 
 =item resize(obj, size)
 
-This function resizes the internal memory buffer of obj, which must be
-an instance of a ctypes type. It is not possible to make the buffer
+This function resizes the internal memory buffer of C<obj>, which must be
+an instance of a Ctypes type. It is not possible to make the buffer
 smaller than the native size of the objects type, as given by
-sizeof(type(obj)), but it is possible to enlarge the buffer.
+C<sizeof(type(obj))>, but it is possible to enlarge the buffer.
 
 =item set_conversion_mode(encoding, errors)
 
-This function sets the rules that ctypes objects use when converting
+This function sets the rules that Ctypes objects use when converting
 between 8-bit strings and unicode strings. encoding must be a string
 specifying an encoding, like 'utf-8' or 'mbcs', errors must be a
 string specifying the error handling on encoding/decoding
 errors. Examples of possible values are "strict", "replace", or
 "ignore".
 
-set_conversion_mode returns a 2-tuple containing the previous
-conversion rules. On windows, the initial conversion rules are
+C<set_conversion_mode> returns a 2-tuple containing the previous
+conversion rules. On Windows, the initial conversion rules are
 ('mbcs', 'ignore'), on other systems ('ascii', 'strict').
 
 =item sizeof(obj_or_type)
 
-Returns the size in bytes of a ctypes type or instance memory
-buffer. Does the same as the C sizeof() function.
+Returns the size in bytes of a Ctypes type or instance memory
+buffer. Does the same as the C C<sizeof()> function.
 
 =item string_at(address[, size])
 
 This function returns the string starting at memory address
-address. If size is specified, it is used as size, otherwise the
+C<address>. If C<size> is specified, it is used as size, otherwise the
 string is assumed to be zero-terminated.
 
 =item WinError( { code=>undef, descr=>undef } )
 
 Windows only: this function is probably the worst-named thing in
-Ctypes. It creates an instance of WindowsError.
+Ctypes. It creates an instance of L<WindowsError>.
 
-If B<code> is not specified, GetLastError is called to determine the
+If B<code> is not specified, L<GetLastError> is called to determine the
 error code. If B<descr> is not spcified, FormatError is called to get
 a textual description of the error.
 
-=item wstring_at(address)
+=item wstring_at(address [, size])
 
 This function returns the wide character string starting at memory
-address address as unicode string. If size is specified, it is used as
+address C<address> as unicode string. If C<size> is specified, it is used as
 the number of characters of the string, otherwise the string is
 assumed to be zero-terminated.
 
@@ -1180,7 +1181,7 @@ L<http://search.cpan.org/dist/Ctypes/>
 =head1 SEE ALSO
 
 There are 4 other Perl ffi libraries:
-L<Win32::API>, L<C::DynaLib>, L<FFI> and L<P5NCI>.
+  L<Win32::API>, L<C::DynaLib>, L<FFI> and L<P5NCI>.
 
 You'll need the headers and/or description of the foreign library.
 

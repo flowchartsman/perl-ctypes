@@ -3,10 +3,10 @@ use strict;
 use warnings;
 use Carp;
 use Ctypes;
-use Ctypes::Type qw|&_types &allow_overflow_all|;
+use Ctypes::Type qw|&_types &strict_input_all|;
 our @ISA = qw|Ctypes::Type|;
 use fields qw|alignment name _typecode size
-              allow_overflow val _as_param_|;
+              strict_input val _as_param_|;
 use overload '${}' => \&_scalar_overload,
              '0+'  => \&_scalar_overload,
              '""'  => \&_scalar_overload,
@@ -150,10 +150,18 @@ sub new {
   } );
   #for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
   #bless $self => $class;
-  $arg = 0 unless defined $arg;
+  if (defined $arg) {
+    $self->{_datasafe} = 0; # force _update_ and validate data
+    if( exists $Ctypes::Type::_types->{$typecode}->{hook_in} ) {
+      my ($valid, $newarg) = $Ctypes::Type::_types->{$typecode}->{hook_in}->($arg);
+      $arg = $newarg unless $valid;
+    }
+  } else {
+    $arg = 0;
+  }
   $self->{_value} = $arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
-  $self->{_rawvalue}{VALUE} = $arg if not defined $self->{_rawvalue}{VALUE};
+  $self->{_rawvalue}{VALUE} = $arg;
   return $self;
 }
 
@@ -176,7 +184,7 @@ sub strict_input {
     my $self = shift;
     my $arg = shift;
     if( @_  or ( defined $arg and $arg != 1 and $arg != 0 ) ) {
-      croak("Usage: allow_overflow(1 or 0)");
+      croak("Usage: strict_input(1 or 0)");
     }
     $self->{_strict_input} = $arg if defined $arg;
     $self->{_strict_input};
@@ -235,7 +243,7 @@ sub data {
     return \$self->{_data};
   }
   $self->{_data} =
-    pack( $self->{_typecode}, $self->{_rawvalue}{VALUE} );
+    pack( $self->packcode, $self->{_rawvalue}{VALUE} );
   print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
   $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_data};
@@ -261,16 +269,18 @@ sub _update_ {
                                $self->{_index},
                                $self->size );
       print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug;
-      print "    Which is ", unpack($self->{_typecode},$self->{_data}), " as a number\n" if $Debug;
-  $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
+      print "    Which is ", unpack($self->packcode,$self->{_data}), " as a number\n" if $Debug;
+      $self->{_rawvalue}{VALUE} = unpack($self->packcode, $self->{_data});
+    } else {
+      $self->{_data} = pack($self->packcode, $self->{_value});
     }
   } else {
-    $self->{_data} = $arg if $arg;
+    $self->{_data} = pack($self->packcode, $arg );
     if( $self->owner ) {
-      $self->owner->_update_($self->{_data},$self->{_index});
+      $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
-  $self->{_rawvalue}{VALUE} = unpack($self->{_typecode},$self->{_data});
+  $self->{_rawvalue}{VALUE} = unpack($self->packcode, $self->{_data});
   print "    VALUE is _update_d to ", $self->{_rawvalue}{VALUE}, "\n" if $Debug;
   $self->{_datasafe} = 1;
   return 1;
@@ -302,7 +312,7 @@ sub TIESCALAR {
   my $class = shift;
   my $object = shift;
   my $self = { object  => $object,
-               VALUE   => undef,
+               VALUE   => $object->{_value},
              };
   return bless $self => $class;
 }
@@ -318,6 +328,10 @@ sub STORE {
   # The following section may be removed completely to allow different
   # Types full discretion of their own input validation via hook_in().
 
+  if( exists $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_in} ) {
+    my ($valid, $newarg) = $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_in}->($arg);
+    $arg = $newarg unless $valid;
+  }
   # Deal with being assigned other Type objects and the like...
 #    if(my $ref = ref($arg)) {
 #      if($ref =~ /^Ctypes::Type::/) {
@@ -338,6 +352,7 @@ sub STORE {
   # with null (i.e. numeric zero) , update owners, return early.
   if( not defined $arg ) {
     print "    Assigned undef. All goes null.\n" if $Debug;
+    $self->{object}{_datasafe} = 0;
     $self->{VALUE} = 0;
     $self->{object}{_data} = "\0" x 8 x $self->{object}{_size}; # stay right length
     if( $self->{object}{_owner} ) {

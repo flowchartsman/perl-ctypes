@@ -78,13 +78,13 @@ subtest 'Overflows' => sub {
       'Cannot go below INT_MIN');
 };
 $$overflower = 5;
-$overflower->allow_overflow(0);
+$overflower->strict_input(0);
 $$overflower = 2147483648;
 is($$overflower, 5, 'Disallow overflow per-object');
-$overflower->allow_overflow(1);
-Ctypes::Type::allow_overflow_all(0);
+$overflower->strict_input(1);
+Ctypes::Type::strict_input_all(0);
 $overflower = c_int(2147483648);
-is($overflower, undef, 'Can (dis)allow_overflow_all');
+is($overflower, undef, 'Can strict_input_all(0)');
 
 TODO: {
   local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';

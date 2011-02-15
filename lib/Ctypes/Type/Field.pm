@@ -47,8 +47,7 @@ sub new {
                 _rawcontents => undef,
               };
   $self->{_rawcontents} = tie $self->{_contents},
-                          'Ctypes::Type::Field::contents',
-                          $self;
+    'Ctypes::Type::Field::contents', $self;
   $self->{_contents} = $val;
   return bless $self => $class;
 }
@@ -62,7 +61,7 @@ my %access = (
   size              => ['_size'],
   'index'           => ['_index'],
   owner             => ['_owner'],
-             );
+);
 for my $func (keys(%access)) {
   no strict 'refs';
   my $key = $access{$func}[0];
@@ -214,7 +213,8 @@ sub STORE {
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{_obj}{_obj}->name, "'s ", $self->{_obj}{_key}, " field FETCH,\n\tcalled from ", (caller(1))[0..3], "\n" if $Debug;
+  print "In ", $self->{_obj}{_obj}->name, "'s ", $self->{_obj}{_key},
+    " field FETCH,\n\tcalled from ", (caller(1))[0..3], "\n" if $Debug;
   if( defined $self->{VALUE}
       and $self->{VALUE}->isa('Ctypes::Type::Simple') ) {
     return ${$self->{VALUE}};

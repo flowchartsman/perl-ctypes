@@ -18,7 +18,7 @@ use Ctypes::Type::Struct;
 use Scalar::Util qw|looks_like_number|;
 use B qw|svref_2object|;
 use Encode;
-my $Debug;
+my $Debug = 1;
 use utf8;
 
 =head1 NAME
@@ -91,7 +91,7 @@ our $_pytypes =
            my $name = $Ctypes::Type::_types->{$tc}->{name};
            # my $MIN = $Ctypes::Type::_types->{$tc}->{MIN};
            # my $MAX = $Ctypes::Type::_types->{$tc}->{MAX};
-           print "In hook_in\n" if $Debug;
+           print "In hook_in c_byte($arg)\n" if $Debug;
            return ( "$name: cannot take references", undef )
              if ref($arg);
            if( Ctypes::Type::is_a_number($arg) ) {
@@ -382,7 +382,7 @@ our $_pytypes =
            my $name = $Ctypes::Type::_types->{$tc}->{name};
            my $MIN  = Ctypes::constant('PERL_INT_MIN');
            my $MAX  = Ctypes::constant('PERL_INT_MAX');
-           print "In hook_in\n" if $Debug;
+           print "In hook_in c_int($arg)\n" if $Debug;
            return ( "$name: cannot take references", undef )
              if ref($arg);
            if( Ctypes::Type::is_a_number($arg) ) {
@@ -649,7 +649,7 @@ sub _new {
   my $class = ref($_[0]) || $_[0];
   my $init = $_[1] if @_ > 1;
   my $self = {
-    _data       =>  "\0",             # raw (binary) memory block
+    _data       =>  "\0",          # raw (binary) memory block
     _needsfree  =>  0,             # does object own its data? (not used yet, 0.002)
     _owner      =>  undef,         # ref to object that owns this one
     _size       =>  0,             # size of memory block in bytes
@@ -818,7 +818,7 @@ sub typecode { return $_[0]->{_typecode} }
 
 This class method can cease all toleration of incorrect input
 for all Type objects. Sets/returns 1 or 0. See the
-L<strict_input/Ctypes::Type::Simple/allow_overflow> object method
+L<strict_input/Ctypes::Type::Simple/strict_input> object method
 for how to do this to individual objects
 
 =back
@@ -832,7 +832,7 @@ for how to do this to individual objects
     # with an object instead of a 1 or 0 and user would not be notified
     my $arg = shift;
     if( @_ or ( defined($arg) and $arg != 1 and $arg != 0 ) ) {
-      croak("Usage: allow_overflow_all(x) (1 or 0)");
+      croak("Usage: strict_input_all(x) (1 or 0)");
     }
     $strict_input_all = $arg if defined $arg;
     return $strict_input_all;

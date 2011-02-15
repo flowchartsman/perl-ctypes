@@ -435,9 +435,11 @@ be one of three things:
 =item A linker argument style string, e.g. '-lc' for libc.
 
 For Win32, mingw and cygwin special rules are used:
-"c" resolves on Win32 to msvcrt<ver>.dll.
--llib will probably find an import lib ending with F<.a> or F<.dll.a>),
+"c" resolves on Win32 to F<msvcrtxx.dll>.
+
+F<-llib> will probably find an import lib ending with F<.a> or F<.dll.a>),
 so C<dllimport> is called to find the DLL behind.
+
 DLL are usually versioned, import libs not,
 so specifying the unversioned library name will find the most recent DLL.
 
