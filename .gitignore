@@ -21,7 +21,13 @@ pod2htm*.tmp
 *.stackdump
 .git
 blib
-libffi-3.0.9*
+libffi-3.0*
 libffi/
 log.test*
+0*.patch
+.diff
+MANIFEST.files
+TAGS
+cygwin/
 *.zip
+Ctypes*.tar.gz

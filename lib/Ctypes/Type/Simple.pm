@@ -125,9 +125,9 @@ sub _code_overload {
 
 =over
 
-=item new TYPECODE, ARG
+=item new Simple TYPECODE [ARG]
 
-=item new TYPECODE
+=item new c_I<(class)> [ARG]
 
 The Ctypes::Type::Simple constructor. See the main L<Ctypes|Ctypes/call>
 module for an explanation of typecodes. ARG is the optional value
@@ -138,7 +138,13 @@ Numbers and characters usually go down well.
 
 sub new {
   my $class = ref($_[0]) || $_[0]; shift;
-  my $typecode = shift;
+  my $typecode;
+  if ($class eq 'Ctypes::Type::Simple') {
+    $typecode = shift;
+  } else {
+    my ($name) = $class =~ /(c_\w+|)/;
+    $typecode = $Ctypes::Type::_defined{$name};
+  }
   my $arg = shift;
   print "In Type::Simple constructor: typecode [ $typecode ]",
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
@@ -161,7 +167,7 @@ sub new {
   }
   $self->{_value} = $arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
-  $self->{_rawvalue}{VALUE} = $arg;
+  # $self->{_rawvalue}{VALUE} = \$self->{_value}; # ref to $self->{_value}
   return $self;
 }
 
@@ -243,7 +249,7 @@ sub data {
     return \$self->{_data};
   }
   $self->{_data} =
-    pack( $self->packcode, $self->{_rawvalue}{VALUE} );
+    pack( $self->packcode, $self->{_value} );
   print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
   $self->{_datasafe} = 0;  # used by FETCH
   return \$self->{_data};
@@ -270,7 +276,7 @@ sub _update_ {
                                $self->size );
       print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug;
       print "    Which is ", unpack($self->packcode,$self->{_data}), " as a number\n" if $Debug;
-      $self->{_rawvalue}{VALUE} = unpack($self->packcode, $self->{_data});
+      $self->{_value} = unpack($self->packcode, $self->{_data});
     } else {
       $self->{_data} = pack($self->packcode, $self->{_value});
     }
@@ -280,8 +286,8 @@ sub _update_ {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
-  $self->{_rawvalue}{VALUE} = unpack($self->packcode, $self->{_data});
-  print "    VALUE is _update_d to ", $self->{_rawvalue}{VALUE}, "\n" if $Debug;
+  $self->{_value} = unpack($self->packcode, $self->{_data});
+  print "    VALUE is _update_d to ", $self->{_value}, "\n" if $Debug;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -302,6 +308,75 @@ sub validate {
   defined $h ? $h->($_[1]) : ("", 1);
 }
 
+sub _limcheck {
+}
+
+sub hook_in {
+  my $self = shift;
+  my $arg = shift;
+  my $valid = undef;
+  my $tc = $self->typecode;
+  my $name = $self->name;
+  my ($MIN,$MAX) = $self->_minmax();
+  print "In hook_in\n" if $Debug;
+  return ( "$name: cannot take references", undef )
+    if ref($arg);
+  if( Ctypes::Type::is_a_number($arg) ) {
+    if( $arg !~ /^[+-]?\d+$/ ) {
+      $valid = "$name: numeric values must be integers " .
+        "$MIN <= x <= $MAX";
+      $arg = sprintf("%u",$arg);
+    }
+    if( $arg < $MIN or $arg > $MAX ) {
+      $valid = "$name: numeric values must be integers " .
+        "$MIN <= x <= $MAX"
+          if not defined $valid;
+    }
+  } else {
+    if( length($arg) == 1 ) {
+      print "    1 char long, good\n" if $Debug;
+      $arg = ord($arg);
+      if( $arg < 0 or $arg > $MAX ) {
+        $valid = "$name: character values must be integers " .
+          "0 <= ord(x) <= $MAX";
+      }
+    } else {
+      $valid = "$name: single characters only";
+      $arg = ord(substr($arg, 0, 1));
+      if( $arg < 0 or $arg > $MAX ) {
+        $valid .= ", and must be integers " .
+          "0 <= ord(x) <= $MAX";
+      }
+    }
+  }
+  return ($valid, $arg);
+}
+
+# c_char c_wchar c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
+# c_longlong c_ulonglong c_float c_double c_longdouble c_char_p c_wchar_p
+# c_size_t c_ssize_t c_bool c_void_p
+
+# c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64
+
+
+package Ctypes::Type::c_int;
+use base 'Ctypes::Type::Simple';
+#sub sizecode{'s'};
+sub packcode{'s'};
+sub typecode{'h'};
+sub _minmax { ( Ctypes::constant('PERL_SHORT_MIN'),
+                Ctypes::constant('PERL_SHORT_MAX') ) }
+
+package Ctypes::Type::c_short;
+use base 'Ctypes::Type::Simple';
+
+package Ctypes::Type::c_char;
+use base 'Ctypes::Type::Simple';
+
+*c_short = *Ctypes::Type::c_short;
+*c_char  = *Ctypes::Type::c_char;
+*c_int   = *Ctypes::Type::c_int;
+
 package Ctypes::Type::Simple::value;
 use strict;
 use warnings;
@@ -311,25 +386,25 @@ use Scalar::Util qw|blessed|;
 sub TIESCALAR {
   my $class = shift;
   my $object = shift;
-  my $self = { object  => $object,
-               VALUE   => $object->{_value},
-             };
+  my $self = [ $object ];
   return bless $self => $class;
 }
 
 sub STORE {
-  croak("STORE must take a value") if scalar @_ != 2;
+  #croak("STORE must take a value") if scalar @_ != 2;
   my $self = shift;
-  my $arg = shift;
-  print "In ", $self->{object}{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug;
+  my $object = $self->[0];
+  my $arg = shift or croak("STORE must take a value");
+  print "In ", $object->{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug;
   croak("Simple Types can only be assigned a single value") if @_;
+  #my $ref= $object->{_value};
 
   # The following section may be removed completely to allow different
   # Types full discretion of their own input validation via hook_in().
 
-  if( exists $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_in} ) {
-    my ($valid, $newarg) = $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_in}->($arg);
+  if( exists $Ctypes::Type::_types->{$object->{_typecode}}->{hook_in} ) {
+    my ($valid, $newarg) = $Ctypes::Type::_types->{$object->{_typecode}}->{hook_in}->($arg);
     $arg = $newarg unless $valid;
   }
   # Deal with being assigned other Type objects and the like...
@@ -352,26 +427,26 @@ sub STORE {
   # with null (i.e. numeric zero) , update owners, return early.
   if( not defined $arg ) {
     print "    Assigned undef. All goes null.\n" if $Debug;
-    $self->{object}{_datasafe} = 0;
-    $self->{VALUE} = 0;
-    $self->{object}{_data} = "\0" x 8 x $self->{object}{_size}; # stay right length
-    if( $self->{object}{_owner} ) {
-      $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
+    $object->{_datasafe} = 0;
+    $object->{_value} = 0;
+    $object->{_data} = "\0" x 8 x $object->{_size}; # stay right length
+    if( $object->{_owner} ) {
+      $object->{_owner}->_update_($object->{_data}, $object->{_index});
     }
-    return $self->{VALUE};
+    return $object->{_value};
   }
 
-  my $typecode = $self->{object}{_typecode};
+  my $typecode = $object->{_typecode};
   print "    Using typecode $typecode\n" if $Debug;
   print "    1) arg is ", $arg, "\n" if $Debug;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   #my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
   print "    Calling validate...\n" if $Debug;
-  my ($invalid, $result) = $self->{object}->validate($arg);
+  my ($invalid, $result) = $object->validate($arg);
   print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug;
   if( defined $invalid ) {
     no strict 'refs';
-    if( ($self->{object}->strict_input == 1)
+    if( ($object->strict_input == 1)
         or (Ctypes::Type::strict_input_all() == 1)
         or (not defined $result) ) {
       print "Unable to ameliorate input! (strict input or validate couldn't convert)\n" if $Debug;
@@ -383,34 +458,35 @@ sub STORE {
   }
   print "    2) arg is $result, which is ",
     unpack('b*', $result), " or ", ord($result), "\n" if $Debug;
-  $self->{object}{_data} =
-    pack( $self->{object}->packcode, $result );
-  $self->{VALUE} = unpack( $self->{object}->packcode, $self->{object}{_data} );
-  $self->{object}->{_input} = $arg;
-  if( $self->{object}{_owner} ) {
+  $object->{_data} =
+    pack( $object->packcode, $result );
+  $object->{_value} = unpack( $object->packcode, $object->{_data} );
+  $object->{_input} = $arg;
+  if( $object->{_owner} ) {
     print "    Have owner, updating with\n",
-      unpack('b*', $self->{object}{_data}), "\n    or ",
-      unpack($self->{object}{_typecode},$self->{object}{_data}), " to you and me\n" if $Debug;
-    $self->{object}{_owner}->_update_($self->{object}{_data}, $self->{object}{_index});
+      unpack('b*', $object->{_data}), "\n    or ",
+      unpack($object->{_typecode},$object->{_data}), " to you and me\n" if $Debug;
+    $object->{_owner}->_update_($object->{_data}, $object->{_index});
   }
   print "  Returning ok...\n" if $Debug;
-  return $self->{VALUE};
+  return $object->{_value};
 }
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{object}{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug;
-  if ( defined $self->{object}{_owner}
-       or $self->{object}{_datasafe} == 0 ) {
+  my $object = $self->[0];
+  print "In ", $object->{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug;
+  if ( defined $object->{_owner}
+       or $object->{_datasafe} == 0 ) {
     print "    Can't trust data, updating...\n" if $Debug;
-    $self->{object}->_update_;
+    $object->_update_;
   }
-  croak("Error updating value!") if $self->{object}{_datasafe} != 1;
-  print "    ", $self->{object}->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug;
-  if( exists $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out} ) {
-    return $Ctypes::Type::_types->{$self->{object}->{_typecode}}->{hook_out}->($self->{VALUE}, $self->{object});
+  croak("Error updating value!") if $object->{_datasafe} != 1;
+  print "    ", $object->name, "'s Fetch returning ", $self->{VALUE}, "\n" if $Debug;
+  if( exists $Ctypes::Type::_types->{$object->{_typecode}}->{hook_out} ) {
+    return $Ctypes::Type::_types->{$object->{_typecode}}->{hook_out}->($self->{VALUE}, $object);
   } else {
-    return $self->{VALUE};
+    return $object->{_value};
   }
 }
 

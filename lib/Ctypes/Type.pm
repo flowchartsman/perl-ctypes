@@ -680,7 +680,7 @@ sub _needsfree : lvalue {
 }
 
 #
-# Create global c_<type> functions...
+# Create global c_<type> functions, classes, and reverse lookup by name => tc
 #
 my %_defined;
 for my $k (keys %$_types) {
@@ -690,7 +690,8 @@ for my $k (keys %$_types) {
     no strict 'refs';
     $func = sub { Ctypes::Type::Simple->new($k, @_); };
     *{"Ctypes::$name"} = $func;
-    $_defined{$name} = 1;
+    # eval { qq(package $name; use base "Ctypes::Type::Simple::$name";) };
+    $_defined{$name} = $k;
   }
 }
 our @_allnames = keys %_defined;
