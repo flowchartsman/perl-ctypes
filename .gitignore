@@ -30,4 +30,5 @@ MANIFEST.files
 TAGS
 cygwin/
 *.zip
+.test*
 Ctypes*.tar.gz
