@@ -32,7 +32,7 @@ our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL
                    POINTER WinError byref is_ctypes_compat
                    Array Pointer Struct Union
                   |, @Ctypes::Type::_allnames );
-our @EXPORT_OK = qw|_make_arrayref _check_invalid_types
+our @EXPORT_OK = qw|USE_PERLTYPES _make_arrayref _check_invalid_types
                     _check_type_needed _valid_for_type
                     _cast|;
 
@@ -109,6 +109,7 @@ Typecode: Ctype                  perl Packcode
   's': c_char_p (ASCIIZ string)  A?
   'w': c_wchar                   U
   'z': c_wchar_p                 U*
+  'X': c_bstr (2byte string)     a?
 
 =cut
 
@@ -1298,7 +1299,7 @@ sub _check_invalid_types ($) {
 sub _check_type_needed (@) {
   # XXX This needs to be changed when we support more typecodes
   print "In _check_type_needed\n" if $Debug;
-  my @types = Ctypes::Type::USE_PERLTYPES ? qw|C p s i l d| : qw|C s h i l d|;
+  my @types = $Ctypes::Type::USE_PERLTYPES ? qw|C p s i l d| : qw|C s h i l d|;
   my @numtypes = @types[2..6]; #  0: short 1: int 2: long 3: double
   my $low = 0;
   my $char = 0;

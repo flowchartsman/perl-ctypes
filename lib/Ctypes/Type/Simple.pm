@@ -13,7 +13,7 @@ use overload '${}' => \&_scalar_overload,
              '&{}' => \&_code_overload,
              fallback => 'TRUE';
        # TODO Multiplication will have to be overridden
-       # to implement Python's Array contruction with "type * x"???
+       # to implement Python's Array construction with "type * x"???
 our $Debug;
 
 =head1 NAME
@@ -82,7 +82,7 @@ passed to C, while $int can be used to find out things I<about> the object
 itself, like C<$int->name>, C<$int->size>, etc.
 
 In addition to the methods provided by Ctypes::Type, Ctypes::Type::Simple
-objects provide the following extra methods.
+objects provide the following extra methods:
 
 =cut
 
@@ -144,6 +144,7 @@ sub new {
   if ($class eq 'Ctypes::Type::Simple') {
     $typecode = shift;
     $name = Ctypes::Type::_types()->{$typecode}->{name};
+    $class = 'Ctypes::Type::'.$name;
   } else {
     $name = $class =~ /(c_\w+|)/;
     $typecode = $Ctypes::Type::_defined{$name};
@@ -158,10 +159,8 @@ sub new {
   my $arg = shift;
   print "In Type::Simple constructor: typecode [ $typecode ]",
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
-  #for(keys(%{$attrs})) { $self->{$_} = $attrs->{$_}; };
-  #bless $self => $class;
   if (defined $arg) {
-    $self->{_datasafe} = 0; # force _update_ and validate data
+    $self->{_datasafe} = 0; # force initial _update_ and validate data
     my ($invalid, $newarg) = $self->_hook_in($arg);
     $arg = $newarg unless $invalid;
   } else {
@@ -296,24 +295,30 @@ sub _update_ {
 
 sub _set_undef { $_[0]->{_value} = 0 }
 
-sub size { Ctypes::sizeof($_[0]->sizecode) };
-sub sizecode {
-  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
-  defined $t->{sizecode} ? $t->{sizecode} : $_[0]->{_typecode};
-}
-sub packcode {
-  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
-  defined $t->{packcode} ? $t->{packcode} : $_[0]->{_typecode};
-}
+sub size { Ctypes::sizeof($_[0]->sizecode) }
+# defaults, overridden below
+sub sizecode { $_[0]->typecode }
+sub packcode { $_[0]->typecode }
+
+#sub sizecode {
+#  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
+#  defined $t->{sizecode} ? $t->{sizecode} : $_[0]->{_typecode};
+#}
+#sub packcode {
+#  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
+#  defined $t->{packcode} ? $t->{packcode} : $_[0]->{_typecode};
+#}
 sub validate {
-  my $h = $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in};
-  defined $h ? $h->($_[1]) : ("", 1);
+  my $self = shift;
+  $self->_hook_in(@_);
+  #my $h = $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in};
+  #defined $h ? $h->($_[1]) : ("", 1);
 }
 
 sub _limcheck {
 }
 
-# XXX FIXME, strings override it, so only numbers.
+# XXX FIXME: strings should override it, so only numbers.
 # takes $arg
 # returns (bool $invalid, $arg)
 sub _hook_in {
@@ -328,6 +333,9 @@ sub _hook_in {
   return ($invalid, $arg) unless $self->can('_minmax');
 
   my ($MIN,$MAX) = $self->_minmax();
+  unless (defined $MIN) {
+    return ("$name: wrong _minmax", $arg);
+  }
   if( Ctypes::Type::is_a_number($arg) ) {
     if( $arg !~ /^[+-]?\d+$/ ) {
       $invalid = "$name: numeric values must be integers " .
@@ -359,23 +367,28 @@ sub _hook_in {
   return ($invalid, $arg);
 }
 
-# XXX FIXME. may change the $object->{_value}
+# may change the $object->{_value}
 sub _hook_out {
   my $obj = shift;
   print "In _hook_out $obj->name\n" if $Debug;
-  my $value = $obj->{_value};
+  #my $value = $obj->{_value};
 }
+
+sub _minmax_const {
+  my ($invalid1, $v1) = shift;
+  my ($invalid2, $v2) = shift;
+  return ($invalid1 or $invalid2) ? (undef, undef) : ($v1, $v2);
+}
+
 
 # DONE
 # c_char c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
 # c_longlong c_ulonglong c_float c_double c_longdouble
+# c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64
 
 # CHECK
 # c_wchar c_char_p c_wchar_p c_bool c_void_p
-
-# TODO
 # c_size_t c_ssize_t
-# c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64
 
 package Ctypes::Type::c_byte;
 use base 'Ctypes::Type::Simple';
@@ -402,22 +415,156 @@ sub _hook_out {
 # single character, c signed, possibly a multi-char (?)
 package Ctypes::Type::c_char;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'c'};
-sub packcode{'c'};
+#sub sizecode{'c'};
+#sub packcode{'c'};
 sub typecode{'c'};
 sub _minmax { ( -127, 128 ) }
+sub _hook_out {
+  print "In _hook_out c_char\n" if $Debug;
+  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
+}
 
 # single character, c unsigned, possibly a multi-char (?)
 package Ctypes::Type::c_uchar;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'C'};
-sub packcode{'C'};
+#sub sizecode{'C'};
+#sub packcode{'C'};
 sub typecode{'C'};
 sub _minmax { ( 0, 256 ) }
 sub _hook_out {
   print "In _hook_out c_uchar\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]);
+  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
 }
+
+package Ctypes::Type::c_short;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'s'};
+sub packcode{'s'};
+sub typecode{'h'};
+sub _minmax_const { ( Ctypes::constant('PERL_SHORT_MIN'),
+                      Ctypes::constant('PERL_SHORT_MAX') ) }
+
+package Ctypes::Type::c_ushort;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'S'};
+sub packcode{'S'};
+sub typecode{'H'};
+sub _minmax_const { ( Ctypes::constant('PERL_USHORT_MIN'),
+                      Ctypes::constant('PERL_USHORT_MAX') ) }
+
+# Alias to c_long where equal; i
+package Ctypes::Type::c_int;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'i'};
+sub packcode{'i'};
+sub typecode{'i'};
+sub _minmax_const { ( Ctypes::constant('PERL_INT_MIN'),
+                      Ctypes::constant('PERL_INT_MAX') ) }
+
+# Alias to c_ulong where equal; I
+package Ctypes::Type::c_uint;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'i'};
+sub packcode{'I'};
+sub typecode{'I'};
+sub _minmax_const { ( Ctypes::constant('PERL_UINT_MIN'),
+                      Ctypes::constant('PERL_UINT_MAX') ) }
+
+package Ctypes::Type::c_long;
+use base 'Ctypes::Type::Simple';
+#sub sizecode{'l'};
+#sub packcode{'l'};
+sub typecode{'l'};
+sub _minmax_const { ( Ctypes::constant('PERL_LONG_MIN'),
+                      Ctypes::constant('PERL_LONG_MAX') ) }
+
+package Ctypes::Type::c_ulong;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'l'};
+sub packcode{'L'};
+sub typecode{'L'};
+sub _minmax_const { ( Ctypes::constant('PERL_ULONG_MIN'),
+                      Ctypes::constant('PERL_ULONG_MAX') ) }
+
+package Ctypes::Type::c_float;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'f'};
+sub packcode{'f'};
+sub typecode{'f'};
+sub _minmax_const { ( Ctypes::constant('FLT_MIN'),
+                      Ctypes::constant('FLT_MAX') ) }
+
+package Ctypes::Type::c_double;
+use base 'Ctypes::Type::Simple';
+#sub sizecode{'d'};
+#sub packcode{'d'};
+sub typecode{'d'};
+sub _minmax_const { ( Ctypes::constant('DBL_MIN'),
+                      Ctypes::constant('DBL_MAX') ) }
+
+package Ctypes::Type::c_longdouble;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'D'};
+sub packcode{'D'};
+sub typecode{'g'};
+sub _minmax_const { ( Ctypes::constant('LDBL_MIN'),
+                      Ctypes::constant('LDBL_MAX') ) }
+
+package Ctypes::Type::c_longlong;
+use base 'Ctypes::Type::Simple';
+#sub sizecode{'q'};
+#sub packcode{'q'};
+sub typecode{'q'};
+#sub _minmax_const { ( Ctypes::constant('LDBL_MIN'),
+#                      Ctypes::constant('LDBL_MAX') ) }
+package Ctypes::Type::c_ulonglong;
+use base 'Ctypes::Type::Simple';
+#sub sizecode{'Q'};
+#sub packcode{'Q'};
+sub typecode{'Q'};
+
+package Ctypes::Type::c_bool;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'c'}; # ?
+sub packcode{'c'}; # ?
+sub typecode{'v'};
+
+package Ctypes::Type::c_void;
+use base 'Ctypes::Type::Simple';
+sub sizecode{'v'};
+sub packcode{'a'};
+sub typecode{'O'};
+sub _hook_in{
+  my $invalid = undef;
+  if( exists $_[0] ) {
+    $invalid = "c_void: void types cannot take values";
+  }
+  return ( $invalid, "\0" );
+}
+
+package Ctypes::Type::c_size_t;
+use base 'Ctypes::Type::c_uint';
+package Ctypes::Type::c_ssize_t;
+use base 'Ctypes::Type::c_int';
+
+package Ctypes::Type::c_int8;
+use base 'Ctypes::Type::c_byte';
+package Ctypes::Type::c_int16;
+use base 'Ctypes::Type::c_short';
+package Ctypes::Type::c_int32;
+use base 'Ctypes::Type::c_long';
+package Ctypes::Type::c_int64;
+use base 'Ctypes::Type::c_longlong';
+package Ctypes::Type::c_uint8;
+use base 'Ctypes::Type::c_ubyte';
+package Ctypes::Type::c_uint16;
+use base 'Ctypes::Type::c_ushort';
+package Ctypes::Type::c_uint32;
+use base 'Ctypes::Type::c_ulong';
+package Ctypes::Type::c_uint64;
+use base 'Ctypes::Type::c_ulonglong';
+
+# Not so simple types:
 
 # null terminated string, A?
 package Ctypes::Type::c_char_p;
@@ -448,114 +595,6 @@ use base 'Ctypes::Type::Simple';
 sub packcode{'a?'};
 sub typecode{'X'};
 
-package Ctypes::Type::c_short;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'s'};
-sub packcode{'s'};
-sub typecode{'h'};
-sub _minmax { ( Ctypes::constant('PERL_SHORT_MIN'),
-                Ctypes::constant('PERL_SHORT_MAX') ) }
-
-package Ctypes::Type::c_ushort;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'S'};
-sub packcode{'S'};
-sub typecode{'H'};
-sub _minmax { ( Ctypes::constant('PERL_USHORT_MIN'),
-                Ctypes::constant('PERL_USHORT_MAX') ) }
-
-# Alias to c_long where equal; i
-package Ctypes::Type::c_int;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'i'};
-sub packcode{'i'};
-sub typecode{'i'};
-sub _minmax { ( Ctypes::constant('PERL_INT_MIN'),
-                Ctypes::constant('PERL_INT_MAX') ) }
-
-# Alias to c_ulong where equal; I
-package Ctypes::Type::c_uint;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'i'};
-sub packcode{'I'};
-sub typecode{'I'};
-sub _minmax { ( Ctypes::constant('PERL_UINT_MIN'),
-                Ctypes::constant('PERL_UINT_MAX') ) }
-
-package Ctypes::Type::c_long;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'l'};
-sub packcode{'l'};
-sub typecode{'l'};
-sub _minmax { ( Ctypes::constant('PERL_LONG_MIN'),
-                Ctypes::constant('PERL_LONG_MAX') ) }
-
-package Ctypes::Type::c_ulong;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'l'};
-sub packcode{'L'};
-sub typecode{'L'};
-sub _minmax { ( Ctypes::constant('PERL_ULONG_MIN'),
-                Ctypes::constant('PERL_ULONG_MAX') ) }
-
-package Ctypes::Type::c_float;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'f'};
-sub packcode{'f'};
-sub typecode{'f'};
-sub _minmax { ( Ctypes::constant('FLT_MIN'),
-                Ctypes::constant('FLT_MAX') ) }
-
-package Ctypes::Type::c_double;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'d'};
-sub packcode{'d'};
-sub typecode{'d'};
-sub _minmax { ( Ctypes::constant('DBL_MIN'),
-                Ctypes::constant('DBL_MAX') ) }
-
-package Ctypes::Type::c_longdouble;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'D'};
-sub packcode{'D'};
-sub typecode{'g'};
-sub _minmax { ( Ctypes::constant('LDBL_MIN'),
-                Ctypes::constant('LDBL_MAX') ) }
-
-package Ctypes::Type::c_longlong;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'q'};
-sub packcode{'q'};
-sub typecode{'q'};
-#sub _minmax { ( Ctypes::constant('LDBL_MIN'),
-#                Ctypes::constant('LDBL_MAX') ) }
-package Ctypes::Type::c_ulonglong;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'Q'};
-sub packcode{'Q'};
-sub typecode{'Q'};
-
-package Ctypes::Type::c_bool;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'c'}; # ?
-sub packcode{'c'}; # ?
-sub typecode{'v'};
-
-package Ctypes::Type::c_void;
-use base 'Ctypes::Type::Simple';
-sub sizecode{'v'};
-sub packcode{'a'};
-sub typecode{'O'};
-sub _hook_in{
-  my $invalid = undef;
-  if( exists $_[0] ) {
-    $invalid = "c_void: void types cannot take values";
-  }
-  return ( $invalid, "\0" );
-}
-
-
-
 #*c_short = *Ctypes::Type::c_short;
 #*c_char  = *Ctypes::Type::c_char;
 #*c_int   = *Ctypes::Type::c_int;
@@ -576,23 +615,14 @@ sub TIESCALAR {
 }
 
 sub STORE {
-  #croak("STORE must take a value") if scalar @_ != 2;
+  croak("STORE must take a value") if scalar @_ != 2;
   my $self = shift;
   my $object = $self->[0];
-  my $arg = shift or croak("STORE must take a value");
+  my $arg = shift;
   print "In ", $object->{_name}, "'s STORE with arg [ ", $arg, " ],\n" if $Debug;
   print "    called from ", (caller(1))[0..3], "\n" if $Debug;
   croak("Simple Types can only be assigned a single value") if @_;
-  #my $ref= $object->{_value};
 
-  # The following section may be removed completely to allow different
-  # Types full discretion of their own input validation via _hook_in().
-
-  # XXX => $object->can("_hook_in")
-  if( exists $Ctypes::Type::_types->{$object->{_typecode}}->{hook_in} ) {
-    my ($invalid, $newarg) = $Ctypes::Type::_types->{$object->{_typecode}}->{hook_in}->($arg);
-    $arg = $newarg unless $invalid;
-  }
   # Deal with being assigned other Type objects and the like...
 #    if(my $ref = ref($arg)) {
 #      if($ref =~ /^Ctypes::Type::/) {
@@ -627,8 +657,10 @@ sub STORE {
   print "    1) arg is ", $arg, "\n" if $Debug;
   # return 1 on success, 0 on fail, -1 if (numeric but) out of range
   #my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  print "    Calling validate...\n" if $Debug;
+  #print "    Calling validate...\n" if $Debug;
   my ($invalid, $result) = $object->validate($arg);
+  $arg = $result unless $invalid;
+
   print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug;
   if( defined $invalid ) {
     no strict 'refs';
@@ -644,8 +676,7 @@ sub STORE {
   }
   print "    2) arg is $result, which is ",
     unpack('b*', $result), " or ", ord($result), "\n" if $Debug;
-  $object->{_data} =
-    pack( $object->packcode, $result );
+  $object->{_data} = pack( $object->packcode, $result );
   $object->{_value} = unpack( $object->packcode, $object->{_data} );
   $object->{_input} = $arg;
   if( $object->{_owner} ) {

@@ -22,8 +22,30 @@ Ctypes::Type::Struct - C Structures
 =head1 SYNOPSIS
 
   use Ctypes;
+  my $struct = Struct([			 # as arrayref
+    f1 => c_char('P'),
+    f2 => c_int(10),
+    f3 => c_long(90000),
+  ]);
 
-  my
+  print $struct->fields->{f2}->name;     # c_int
+  print $struct->fields->{f2}->typecode; # i
+  print $struct->fields->{f2}->owner;    # Ctypes::Type::Struct=HASH(0x...)
+  print $struct->fields->{f2}->data;     # raw value
+
+  $struct->align(8);
+  print $struct->size;
+  print $struct->values->{f1};
+  print $$struct->{f1};			 # value of f1
+
+  my $alignedstruct = Struct({		 # as hashref
+    fields => [
+      o1 => c_char('Q'),
+      o2 => c_int(20),
+      o3 => c_long(180000),
+    ],
+    align => 4,
+  });
 
 =head1 ABSTRACT
 
@@ -112,11 +134,13 @@ The hashref syntax currently supports only two named attributes:
 
 =over
 
-=item C<fields>, an arrayref of fieldname-value pairs like the arrayref
-syntax above.
+=item C<fields>
 
-=item C<align>, a number indicating the alignment of the struct. Valid
-alignments are 0, 1, 2, 4, 8, 16, 32 or 64. The default alignment is 1
+An arrayref of fieldname-value pairs like the arrayref syntax above.
+
+=item C<align> a number indicating the alignment of the struct.
+
+Valid alignments are 0, 1, 2, 4, 8, 16, 32 or 64. The default alignment is 1
 (trading processor cycles for saved space). An alignment of 0 is the same
 as 1. Note that defining alignment for individual members or sections of
 Structs is not yet implemented.
@@ -234,6 +258,8 @@ Return a copy of the Struct object.
 
 sub copy {
   my $self = shift;
+  warn "copy nyi";
+  $self;
 }
 
 sub data {
@@ -334,7 +360,7 @@ sub _valid_align {
 =item align
 
 Returns or sets the alignment for the Struct. Valid alignments are
-2, 4, 8, 16, 32 or 64. Setting alignment for individual members /
+1, 2, 4, 8, 16, 32 or 64. Default: 1. Setting alignment for individual members /
 areas of the struct is not yet implemented.
 
 =item fields
@@ -409,10 +435,9 @@ following two lines are equivalent:
 my %access = (
   typecode      => ['_typecode_'],
   align         => [
-    '_alignment',
-    sub {if($_[0] =~ /^2$|^4$|^8$|^16$|^32$|^64$/){return 1}else{return 0}},
-    1,
-                   ],
+                    '_alignment',
+                    sub {if($_[0] =~ /^(1|2|4|8|16|32|64)$/){return 1}else{return 0}},
+                    1],
   name          => ['_name'],
   size          => ['_size'],
   fields        => ['_fields'],
@@ -467,8 +492,7 @@ sub _set_owned_unsafe {
 
 =head1 SEE ALSO
 
-L<Ctypes::Union>
-L<Ctypes::Type>
+L<Ctypes::Type::Union>, L<Ctypes::Type::Field>, L<Ctypes::Type>
 
 =cut
 
@@ -497,7 +521,7 @@ sub _hash_overload {
   my( $self, $key ) = ( shift, shift );
   my $class = ref($self);
   bless $self => 'overload::dummy';
-#  print "_Fields' HashOverload\n" if $Debug;
+  #  print "_Fields' HashOverload\n" if $Debug;
   my $ret = $self->{_hash};
   bless $self => $class;
   return $ret;

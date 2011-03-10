@@ -51,7 +51,7 @@ my $no_value = c_int;
 ok( ref($no_value) =~ /Ctypes::Type/, 'Created object without initializer' );
 is( $$no_value, 0, 'Default initialization to 0' );
 $$no_value = 10;
-is( $$no_value, 10 );
+is( $$no_value, 10, 'Set to valid number' );
 $$no_value = undef;
 is( $$no_value, 0, 'Setting undef means zero' );
 
