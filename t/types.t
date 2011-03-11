@@ -9,7 +9,7 @@ use utf8;
 my $number_seven = c_int(7);
 ok( defined $number_seven, 'c_int returned object');
 # XXX Py ctypes has this behaviour: valuable?
-# don't know if c_int will default to different type on 
+# don't know if c_int will default to different type on
 # this system so do inspecific check:
 like( ref($number_seven), qr/Ctypes::Type/, 'c_int created Type object' );
 
@@ -55,10 +55,10 @@ is( $$no_value, 10, 'Set to valid number' );
 $$no_value = undef;
 is( $$no_value, 0, 'Setting undef means zero' );
 
-my $number_y = c_int('y');
+my $number_y = c_int('y'); #20
 is( $$number_y, 121, 'c_int casts from non-numeric ASCII character' );
 
-my $number_ryu = c_int('龍');
+my $number_ryu = c_int('龍'); #21
 is( $$number_ryu, 40845, 'c_int converts from UTF-8 character' );
 # TODO: implement this for other numeric types!
 
@@ -67,12 +67,12 @@ is( $$number_ryu, 40845, 'c_int converts from UTF-8 character' );
 my $overflower = c_int(2147483648);
 subtest 'Overflows' => sub {
   plan tests => 6;
-  is(ref $overflower, 'Ctypes::Type::Simple');
+  is(ref $overflower, 'Ctypes::Type::c_int');
   isnt( $$overflower, 2147483648);
   ok( $$overflower <= Ctypes::constant('PERL_INT_MAX'),
       'Cannot exceed INT_MAX');
   $$overflower = -2147483649;
-  is(ref $overflower, 'Ctypes::Type::Simple');
+  is(ref $overflower, 'Ctypes::Type::c_int');
   isnt( $$overflower,-2147483649);
   ok( $$overflower >= Ctypes::constant('PERL_INT_MIN'),
       'Cannot go below INT_MIN');

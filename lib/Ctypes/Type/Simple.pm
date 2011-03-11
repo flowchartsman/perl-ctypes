@@ -318,9 +318,9 @@ sub validate {
 sub _limcheck {
 }
 
-# XXX FIXME: strings should override it, so only numbers.
+# strings should override it, only for numbers.
 # takes $arg
-# returns (bool $invalid, $arg)
+# returns (bool $invalid, number $arg)
 sub _hook_store {
   my $self = shift;
   my $arg = shift;
@@ -375,11 +375,11 @@ sub _hook_fetch {
 }
 
 sub _minmax_const {
-  my ($invalid1, $v1) = shift;
-  my ($invalid2, $v2) = shift;
-  return ($invalid1 or $invalid2) ? (undef, undef) : ($v1, $v2);
+  my ($invalid1, $v1, $invalid2, $v2) = @_;
+  $v1 = undef if $invalid1;
+  $v2 = undef if $invalid2;
+  return ($v1, $v2);
 }
-
 
 # DONE
 # c_char c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
@@ -441,16 +441,20 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'s'};
 sub packcode{'s'};
 sub typecode{'h'};
-sub _minmax_const { ( Ctypes::constant('PERL_SHORT_MIN'),
-                      Ctypes::constant('PERL_SHORT_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_SHORT_MIN'),
+       Ctypes::constant('PERL_SHORT_MAX') ) }
 
 package Ctypes::Type::c_ushort;
 use base 'Ctypes::Type::Simple';
 sub sizecode{'S'};
 sub packcode{'S'};
 sub typecode{'H'};
-sub _minmax_const { ( Ctypes::constant('PERL_USHORT_MIN'),
-                      Ctypes::constant('PERL_USHORT_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_USHORT_MIN'),
+       Ctypes::constant('PERL_USHORT_MAX') ) }
 
 # Alias to c_long where equal; i
 package Ctypes::Type::c_int;
@@ -458,8 +462,10 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'i'};
 sub packcode{'i'};
 sub typecode{'i'};
-sub _minmax_const { ( Ctypes::constant('PERL_INT_MIN'),
-                      Ctypes::constant('PERL_INT_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_INT_MIN'),
+       Ctypes::constant('PERL_INT_MAX') ) }
 
 # Alias to c_ulong where equal; I
 package Ctypes::Type::c_uint;
@@ -467,61 +473,77 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'i'};
 sub packcode{'I'};
 sub typecode{'I'};
-sub _minmax_const { ( Ctypes::constant('PERL_UINT_MIN'),
-                      Ctypes::constant('PERL_UINT_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_UINT_MIN'),
+       Ctypes::constant('PERL_UINT_MAX') ) }
 
 package Ctypes::Type::c_long;
 use base 'Ctypes::Type::Simple';
 #sub sizecode{'l'};
 #sub packcode{'l'};
 sub typecode{'l'};
-sub _minmax_const { ( Ctypes::constant('PERL_LONG_MIN'),
-                      Ctypes::constant('PERL_LONG_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_LONG_MIN'),
+       Ctypes::constant('PERL_LONG_MAX') ) }
 
 package Ctypes::Type::c_ulong;
 use base 'Ctypes::Type::Simple';
 sub sizecode{'l'};
 sub packcode{'L'};
 sub typecode{'L'};
-sub _minmax_const { ( Ctypes::constant('PERL_ULONG_MIN'),
-                      Ctypes::constant('PERL_ULONG_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('PERL_ULONG_MIN'),
+       Ctypes::constant('PERL_ULONG_MAX') ) }
 
 package Ctypes::Type::c_float;
 use base 'Ctypes::Type::Simple';
 sub sizecode{'f'};
 sub packcode{'f'};
 sub typecode{'f'};
-sub _minmax_const { ( Ctypes::constant('FLT_MIN'),
-                      Ctypes::constant('FLT_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('FLT_MIN'),
+       Ctypes::constant('FLT_MAX') ) }
 
 package Ctypes::Type::c_double;
 use base 'Ctypes::Type::Simple';
 #sub sizecode{'d'};
 #sub packcode{'d'};
 sub typecode{'d'};
-sub _minmax_const { ( Ctypes::constant('DBL_MIN'),
-                      Ctypes::constant('DBL_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('DBL_MIN'),
+       Ctypes::constant('DBL_MAX') ) }
 
 package Ctypes::Type::c_longdouble;
 use base 'Ctypes::Type::Simple';
 sub sizecode{'D'};
 sub packcode{'D'};
 sub typecode{'g'};
-sub _minmax_const { ( Ctypes::constant('LDBL_MIN'),
-                      Ctypes::constant('LDBL_MAX') ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const
+      (Ctypes::constant('LDBL_MIN'),
+       Ctypes::constant('LDBL_MAX') ) }
 
 package Ctypes::Type::c_longlong;
 use base 'Ctypes::Type::Simple';
+use Config;
 #sub sizecode{'q'};
 #sub packcode{'q'};
 sub typecode{'q'};
-#sub _minmax_const { ( Ctypes::constant('LDBL_MIN'),
-#                      Ctypes::constant('LDBL_MAX') ) }
+sub _minmax { (-hex("8".("F" x (2*$Config{longlongsize}))),
+                hex("8".("F" x (2*$Config{longlongsize})))) }
+
 package Ctypes::Type::c_ulonglong;
 use base 'Ctypes::Type::Simple';
+use Config;
 #sub sizecode{'Q'};
 #sub packcode{'Q'};
 sub typecode{'Q'};
+sub _minmax { (0, hex("F" x (2*$Config{longlongsize}))) }
 
 package Ctypes::Type::c_bool;
 use base 'Ctypes::Type::Simple';
