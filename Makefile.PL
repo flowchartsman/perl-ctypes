@@ -13,10 +13,11 @@ our $libffi_version = "3.0.10rc3";
 use lib qw(inc);
 use Devel::CheckLib;
 my ($libdir, $incdir);
-if (grep /INCDIR[ =](\S+)/,join(" ", @ARGV)) {
+my $args = join(" ", @ARGV);
+if ($args =~ /INCDIR[ =](\S+)/) {
   $incdir = $1;
 }
-if (grep /LIBDIR[ =](\S+)/,join(" ", @ARGV)) {
+if ($args =~ /LIBDIR[ =](\S+)/) {
   $libdir = $1;
 }
 if ($libdir or $incdir) {
@@ -33,7 +34,7 @@ if ($@) {
     system ($tar, "xfz", "libffi.tar.gz");
     chdir "libffi";
     my $cwd = getcwd;
-    system ($ENV{SHELL},"./configure PREFIX=/");
+    system ($ENV{SHELL},"./configure --prefix=/");
     system ("make");
     system ("make install DESTDIR=$cwd"); # abspath. install into libffi/lib, bin and include
     $incdir = "$cwd/include";
@@ -57,7 +58,7 @@ if ($@) {
 } else {
   warn "Using system libffi.\n";
   warn "If too old (failing tests) install libffi.tar.gz and use INCDIR and LIBDIR.\n";
-  warn "  tar xfz libffi.tar.gz; cd libffi; ./configure DESTDIR=`cwd`; make && make install\n";
+  warn "  tar xfz libffi.tar.gz; cd libffi; . configure --prefix=/; make && make install DESTDIR=`pwd`; cd ..\n";
   warn "  perl Makefile.PL INCDIR=libffi/include LIBDIR=libffi/lib\n";
 }
 
