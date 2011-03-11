@@ -32,9 +32,9 @@ Ctypes::Type::Array - Taking (some of) the misery out of C arrays!
 =head1 ABSTRACT
 
 This class represents C arrays. Like in C, Arrays are typed,
-and can only contain data of that type. Arrays use the double-
-syntax of other Ctypes classes, in this case the Perl array
-sigil 'C<@>'
+and can only contain data of that type.
+Arrays use the same dereference syntax of other Ctypes classes,
+in this case the Perl array sigil 'C<@>'
 
 =cut
 
@@ -497,9 +497,9 @@ sub STORE {
 
   if( $self->{VALUES}[$index] ) {
     $self->{VALUES}[$index]->{_owner} = undef;
-#    if( $self->{VALUES}[$index]{_needsfree} == 1 )  # If this were C (or
-# if it were someday being translated to C), I think this might be where
-# one would make use of the disappearing object's _needsfree attribute.
+    #    if( $self->{VALUES}[$index]{_needsfree} == 1 )  # If this were C (or
+    # if it were someday being translated to C), I think this might be where
+    # one would make use of the disappearing object's _needsfree attribute.
   }
   my $datum = ${$val->data}; # BEFORE setting owner, that's important!
   print "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n" if $Debug;
@@ -512,8 +512,8 @@ sub STORE {
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index} = $index * $self->{object}->{_member_size};
 
-# XXX Found this while working on Struct, think it's suspect. Sadly,
-# tests still pass without it. Doesn't say much for the regime :(
+  # XXX Found this while working on Struct, think it's suspect. Sadly,
+  # tests still pass without it. Doesn't say much for the regime :(
 #  if( $self->{object}{_owner} ) {
 #    $self->{object}{_owner}->_update_($arg, $self->{_owner}{_index});
 #  }
