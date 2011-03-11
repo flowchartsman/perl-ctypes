@@ -36,12 +36,12 @@ if ($@) {
     my $cwd = getcwd;
     system ($ENV{SHELL},"./configure --prefix=/");
     system ("make");
-    system ("make install DESTDIR=$cwd"); # abspath. install into libffi/lib, bin and include
+    system ("make install DESTDIR='$cwd'"); # abspath. install into libffi/lib, bin and include
     $incdir = "$cwd/include";
     $libdir = "$cwd/lib";
     if ($^O eq 'cygwin') { # copy the bin/*.dll
       mkdir "bin";
-      File::Copy::cp('bin/libffi-*.dll', 'bin/');
+      File::Copy::cp('lib/cygffi-*.dll', 'bin/');
     }
     chdir "..";
   } else { # MSWin32
@@ -56,8 +56,7 @@ if ($@) {
     File::Copy::cp(File::Spec->catfile($libdir, "libffi-5.dll"), "bin");
   }
 } else {
-  warn "Using system libffi.\n";
-  warn "If too old (failing tests) install libffi.tar.gz and use INCDIR and LIBDIR.\n";
+  warn "Using system libffi. If too old (failing _call tests) install libffi.tar.gz and use INCDIR and LIBDIR.\n";
   warn "  tar xfz libffi.tar.gz; cd libffi; . configure --prefix=/; make && make install DESTDIR=`pwd`; cd ..\n";
   warn "  perl Makefile.PL INCDIR=libffi/include LIBDIR=libffi/lib\n";
 }
