@@ -20,6 +20,7 @@ pod2htm*.tmp
 *.bs
 *.stackdump
 .git
+.provedb
 blib
 libffi-3.0*
 libffi/

@@ -161,7 +161,7 @@ sub new {
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
   if (defined $arg) {
     $self->{_datasafe} = 0; # force initial _update_ and validate data
-    my ($invalid, $newarg) = $self->_hook_in($arg);
+    my ($invalid, $newarg) = $self->_hook_store($arg);
     $arg = $newarg unless $invalid;
   } else {
     $arg = 0;
@@ -310,7 +310,7 @@ sub packcode { $_[0]->typecode }
 #}
 sub validate {
   my $self = shift;
-  $self->_hook_in(@_);
+  $self->_hook_store(@_);
   #my $h = $Ctypes::Type::_types->{$_[0]->{_typecode}}->{hook_in};
   #defined $h ? $h->($_[1]) : ("", 1);
 }
@@ -321,13 +321,13 @@ sub _limcheck {
 # XXX FIXME: strings should override it, so only numbers.
 # takes $arg
 # returns (bool $invalid, $arg)
-sub _hook_in {
+sub _hook_store {
   my $self = shift;
   my $arg = shift;
   my $invalid = undef;
   my $tc = $self->typecode;
   my $name = $self->name;
-  print "In _hook_in $name\n" if $Debug;
+  print "In _hook_store $name\n" if $Debug;
   return ( "$name: cannot take references", undef )
     if ref($arg);
   return ($invalid, $arg) unless $self->can('_minmax');
@@ -368,9 +368,9 @@ sub _hook_in {
 }
 
 # may change the $object->{_value}
-sub _hook_out {
+sub _hook_fetch {
   my $obj = shift;
-  print "In _hook_out $obj->name\n" if $Debug;
+  print "In _hook_fetch $obj->name\n" if $Debug;
   #my $value = $obj->{_value};
 }
 
@@ -396,8 +396,8 @@ sub sizecode{'c'};
 sub packcode{'c'};
 sub typecode{'b'};
 sub _minmax { ( -127, 128 ) }
-sub _hook_out {
-  print "In _hook_out c_byte\n" if $Debug;
+sub _hook_fetch {
+  print "In _hook_fetch c_byte\n" if $Debug;
   $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
 }
 
@@ -407,8 +407,8 @@ sub sizecode{'c'};
 sub packcode{'C'};
 sub typecode{'B'};
 sub _minmax { ( 0, 256 ) }
-sub _hook_out {
-  print "In _hook_out c_ubyte\n" if $Debug;
+sub _hook_fetch {
+  print "In _hook_fetch c_ubyte\n" if $Debug;
   $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
 }
 
@@ -419,8 +419,8 @@ use base 'Ctypes::Type::Simple';
 #sub packcode{'c'};
 sub typecode{'c'};
 sub _minmax { ( -127, 128 ) }
-sub _hook_out {
-  print "In _hook_out c_char\n" if $Debug;
+sub _hook_fetch {
+  print "In _hook_fetch c_char\n" if $Debug;
   $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
 }
 
@@ -431,8 +431,8 @@ use base 'Ctypes::Type::Simple';
 #sub packcode{'C'};
 sub typecode{'C'};
 sub _minmax { ( 0, 256 ) }
-sub _hook_out {
-  print "In _hook_out c_uchar\n" if $Debug;
+sub _hook_fetch {
+  print "In _hook_fetch c_uchar\n" if $Debug;
   $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
 }
 
@@ -534,7 +534,7 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'v'};
 sub packcode{'a'};
 sub typecode{'O'};
-sub _hook_in{
+sub _hook_store{
   my $invalid = undef;
   if( exists $_[0] ) {
     $invalid = "c_void: void types cannot take values";
@@ -571,11 +571,11 @@ package Ctypes::Type::c_char_p;
 use base 'Ctypes::Type::Simple';
 sub packcode{'A?'};
 sub typecode{'s'};
-sub _hook_in {
+sub _hook_store {
   my $self = shift;
   my $arg = shift;
   my $invalid = undef;
-  print "In _hook_in c_char_p\n" if $Debug;
+  print "In _hook_store c_char_p\n" if $Debug;
   return ($invalid, $arg);
 }
 
@@ -700,7 +700,7 @@ sub FETCH {
   }
   croak("Error updating value!") if $object->{_datasafe} != 1;
   print "    ", $object->name, "'s Fetch returning ", $object->{_value}, "\n" if $Debug;
-  $object->_hook_out($object->{_value});
+  $object->_hook_fetch($object->{_value});
   return $object->{_value};
 }
 
