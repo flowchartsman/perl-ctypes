@@ -396,10 +396,10 @@ sub sizecode{'c'};
 sub packcode{'c'};
 sub typecode{'b'};
 sub _minmax { ( -127, 128 ) }
-sub _hook_fetch {
-  print "In _hook_fetch c_byte\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
-}
+#sub _hook_fetch {
+#  print "In _hook_fetch c_byte\n" if $Debug;
+#  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+#}
 
 package Ctypes::Type::c_ubyte;
 use base 'Ctypes::Type::Simple';
@@ -407,10 +407,10 @@ sub sizecode{'c'};
 sub packcode{'C'};
 sub typecode{'B'};
 sub _minmax { ( 0, 256 ) }
-sub _hook_fetch {
-  print "In _hook_fetch c_ubyte\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
-}
+#sub _hook_fetch {
+#  print "In _hook_fetch c_ubyte\n" if $Debug;
+#  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[1]);
+#}
 
 # single character, c signed, possibly a multi-char (?)
 package Ctypes::Type::c_char;
@@ -421,7 +421,7 @@ sub typecode{'c'};
 sub _minmax { ( -127, 128 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_char\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
+  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
 }
 
 # single character, c unsigned, possibly a multi-char (?)
@@ -433,7 +433,7 @@ sub typecode{'C'};
 sub _minmax { ( 0, 256 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_uchar\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[0]->{_input});
+  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
 }
 
 package Ctypes::Type::c_short;
@@ -616,10 +616,6 @@ use base 'Ctypes::Type::Simple';
 #sub sizecode{'a'};
 sub packcode{'a?'};
 sub typecode{'X'};
-
-#*c_short = *Ctypes::Type::c_short;
-#*c_char  = *Ctypes::Type::c_char;
-#*c_int   = *Ctypes::Type::c_int;
 
 #####################################################################
 
