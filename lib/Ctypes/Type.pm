@@ -190,6 +190,22 @@ my %_defined;
       $_defined{$name} = $k;
     }
   }
+  my %alias = (int8 => 'b', int16 => 'h', int32 => 'l', 'int64' => 'q');
+  for my $name (qw(c_int8 c_int16 c_int32 c_int64 c_uint8 c_uint16 c_uint32 c_uint64)) {
+    my $k = exists $alias{substr($name,2)}
+      ? $alias{substr($name,2)}
+      : uc($alias{substr($name,3)});
+    my $func;
+    if (!$_defined{$name}) {
+      no strict 'refs';
+      $func = sub { Ctypes::Type::Simple->new($k, @_); };
+      *{'Ctypes::'.$name} = $func;
+      unless (defined *{"$pkg\::$name"}) {
+        *{"$pkg\::$name"} = *{'Ctypes::Type::Simple::'.$name};
+      }
+      $_defined{$name} = $k;
+    }
+  }
 }
 our @_allnames = keys %_defined;
 

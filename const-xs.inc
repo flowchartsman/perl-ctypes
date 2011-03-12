@@ -8,7 +8,7 @@ constant(sv)
 #endif
 	STRLEN		len;
         int		type;
-        /* IV		iv;	Uncomment this if you need to return PVs */
+	/* IV		iv;	Uncomment this if you need to return IVs */
 	NV		nv;
 	/* const char	*pv;	Uncomment this if you need to return PVs */
     INPUT:
@@ -32,7 +32,7 @@ constant(sv)
 				   s));
           PUSHs(sv);
           break;
-        /* Uncomment this if you need to return IVs
+	/* Uncomment this if you need to return IVs
         case PERL_constant_ISIV:
           EXTEND(SP, 1);
           PUSHs(&PL_sv_undef);

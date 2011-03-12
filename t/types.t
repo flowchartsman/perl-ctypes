@@ -64,36 +64,38 @@ is( $$number_ryu, 40845, 'c_int converts from UTF-8 character' );
 
 # Exceeding range on _signed_ variables is undefined in the standard,
 # so these tests can't really be any better.
-my $overflower = c_int(2147483648);
+my $overflower = c_int16(32768); # i.e. c_short
 subtest 'Overflows' => sub {
   plan tests => 6;
-  is(ref $overflower, 'Ctypes::Type::c_int');
-  isnt( $$overflower, 2147483648);
-  ok( $$overflower <= Ctypes::constant('PERL_INT_MAX'),
-      'Cannot exceed INT_MAX');
-  $$overflower = -2147483649;
-  is(ref $overflower, 'Ctypes::Type::c_int');
-  isnt( $$overflower,-2147483649);
-  ok( $$overflower >= Ctypes::constant('PERL_INT_MIN'),
-      'Cannot go below INT_MIN');
+  is(ref $overflower, 'Ctypes::Type::c_short');
+  isnt( $$overflower, 32768);
+  ok( $$overflower <= Ctypes::constant('PERL_SHORT_MAX'),
+      'Cannot exceed SHORT_MAX');
+  $$overflower = -32769;
+  is(ref $overflower, 'Ctypes::Type::c_short');
+  isnt( $$overflower,-32769);
+  ok( $$overflower >= Ctypes::constant('PERL_SHORT_MIN'),
+      'Cannot go below SHORT_MIN');
 };
 $$overflower = 5;
 $overflower->strict_input(0);
-$$overflower = 2147483648;
-is($$overflower, 5, 'Disallow overflow per-object');
-$overflower->strict_input(1);
-Ctypes::Type::strict_input_all(0);
-$overflower = c_int(2147483648);
-is($overflower, undef, 'Can strict_input_all(0)');
+$$overflower = 32768;
 
 TODO: {
-  local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';
-  my $charar = c_char('P');
-  is( $$charar, 'P', 'c_char shows as 1-char strings in Perl' );
-  my $ret_as_char = c_char(89);
-  is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
+  local $TODO = 'overflow with strict_input';
+  is($$overflower, 5, 'Disallow overflow per-object');
+  $overflower->strict_input(1);
+  Ctypes::Type::strict_input_all(0);
+  $overflower = c_int16(32768);
+  is($overflower, undef, 'Can strict_input_all(0)');
 }
 
-# my $ushort = c_uint(691693896);
-# my $charptr = Pointer( c_char, $ushort );
-# diag( join(" ",@$charptr) );
+#local $TODO = 'chars are integers - need Perl-side hooks for displaying as chars';
+my $charar = c_char('P');
+is( $$charar, 'P', 'c_char shows as 1-char strings in Perl' );
+my $ret_as_char = c_char(89);
+is( $$ret_as_char, 'Y', 'c_char converts from numbers' );
+
+my $ushort = c_uint(691693896);
+my $charptr = Pointer( c_char, $ushort );
+diag( join(" ",@$charptr) );
