@@ -450,7 +450,10 @@ _call( addr, sig, ... )
     if((status = ffi_prep_cif
          (&cif,
 	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
-          sig[0] == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
+#if defined(__CYGWIN__) || defined (_WIN32)
+          sig[0] == 's' ? FFI_STDCALL :
+#endif 
+		FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
       croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
     }
@@ -603,7 +606,10 @@ _call(self, ...)
     if((status = ffi_prep_cif
          (&cif,
 	  /* x86-64 uses for 'c' UNIX64 resp. WIN64, which is f not c */
-           abi == 's' ? FFI_STDCALL : FFI_DEFAULT_ABI,
+#if defined(__CYGWIN__) || defined (_WIN32)
+           abi == 's' ? FFI_STDCALL : 
+#endif
+		FFI_DEFAULT_ABI,
           num_args, rtype, argtypes)) != FFI_OK ) {
       croak( "Ctypes::_call error: ffi_prep_cif error %d", status );
     }
