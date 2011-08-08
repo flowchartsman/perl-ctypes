@@ -1,0 +1,11 @@
+Basically you can help porting the mess from the old over-architectured OO layout 
+to the new class layout.
+
+  done: Simple and partially Pointer
+  todo: Array, Struct, Field, Union, and fix the "not so simple" Simple types.
+
+See http://gitorious.org/perl-ctypes/perl-ctypes/commits/classify
+
+I had no time lately, but beginning with fall 2011 I quit my perl-less dayjob
+and start with a perl core-only job at cPanel, so I will have a lot of time to
+finish Ctypes and types and fix some remaining compiler bugs.
