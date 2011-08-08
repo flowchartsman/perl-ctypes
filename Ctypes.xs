@@ -301,12 +301,12 @@ callback; expected %c", __LINE__, sig[0] );
             debug_warn( "#    [%i] sizeof packed array (sv_len): %i",  __LINE__, (int)len );
             debug_warn( "#    [%i] %i items in array (assumed int)",  __LINE__, (int)((int)len/sizeof(int)) );
             *(intptr_t*)retval = (intptr_t)SvPVbyte(ST(i+2), len);
-#ifdef CTYPES_DEBUG
+          #ifdef CTYPES_DEBUG
             int j;
             for( j = 0; j < ((int)len/sizeof(int)); j++ ) {
                 debug_warn( "#    argvalues[%i][%i]: %i", i, j, ((int*)*(intptr_t*)retval)[j] );
             }
-#endif
+          #endif
           } */
           break;
         /* should never happen here */
@@ -344,12 +344,11 @@ _call( addr, sig, ... )
  
     debug_warn( "\n#[Ctypes.xs: %i ] XS_Ctypes_call_raw( 0x%x, \"%s\", ...)", __LINE__, (unsigned int)(intptr_t)addr, sig );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
-#ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
+  #ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
     if( num_args < 0 ) {
       croak( "Ctypes::_call error: Not enough arguments" );
     }
-#endif
-
+  #endif
     args_in_sig = validate_signature(sig);
     if( args_in_sig != num_args ) {
       croak( "Ctypes::_call_raw error: specified %i arguments but supplied %i", 
@@ -428,6 +427,16 @@ _call( addr, sig, ... )
           Newxc(argvalues[i], 1, long double, long double);
           *(long double*)argvalues[i] = SvNV(thisSV);
           break;
+	#if HAS_LONG_LONG
+        case 'q':
+          Newxc(argvalues[i], 1, long long, long long);
+          *(long long*)argvalues[i] = SvNV(thisSV);
+          break;
+        case 'Q':
+          Newxc(argvalues[i], 1, unsigned long long, unsigned long long);
+          *(unsigned long long*)argvalues[i] = SvNV(thisSV);
+          break;
+	#endif
         case 'p':
           len = sv_len(thisSV);
           Newx(argvalues[i], 1, void);
@@ -478,6 +487,10 @@ _call( addr, sig, ... )
       case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)rvalue)));    break;
       case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)rvalue)));    break;
       case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)rvalue)));    break;
+      #if HAS_LONG_LONG
+      case 'q': XPUSHs(sv_2mortal(newSVnv(*(long long*)rvalue)));      break;
+      case 'Q': XPUSHs(sv_2mortal(newSVnv(*(unsigned long long*)rvalue))); break;
+      #endif
       case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
@@ -514,11 +527,11 @@ _call(self, ...)
     debug_warn( "\n#[%s:%i] XS_Ctypes_Function__call( %i args )",
                 __FILE__, __LINE__, num_args );
     debug_warn( "#Module compiled with -DCTYPES_DEBUG for detailed output from XS" );
-#ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
+    #ifndef PERL_ARGS_ASSERT_CROAK_XS_USAGE
     if( num_args < 0 ) {
       croak( "Ctypes::_call error: Not enough arguments" );
     }
-#endif
+    #endif
 
     if( !(Ct_Obj_IsDeriv(self,"Ctypes::Function"))) 
       croak("Ctypes::_call: $self must be a Ctypes::Function or derivative");
@@ -635,6 +648,10 @@ _call(self, ...)
       case 'f': XPUSHs(sv_2mortal(newSVnv(*(float*)rvalue)));    break;
       case 'd': XPUSHs(sv_2mortal(newSVnv(*(double*)rvalue)));    break;
       case 'D': XPUSHs(sv_2mortal(newSVnv(*(long double*)rvalue)));    break;
+      #if HAS_LONG_LONG
+      case 'q': XPUSHs(sv_2mortal(newSVnv(*(long long*)rvalue)));      break;
+      case 'Q': XPUSHs(sv_2mortal(newSVnv(*(unsigned long long*)rvalue))); break;
+      #endif
       case 'p': XPUSHs(sv_2mortal(newSVpv((void*)rvalue, 0))); break;
     }
 
@@ -669,6 +686,10 @@ CODE:
     case 'f': RETVAL = sizeof(float); break;
     case 'd': RETVAL = sizeof(double);     break;
     case 'D': RETVAL = sizeof(long double);break;
+    #if HAS_LONG_LONG
+    case 'q': 
+    case 'Q': RETVAL = sizeof(long long);break;
+    #endif
     case 'p': RETVAL = sizeof(void*);      break;
     default: croak( "Unrecognised type '%c'", *type );
   }
@@ -749,14 +770,14 @@ CODE:
         RETVAL = -1; break;  /* XXX Wtf... what's going wrong here??? */
       }
       RETVAL = 1; break;
-#ifdef HAS_LONG_DOUBLE
+    #ifdef HAS_LONG_DOUBLE
     case 'D':
       arg_nv = SvNV(arg_sv);
       if( (LDBL_MIN - arg_nv) > LDBL_EPSILON || (arg_nv - LDBL_MAX) > LDBL_EPSILON ) {
         RETVAL = -1; break;
       }
       RETVAL = 1; break;
-#endif
+    #endif
     case 'p':
     /* Pointers can be just about anything
        ??? Could this be improved? */
@@ -778,11 +799,11 @@ _cast(arg_sv,type)
 CODE:
   debug_warn("#[%s:%i] _cast: got type %c", __FILE__, __LINE__, type);
   void *retval = NULL;
-#ifdef HAS_LONG_DOUBLE
+  #ifdef HAS_LONG_DOUBLE
   Newxc(retval, 1, long double, long double);
-#else
+  #else
   Newxc(retval, 1, double, double);
-#endif
+  #endif
   if(retval == NULL) croak("Ctypes::_cast: Out of memory!");
   STRLEN len = 1;
   STRLEN utf8retlen = 0;
@@ -952,7 +973,7 @@ CODE:
         RETVAL = newSVnv(*(double*)retval);
       }
       break;
-#ifdef HAS_LONG_DOUBLE
+    #ifdef HAS_LONG_DOUBLE
     case 'D':
       if(SvIOK(arg_sv)) {
         *(long double*) retval = (long double)SvIV(arg_sv);
@@ -965,7 +986,33 @@ CODE:
         RETVAL = newSVnv(*(long double*)retval);
       }
       break;
-#endif
+    #endif
+    #ifdef HAS_LONG_LONG
+    case 'q':
+      if(SvNOK(arg_sv)) {
+        *(long long*) retval = (long long)SvNV(arg_sv);
+      } else if(SvIOK(arg_sv)) {
+        *(long long*) retval = (long long)SvIV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(long long*) retval = (long long)*SvPV_nolen(arg_sv);
+      }
+      if(*(long long*)retval) {
+        RETVAL = newSViv(*(long long*)retval);
+      }
+      break;
+    case 'Q':
+      if(SvNOK(arg_sv)) {
+        *(unsigned long long*) retval = (unsigned long long)SvNV(arg_sv);
+      } else if(SvIOK(arg_sv)) {
+        *(unsigned long long*) retval = (unsigned long long)SvIV(arg_sv);
+      } else if(SvPOK(arg_sv)) {
+        *(unsigned long long*) retval = (unsigned long long)*SvPV_nolen(arg_sv);
+      }
+      if(*(unsigned long long*)retval) {
+        RETVAL = newSVuv(*(unsigned long long*)retval);
+      }
+      break;
+    #endif
     case 'p':
       if(SvIOK(arg_sv)) {
       debug_warn("#[%s:%i] _cast: Pointer SvIOK, assuming 'PTR2IV' value",
