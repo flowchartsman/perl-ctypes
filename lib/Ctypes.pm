@@ -30,9 +30,9 @@ our @ISA = qw(Exporter);
 our @EXPORT = ( qw|CDLL WinDLL OleDLL PerlDLL
                    WINFUNCTYPE CFUNCTYPE PERLFUNCTYPE
                    POINTER WinError byref is_ctypes_compat
-                   Array Pointer Struct Union
+                   Array Pointer Struct Union USE_PERLTYPES
                   |, @Ctypes::Type::_allnames );
-our @EXPORT_OK = qw|USE_PERLTYPES _make_arrayref _check_invalid_types
+our @EXPORT_OK = qw|PERL _make_arrayref _check_invalid_types
                     _check_type_needed _valid_for_type
                     _cast|;
 
@@ -43,7 +43,6 @@ XSLoader::load('Ctypes', $VERSION);
 
     use Ctypes;
 
-    # Look Ma, no XS!
     my $lib  = CDLL->LoadLibrary("-lm");
     my $func = $lib->sqrt;
     my $ret = $lib->sqrt(16.0); # on Windows only
@@ -52,7 +51,7 @@ XSLoader::load('Ctypes', $VERSION);
 
     # bare
     my $ret  = Ctypes::call( $func, 'cdd', 16.0  );
-    print $ret; # 4! Eureka!
+    print $ret; # 4
 
     # which is the same as:
     use DynaLoader;
@@ -84,8 +83,10 @@ to expose the full functionality of a large C/C++ project.
 Here are the currently supported low-level signature typecode characters, with
 the matching Ctypes and perl-style packcodes.
 As you can see, there is some overlap with Perl's L<pack|perlfunc/pack> notation,
-they're not identical (v, h, H), and furthermore B<WILL CHANGE> to offer a
-wider range of types, as on the python ctypes typecodes (s,w,z,...)
+they're not identical (v, h, H), and offer a wider range of types as on the 
+python ctypes typecodes (s,w,z,...).
+
+With C<use Ctypes 'PERL'>, you can demand Perl's L<pack|perlfunc/pack> notation.
 
 Typecode: Ctype                  perl Packcode
   'v': void
@@ -106,22 +107,32 @@ Typecode: Ctype                  perl Packcode
   'q': c_longlong                q
   'Q': c_ulonglong               Q
 
-  's': c_char_p (ASCIIZ string)  A?
+  'Z': c_char_p (ASCIIZ string)  A?
   'w': c_wchar                   U
   'z': c_wchar_p                 U*
   'X': c_bstr (2byte string)     a?
 
 =cut
 
+our $USE_PERLTYPES = 0; # import arg -PERL: full python ctypes types,
+                        # or just the simplier perl pack-style types
+sub USE_PERLTYPES { $USE_PERLTYPES }
+sub PERL {
+  $USE_PERLTYPES = 1;
+  #eval q|sub Ctypes::Type::c_short::typecode{'s'}; 
+  #       sub Ctypes::Type::c_ushort::typecode{'S'};
+  #       sub Ctypes::Type::c_longdouble::typecode{'D'}
+  #      |;
+}
 
 =head1 FUNCTIONS
 
 =over
 
-=item call SIG, ADDR, [ ARGS ... ]
+=item call ADDR, SIG, [ ARGS ... ]
 
-Lets you call the external function at the address specified by ADDR,
-with the signature specified by SIG, and return a value.
+Call the external function via C<libffi> at the address specified by B<ADDR>,
+with the signature specified by B<SIG>, optional B<ARGS>, and return a value.
 
 C<Ctypes::call> is modelled after the C<call> function found in
 L<FFI.pm|FFI>: it's the low-level, bare bones access to Ctypes'
@@ -129,8 +140,8 @@ capabilities. Most of the time you'll probably prefer the
 abstractions provided by L<Ctypes::Function>.
 
 I<SIG> is the signature string. The first character specifies the
-calling-convention: s for stdcall, c for cdecl (or 64-bit fastcall).
-The second character specifies the typecode for the return type
+calling-convention: B<s> for stdcall, B<c> for cdecl (or 64-bit fastcall).
+The second character specifies the B<typecode> for the return type
 of the function, and the subsequent characters specify the argument types.
 
 L<Typecodes> are single character designations for various C data types.
@@ -153,6 +164,7 @@ sub call {
   my @argtypes = ();
   @argtypes = split( //, substr( $sig, 2 ) ) if length $sig > 2;
   for(my $i=0 ; $i<=$#args ; $i++) {
+    # valid ffi sizecode's
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and
         not looks_like_number($args[$i]) ) {
       die "$i-th argument $args[$i] is no number";
@@ -984,8 +996,9 @@ sub is_ctypes_compat (\$) {
       and $_[0]->can('_update_')
       and $_[0]->can('typecode')
     ) {
-    $@ = undef;
-    eval{ sizeof($_[0]->typecode) };
+    #my $types = CTypes::Type::_types;
+    #return undef unless exists $_types->{$_[0]->typecode};
+    eval{ Ctypes::sizeof($_[0]->sizecode) };
     if( !$@ ) {
       return 1;
     }
@@ -1270,7 +1283,7 @@ sub _check_invalid_types ($) {
             return $i;
           }
         }
-        eval{ Ctypes::sizeof($typecode) };
+        eval{ Ctypes::sizeof($_->sizecode) };
         if( $@ ) {
           carp( @_ );
           return $i;
@@ -1299,7 +1312,7 @@ sub _check_invalid_types ($) {
 sub _check_type_needed (@) {
   # XXX This needs to be changed when we support more typecodes
   print "In _check_type_needed\n" if $Debug;
-  my @types = $Ctypes::Type::USE_PERLTYPES ? qw|C p s i l d| : qw|C s h i l d|;
+  my @types = $Ctypes::USE_PERLTYPES ? qw|C p s i l d| : qw|C s h i l d|;
   my @numtypes = @types[2..6]; #  0: short 1: int 2: long 3: double
   my $low = 0;
   my $char = 0;

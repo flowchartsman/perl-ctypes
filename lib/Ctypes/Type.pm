@@ -8,8 +8,6 @@ our @ISA = qw|Exporter|;
 our @EXPORT_OK = qw|&_types &strict_input_all|;
 
 # This should be customizable, should it?
-my $USE_PERLTYPES = 0; # import arg: full python ctypes types,
-                       # or the simplier perl pack-style types
 use Ctypes;
 use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
@@ -76,13 +74,13 @@ our $_pytypes =
   f => { name => 'c_float' },
   d => { name => 'c_double' },
   g => { name => 'c_longdouble', packcode => 'D' }, # Alias to c_double where equal, D
-  q => { name => 'c_longlong' },
-  Q => { name => 'c_ulonglong' },
+  #q => { name => 'c_longlong' },
+  #Q => { name => 'c_ulonglong' },
   v => { name => 'c_bool', packcode => 'c' },        # ?
   O => { name => 'c_void', packcode => 'a', sizecode => 'v' }
 };
 
-our $_types = $USE_PERLTYPES ? $_perltypes : $_pytypes;
+our $_types = $Ctypes::USE_PERLTYPES ? $_perltypes : $_pytypes;
 sub _types () { return $_types; }
 sub strict_input_all;
 
@@ -309,7 +307,7 @@ have size 4, and an Array of five of them would have size 20.
 
 =cut
 
-sub size   { return $_[0]->{_size}  }
+sub size   { exists $_[0]->{_size} ? $_[0]->{_size} : Ctypes::sizeof($_[0]->sizecode) }
 sub _set_size { return $_[0]->{_size} = $_[1] }
 
 =item typecode
@@ -320,7 +318,10 @@ C types, which might be useful for various things.
 
 =cut
 
-sub typecode { return $_[0]->{_typecode} }
+sub typecode { $_[0]->{_typecode} }
+# See Simple
+#sub packcode { $_[0]->{_typecode} }
+#sub sizecode { $_[0]->{_typecode} }
 
 =back
 
