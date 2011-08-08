@@ -323,6 +323,17 @@ sub typecode { $_[0]->{_typecode} }
 #sub packcode { $_[0]->{_typecode} }
 #sub sizecode { $_[0]->{_typecode} }
 
+=item validate
+
+Calls the _hook_store() callback method, which checks types and limits on write.
+
+=cut
+
+sub validate {
+  my $self = shift;
+  $self->_hook_store(@_);
+}
+
 =back
 
 =head1 CLASS FUNCTIONS
@@ -353,6 +364,12 @@ for how to do this to individual objects
     return $strict_input_all;
   }
 }
+
+=item sub is_a_number
+
+=cut
+
+sub is_a_number { looks_like_number(shift) }
 
 =head1 SEE ALSO
 

@@ -18,7 +18,8 @@ plan skip_all => "Pod::Coverage $min_pc required for testing POD coverage"
 
 my $opts = { trustme => [ qr/^c_[a-z_]*$/,    # all private methods
                           qr/^PF_.*/,         # inlined flags, Function.pm
-                          # (XXX will expose to users in a different format later) 
+                          # (XXX will expose to users in a different format later)
+			  qr/^PERL|USE_PERLTYPES$/, 
                           qr/^constant$/,     # Auto-generated
                           qr/^data$/,         # doc'd in Type, skip in children
                         ] };

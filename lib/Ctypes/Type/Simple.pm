@@ -293,10 +293,30 @@ sub _update_ {
 
 sub _set_undef { $_[0]->{_value} = 0 }
 
+=item size
+
+Returns the size of the type in bytes.
+
+=cut
+
 sub size { Ctypes::sizeof($_[0]->sizecode) }
+
+=item sizecode
+
+Access the packcode, used as libffi interface.
+
+=cut
+
 # defaults, overridden below
 sub sizecode { $_[0]->packcode } # used as libffi interface
-sub packcode { $_[0]->typecode } # used for perl unpack/pack
+
+=item packcode
+
+Access the typecode, used for perl pack/unpack.
+
+=cut
+
+sub packcode { $_[0]->typecode }
 
 #sub sizecode {
 #  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
@@ -306,6 +326,13 @@ sub packcode { $_[0]->typecode } # used for perl unpack/pack
 #  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
 #  defined $t->{packcode} ? $t->{packcode} : $_[0]->{_typecode};
 #}
+
+=item validate
+
+Calls the _hook_store() callback method, which checks types and limits on write.
+
+=cut
+
 sub validate {
   my $self = shift;
   $self->_hook_store(@_);
@@ -404,7 +431,7 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'C'};
 sub packcode{'C'};
 sub typecode{ $Ctypes::USE_PERLTYPES ? 'C' : 'B'};
-sub _minmax { ( 0, 256 ) }
+sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_ubyte\n" if $Debug;
   $_[0]->{_value} = ord($_[1]) unless Ctypes::Type::is_a_number($_[1]);
@@ -430,7 +457,7 @@ use base 'Ctypes::Type::Simple';
 #sub sizecode{'C'};
 #sub packcode{'C'};
 sub typecode{'C'};
-sub _minmax { ( 0, 256 ) }
+sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_uchar\n" if $Debug;
   $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
