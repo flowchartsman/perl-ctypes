@@ -137,10 +137,9 @@ sub SimpleTest {
   is( $x->name, $name, 'Correct name' );
 
   subtest "$name will not accept references" => sub {
-    plan tests => 3;
+    plan tests => 2;
     $input = 95;
     $$x = $input;
-    $@ = undef;
     eval{  $$x = [1, 2, 3] };
     is( $$x, $get_return->($input) );
     is( unpack('b*',${$x->data}), unpack('b*', pack($x->packcode, 95)) );
@@ -204,31 +203,33 @@ sub SimpleTest {
     }
   };
 
-  subtest "$name: character overflow" => sub {
-    for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
-      $input = chr($_);
-      $$x = $input;
-      is( $$x, $get_return->($input) );
-      is( ${$x->data}, pack($x->packcode, $_ ) );
-    }
-    for( $range->( $MAX + 1, $MAX + $extra) ) {
-      $input = chr($_);
-      $$x = $input;
-      isnt( $$x, $get_return->($input) );
-      ok( $$x <= $MAX );
-    }
-    done_testing();
-  };
+  if ($ret_char) {
+    subtest "$name: character overflow" => sub {
+      for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
+	$input = chr($_);
+	$$x = $input;
+	is( $$x, $get_return->($input) );
+	is( ${$x->data}, pack($x->packcode, $_ ) );
+      }
+      for( $range->( $MAX + 1, $MAX + $extra) ) {
+	$input = chr($_);
+	$$x = $input;
+	isnt( $$x, $get_return->($input) );
+	ok( $$x <= $MAX );
+      }
+      done_testing();
+    };
 
-  subtest "$name: characters after first discarded" => sub {
-    for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
-      $input = chr($_) . 'oubi';
-      $$x = $input;
-      is( $$x, $get_return->($input) );
-      is( ${$x->data}, pack($x->packcode, $_ ) );
-    }
-    done_testing();
-  };
+    subtest "$name: characters after first discarded" => sub {
+      for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
+	$input = chr($_) . 'oubi';
+	$$x = $input;
+	is( $$x, $get_return->($input) );
+	is( ${$x->data}, pack($x->packcode, $_ ) );
+      }
+      done_testing();
+    };
+  }
 
   $x->strict_input(1);
 
@@ -433,7 +434,7 @@ my $types = {
   c_ubyte => {
     instantiator => 'c_ubyte',
     packcode     => 'C',
-    sizecode     => 'c',
+    sizecode     => 'C',
     typecode     => 'B',
     name         => 'c_ubyte',
     MAX          => 255,

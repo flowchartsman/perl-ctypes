@@ -39,14 +39,14 @@ Ctypes objects (there's no raw memory manipulation going on here).
 =head1 DESCRIPTION
 
 In the current implementation, Pointer objects are the only Ctypes
-Type which come close to dealing with raw memory. For most types,
+type which come close to dealing with raw memory. For most types,
 which simply represent a value, that value can be normally be cached
 as a Perl scalar up until the point it is required by a C library
 function. However, in order to emulate pointer arithmetic, Pointer
 objects have to access the raw data fields of the Ctypes objects
 to which they point whenever they are dereferenced.
 
-This needn't happen on all occasions though. Since Ctypes Types are
+This needn't happen on all occasions though. Since Ctypes types are
 both 'object' and 'value', and it would be nice to use Pointers to
 access both, Pointer objects can be 'dereferenced' in two different
 ways.
@@ -198,19 +198,19 @@ sub new {
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
-  $type = $type->typecode if ref($type);
-  if( not Ctypes::sizeof($type) ) {
-    carp("Invalid Array type specified (first position argument)");
-    return undef;
-  }
+  my $typecode = $type->typecode if ref($type);
+  #if( not Ctypes::sizeof($type) ) {
+  #  carp("Invalid Array type specified (first position argument)");
+  #  return undef;
+  #}
   my $self = $class->_new( {
      _name        => $type.'_Pointer',
      _size        => Ctypes::sizeof('p'),
      _offset      => 0,
      _contents    => $contents,
      _bytes       => undef,
-     _orig_type   => $type,
-     _typecode  => 'p',
+     _type        => $type,
+     _typecode    => 'p',
   } );
   $self->{_rawcontents} =
     tie $self->{_contents}, 'Ctypes::Type::Pointer::contents', $self;
@@ -335,9 +335,10 @@ work.
 #
 my %access = (
   contents          => ['_contents'],
-  type              => ['_orig_type'],
   offset            => ['_offset',undef,1],
-             );
+);
+
+sub type { $_[0]->{_type}->typecode; }
 for my $func (keys(%access)) {
   no strict 'refs';
   my $key = $access{$func}[0];
@@ -380,9 +381,9 @@ sub STORE {
   print "In ", $self->{_owner}{_name}, "'s content STORE, from ", (caller(1))[0..3], "\n" if $Debug;
   if( not Ctypes::is_ctypes_compat($arg) ) {
     if ( $arg =~ /^\d*$/ ) {
-croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
+      croak("Cannot make Pointer to plain scalar; did you mean to say '\$ptr++'?")
     }
-  croak("Pointers are to Ctypes compatible objects only")
+    croak("Pointers are to Ctypes compatible objects only")
   }
   $self->{_owner}{_data} = undef;
   $self->{_owner}{_offset} = 0; # makes sense to reset offset
@@ -430,7 +431,7 @@ sub STORE {
 
   my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug;
-  my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
+  my $each = $self->{_owner}{_type}->size;
 
   my $offset = $index + $self->{_owner}{_offset};
   if( $offset < 0 ) {
@@ -444,9 +445,9 @@ sub STORE {
 
   print "\teach is $each\n" if $Debug;
   print "\tdata length is ", length($$data), "\n" if $Debug;
-  my $insert = pack($self->{_owner}{_orig_type},$arg);
+  my $insert = pack($self->{_owner}{_type}->packcode,$arg);
   print "\tinsert is ", unpack('b*',$insert), "\n" if $Debug;
-  if( length($insert) != Ctypes::sizeof($self->{_owner}{_orig_type}) ) {
+  if( length($insert) != $self->{_owner}{_type}->size ) {
     carp("You're about to break something...");
 # ??? What would be useful feedback here? Aside from just not doing it..
   }
@@ -454,7 +455,7 @@ sub STORE {
   print unpack('b*',$$data), "\n" if $Debug;
   substr( $$data,
           $each * $offset,
-          Ctypes::sizeof($self->{_owner}{_orig_type}),
+          $self->{_owner}{_type}->size,
         ) =  $insert;
   print unpack('b*',$$data), "\n" if $Debug;
   $self->{DATA}[$index] = $insert;  # don't think this can be used
@@ -467,8 +468,8 @@ sub FETCH {
   my( $self, $index ) = @_;
   print "In ", $self->{_owner}{_name}, "'s Bytes FETCH, from ", (caller(1))[0..3], "\n" if $Debug;
 
-  my $type = $self->{_owner}{_orig_type};
-  if( $type =~ /[pv]/ ) {
+  my $type = $self->{_owner}{_type};
+  if( $type->name =~ /[pv]/ ) {
     carp("Pointer is to type ", $type,
          "; can't know how to dereference data");
     return undef;
@@ -476,7 +477,7 @@ sub FETCH {
 
   my $data = $self->{_owner}{_rawcontents}{DATA}->_as_param_;
   print "\tdata is $$data\n" if $Debug;
-  my $each = Ctypes::sizeof($self->{_owner}{_orig_type});
+  my $each = $self->{_owner}{_type}->size;
 
   my $offset = $index + $self->{_owner}{_offset};
   if( $offset < 0 ) {
@@ -493,23 +494,24 @@ sub FETCH {
   print "\toffset is $offset\n" if $Debug;
   print "\teach is $each\n" if $Debug;
   print "\tstart is $start\n" if $Debug;
-  print "\torig_type: ", $self->{_owner}{_orig_type}, "\n" if $Debug;
+  print "\torig_type: ", $self->{_owner}{_type}->name, "\n" if $Debug;
   print "\tdata length is ", length($$data), "\n" if $Debug;
   my $chunk = substr( $$data,
                       $each * $offset,
-                      Ctypes::sizeof($self->{_owner}{_orig_type})
+                      $self->{_owner}{_type}->size
                     );
   print "\tchunk: ", unpack('b*',$chunk), "\n" if $Debug;
   $self->{DATA}[$index] = $chunk;
   print "  ", $self->{_owner}{_name}, "'s Bytes FETCH returning ok...\n" if $Debug;
-  return unpack($self->{_owner}{_orig_type},$chunk);
+  return unpack($self->{_owner}{_type}->packcode,$chunk);
 }
 
 sub FETCHSIZE {
   my $data = $_[0]->{_owner}{_rawcontents}{DATA}{_data}
-  ? $_[0]->{_owner}{_rawcontents}{DATA}{_data}
-  : $_[0]->{_owner}{_rawcontents}{DATA}->_as_param_;
-  return length($data) / Ctypes::sizeof($_[0]->{_owner}{_orig_type});
+    ? $_[0]->{_owner}{_rawcontents}{DATA}{_data}
+    : $_[0]->{_owner}{_rawcontents}{DATA}->_as_param_;
+  my $type = $_[0]->{_owner}{_type};
+  return length($data) / $type->size;
 }
 
 sub EXISTS { 0 }  # makes no sense for ::bytes

@@ -44,7 +44,7 @@ $$$ushortp = 25;
 # for Arrays it'll probably be meaningless.
 
 is( ${$ushortp->_as_param_}, pack('S',25), '_as_param_ returns object\'s data' );
-is( $ushortp->type, 'S', 'Get type of object with $ptr->type');
+is( $ushortp->type, 'H', 'Get type of object with $ptr->type');
 
 my $double = c_double(1);
 my $intp = Pointer( c_int, $double );
@@ -53,6 +53,7 @@ my $longp = Pointer( 'l', $double );
 is( $intp->type, 'i', 'Specify Pointer type with Pointer( <typecode> <obj> )' );
 
 is( $$ushortp[0], 25, 'Get value with $$ptr[0]' );
+# XXX
 $$ushortp[0] = 30;
 is( $$ushort, 30, 'Modify val of original object via $$ptr[x] = y' );
 

@@ -331,8 +331,8 @@ sub call {
 # Py's StgDictObject's int 'flags' field holds ABI info and
 # FUNCFLAG_PYTHONAPI
 
-# callargs should be changed in place?
-  my $result = _call($self, @callargs);
+  # callargs should be changed in place?
+  my $result = Ctypes::call($self->{func}, $self->{sig}, @callargs);
 
 # XXX <insert 'errcheck protocol' here>
 
@@ -353,7 +353,7 @@ sub _form_sig {
   $sig_parts[0] = $self->{abi} or abi_default();
   if( ref($self->{restype}) ) {
     if( ref($self->{restype}) =~ /Ctypes::Type/ ) {
-      $sig_parts[1] = $self->{restype}->{_typecode};
+      $sig_parts[1] = $self->{restype}->sizecode;
     } else {
       return undef; # Can't take typecodes for non Type objects
     }
@@ -365,7 +365,7 @@ sub _form_sig {
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
       if( ref($self->{argtypes}[$i]) ) {
         if( ref($self->{argtypes}[$i]) ) {
-          $sig_parts[$i+2] = $self->{argtypes}[$i]->{_typecode};
+          $sig_parts[$i+2] = $self->{argtypes}[$i]->sizecode;
         }
         # Can't represent non-Type objects as typecodes!
         return undef;

@@ -161,10 +161,7 @@ sub new {
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
   if (defined $arg) {
     $self->{_datasafe} = 0; # force initial _update_ and validate data
-    my ($invalid, $newarg) = $self->_hook_store($arg);
-    $arg = $newarg unless $invalid;
-  } else {
-    $arg = 0;
+    my ($invalid, $arg) = $self->_hook_store($arg);
   }
   $self->{_value} = $arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
@@ -276,7 +273,8 @@ sub _update_ {
                                $self->{_index},
                                $self->size );
       print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug;
-      print "    Which is ", unpack($self->packcode,$self->{_data}), " as a number\n" if $Debug;
+      print "    Which is ", unpack($self->packcode,$self->{_data}), " as a number\n"
+	if $Debug;
       $self->{_value} = unpack($self->packcode, $self->{_data});
     } else {
       $self->{_data} = pack($self->packcode, $self->{_value});
@@ -297,8 +295,8 @@ sub _set_undef { $_[0]->{_value} = 0 }
 
 sub size { Ctypes::sizeof($_[0]->sizecode) }
 # defaults, overridden below
-sub sizecode { $_[0]->typecode }
-sub packcode { $_[0]->typecode }
+sub sizecode { $_[0]->packcode } # used as libffi interface
+sub packcode { $_[0]->typecode } # used for perl unpack/pack
 
 #sub sizecode {
 #  my $t = $Ctypes::Type::_types->{$_[0]->{_typecode}};
@@ -394,28 +392,30 @@ package Ctypes::Type::c_byte;
 use base 'Ctypes::Type::Simple';
 sub sizecode{'c'};
 sub packcode{'c'};
-sub typecode{'b'};
+sub typecode{ $Ctypes::USE_PERLTYPE ? 'c' : 'b'};
 sub _minmax { ( -127, 128 ) }
-#sub _hook_fetch {
-#  print "In _hook_fetch c_byte\n" if $Debug;
-#  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
-#}
+sub _hook_fetch {
+  print "In _hook_fetch c_byte\n" if $Debug;
+  $_[0]->{_value} = ord($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+}
 
 package Ctypes::Type::c_ubyte;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'c'};
+sub sizecode{'C'};
 sub packcode{'C'};
-sub typecode{'B'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 'C' : 'B'};
 sub _minmax { ( 0, 256 ) }
-#sub _hook_fetch {
-#  print "In _hook_fetch c_ubyte\n" if $Debug;
-#  $_[0]->{_value} = chr($_[1]) unless Ctypes::Type::is_a_number($_[1]);
-#}
+sub _hook_fetch {
+  print "In _hook_fetch c_ubyte\n" if $Debug;
+  $_[0]->{_value} = ord($_[1]) unless Ctypes::Type::is_a_number($_[1]);
+  $_[0]->{_value} += 127 if $_[0]->{_value} < 1;
+  $_[0]->{_value} &= 255 if $_[0]->{_value} > 255;
+}
 
 # single character, c signed, possibly a multi-char (?)
 package Ctypes::Type::c_char;
 use base 'Ctypes::Type::Simple';
-#sub sizecode{'c'};
+sub sizecode{'c'};
 #sub packcode{'c'};
 sub typecode{'c'};
 sub _minmax { ( -127, 128 ) }
@@ -438,9 +438,9 @@ sub _hook_fetch {
 
 package Ctypes::Type::c_short;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'s'};
+#sub sizecode{'s'};
 sub packcode{'s'};
-sub typecode{'h'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 's' : 'h'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
       (Ctypes::constant('PERL_SHORT_MIN'),
@@ -448,9 +448,9 @@ sub _minmax {
 
 package Ctypes::Type::c_ushort;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'S'};
+#sub sizecode{'S'};
 sub packcode{'S'};
-sub typecode{'H'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 'S' : 'H'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
       (Ctypes::constant('PERL_USHORT_MIN'),
@@ -459,7 +459,7 @@ sub _minmax {
 # Alias to c_long where equal; i
 package Ctypes::Type::c_int;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'i'};
+#sub sizecode{'i'};
 sub packcode{'i'};
 sub typecode{'i'};
 sub _minmax {
@@ -470,7 +470,7 @@ sub _minmax {
 # Alias to c_ulong where equal; I
 package Ctypes::Type::c_uint;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'i'};
+#sub sizecode{'i'};
 sub packcode{'I'};
 sub typecode{'I'};
 sub _minmax {
@@ -490,7 +490,7 @@ sub _minmax {
 
 package Ctypes::Type::c_ulong;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'l'};
+#sub sizecode{'l'};
 sub packcode{'L'};
 sub typecode{'L'};
 sub _minmax {
@@ -500,7 +500,7 @@ sub _minmax {
 
 package Ctypes::Type::c_float;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'f'};
+#sub sizecode{'f'};
 sub packcode{'f'};
 sub typecode{'f'};
 sub _minmax {
@@ -520,9 +520,9 @@ sub _minmax {
 
 package Ctypes::Type::c_longdouble;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'D'};
+#sub sizecode{'D'};
 sub packcode{'D'};
-sub typecode{'g'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 'D' : 'g'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
       (Ctypes::constant('LDBL_MIN'),
@@ -547,7 +547,7 @@ sub _minmax { (0, hex("F" x (2*$Config{longlongsize}))) }
 
 package Ctypes::Type::c_bool;
 use base 'Ctypes::Type::Simple';
-sub sizecode{'c'}; # ?
+#sub sizecode{'c'}; # ?
 sub packcode{'c'}; # ?
 sub typecode{'v'};
 
@@ -587,12 +587,15 @@ package Ctypes::Type::c_uint64;
 use base 'Ctypes::Type::c_ulonglong';
 
 # Not so simple types:
+# XXX TODO size
 
 # null terminated string, A?
 package Ctypes::Type::c_char_p;
 use base 'Ctypes::Type::Simple';
+sub sizecode{'p'};
 sub packcode{'A?'};
-sub typecode{'s'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 'A' : 's'};
+sub size { $_[0]->{_size} }
 sub _hook_store {
   my $self = shift;
   my $arg = shift;
@@ -603,19 +606,25 @@ sub _hook_store {
 
 package Ctypes::Type::c_wchar;
 use base 'Ctypes::Type::Simple';
+sub sizecode{'p'};
 sub packcode{'U'};
-sub typecode{'w'};
+sub typecode{ $Ctypes::USE_PERLTYPES ? 'U' : 'w'};
+sub size { $_[0]->{_size} }
 
 package Ctypes::Type::c_wchar_p;
 use base 'Ctypes::Type::Simple';
+sub sizecode{'p'};
 sub packcode{'U*'};
 sub typecode{'z'};
+sub size { $_[0]->{_size} }
 
 package Ctypes::Type::c_bstr;
 use base 'Ctypes::Type::Simple';
 #sub sizecode{'a'};
+sub sizecode{'p'};
 sub packcode{'a?'};
 sub typecode{'X'};
+sub size { $_[0]->{_size} }
 
 #####################################################################
 
@@ -694,7 +703,7 @@ sub STORE {
   }
   print "    2) arg is $result, which is ",
     unpack('b*', $result), " or ", ord($result), "\n" if $Debug;
-  $object->{_data} = pack( $object->packcode, $result );
+  eval { $object->{_data} = pack( $object->packcode, $result ); }; # overflow warning
   $object->{_value} = unpack( $object->packcode, $object->{_data} );
   $object->{_input} = $arg;
   if( $object->{_owner} ) {
