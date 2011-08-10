@@ -56,7 +56,8 @@ if ($@) {
     File::Copy::cp(File::Spec->catfile($libdir, "libffi-5.dll"), "bin");
   }
 } else {
-  warn "Using system libffi. If too old (failing _call tests) install libffi.tar.gz and use INCDIR and LIBDIR.\n";
+  warn "Using system libffi.\n";
+  warn "  If too old (failing _call tests) install our libffi.tar.gz and use INCDIR and LIBDIR.\n";
   warn "  tar xfz libffi.tar.gz; cd libffi; . configure --prefix=/; make && make install DESTDIR=`pwd`; cd ..\n";
   warn "  perl Makefile.PL INCDIR=libffi/include LIBDIR=libffi/lib\n";
 }
@@ -65,7 +66,7 @@ WriteMakefile(
     NAME              => 'Ctypes',
     VERSION_FROM      => 'lib/Ctypes.pm',
     ABSTRACT_FROM     => 'lib/Ctypes.pm',
-    AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com',
+    AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com, Reini Urban',
     PREREQ_PM         => {},
     LIBS              => $libdir ? [ "-L$libdir -lffi" ] : [ "-lffi" ],
     INC               => $incdir ? "-I. -I$incdir" : "-I.",
@@ -112,5 +113,22 @@ const-xs.inc: $0 \$(CONFIGDEP)
 const-c.inc: $0 \$(CONFIGDEP)
 
 Ctypes.c: \$(XSUBPPDEPS) const-xs.inc \$(XS_FILES) util.c obj_util.c
+
+README : lib/Ctypes.pm
+	pod2text lib/Ctypes.pm > README
+
+gcov : Ctypes.c.gcov Ctypes.xs.gcov cover_db/Ctypes-xs.html
+
+Ctypes.c.gcov Ctypes.xs.gcov : Ctypes.xs
+	\$(MAKE) CCFLAGS=\"\$(CCFLAGS) -fprofile-arcs -ftest-coverage\" LDDLFLAGS=\"\$(LDDLFLAGS) -fprofile-arcs -ftest-coverage\"
+	gcov Ctypes.c Ctypes.xs
+
+cover_db/Ctypes-xs.html : Ctypes.xs.gcov
+	-PERL5OPT=-MDevel::Cover make test
+	-$^X -S gcov2perl Ctypes.c.gcov Ctypes.xs.gcov
+	$^X -S cover
+
+gprof :
+	\$(MAKE) CCFLAGS=\"\$(CCFLAGS) -pg\" LDDLFLAGS=\"\$(LDDLFLAGS) -pg\"
 ";
 }
