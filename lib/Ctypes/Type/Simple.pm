@@ -226,12 +226,6 @@ sub value : lvalue {
   $_[0]->{_value};
 }
 
-=head1 SEE ALSO
-
-L<Ctypes>
-
-=cut
-
 sub data {
   my $self = shift;
   print "In ", $self->{_name}, "'s _DATA_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug;
@@ -269,14 +263,18 @@ sub _update_ {
       print unpack('b*', $owners_data), "\n" if $Debug;
       print "    My index is ", $self->{_index}, "\n" if $Debug;
       print "    My size is ", $self->size, "\n" if $Debug;
-      $self->{_data} = substr( ${$self->{_owner}->data},
+      $self->{_data} = substr( $owners_data,
                                $self->{_index},
                                $self->size );
       print "    My data is now:\n", unpack('b*', $self->{_data}), "\n" if $Debug;
       print "    Which is ", unpack($self->packcode,$self->{_data}), " as a number\n"
 	if $Debug;
-      $self->{_value} = unpack($self->packcode, $self->{_data});
+      $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
     } else {
+#
+# This needs thought... might not make sense.
+# Where would $self->{_value} get a new, correct value?
+#
       $self->{_data} = pack($self->packcode, $self->{_value});
     }
   } else {
@@ -285,8 +283,8 @@ sub _update_ {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
-  $self->{_value} = unpack($self->packcode, $self->{_data});
-  print "    VALUE is _update_d to ", $self->{_value}, "\n" if $Debug;
+  $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
+  print "    VALUE is _update_d to ", $self->{_rawvalue}->[1], "\n" if $Debug;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -393,9 +391,43 @@ sub _hook_store {
 }
 
 # may change the $object->{_value}
+=head1 INTERNAL METHODS
+
+These are documented here solely for the understanding and ongoing
+development of Ctypes internals. B<They DO NOT form part of the
+official Ctypes API>. Do not use them in your applications.
+
+=over
+
+=item _hook_fetch I<internal_value>
+
+C<_hook_fetch> is for taking the internal representation of the
+data type object and returning it in the form expected by the
+Perl code in the "outside world". If no modification is required,
+it must return its single argument unmodified.
+
+The case where _hook_fetch is most needed by the core Ctypes
+types are for C<c_byte> and C<c_ubyte> types. Both of these types
+can be assigned either numerical or single-character string
+values. Inside the object, both types of input are stored as
+numbers: both the decimal value 65 and the ASCII character 'A'
+have the same value in a c_byte type. However, if a user put
+in a character, it is reasonable to expect that character to come
+back out, not its internal numeric representation. This is what
+_hook_fetch is for.
+
+_hook_fetch should not modify any public or private properties
+of its object. All the logic for cleansing input is held in the
+STORE and _hook_store methods. Circumventing these methods
+in _hook_fetch or anywhere else would raise the possibility
+of inconsistent data.
+
+=cut
+
 sub _hook_fetch {
   my $obj = shift;
   print "In _hook_fetch $obj->name\n" if $Debug;
+  $_[0];
   #my $value = $obj->{_value};
 }
 
@@ -405,6 +437,12 @@ sub _minmax_const {
   $v2 = undef if $invalid2;
   return ($v1, $v2);
 }
+
+=head1 SEE ALSO
+
+L<Ctypes>
+
+=cut
 
 # DONE
 # c_char c_byte c_ubyte c_short c_ushort c_int c_uint c_long c_ulong
@@ -423,20 +461,26 @@ sub typecode{ $Ctypes::USE_PERLTYPE ? 'c' : 'b'};
 sub _minmax { ( -127, 128 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_byte\n" if $Debug;
-  $_[0]->{_value} = ord($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+# Not sure what the unless is_a_number test does here?
+# What if last assignment was e.g. a float?
+  return ord($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+  $_[1];
 }
 
 package Ctypes::Type::c_ubyte;
 use base 'Ctypes::Type::Simple';
+our $Debug;
 sub sizecode{'C'};
 sub packcode{'C'};
 sub typecode{ $Ctypes::USE_PERLTYPES ? 'C' : 'B'};
 sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_ubyte\n" if $Debug;
-  $_[0]->{_value} = ord($_[1]) unless Ctypes::Type::is_a_number($_[1]);
-  $_[0]->{_value} += 127 if $_[0]->{_value} < 1;
-  $_[0]->{_value} &= 255 if $_[0]->{_value} > 255;
+  my $ret = $_[1];
+  $ret = ord($_[1]) unless Ctypes::Type::is_a_number($_[1]);
+  $ret += 127 if $ret < 1;
+  $ret &= 255 if $ret > 255;
+  $ret;
 }
 
 # single character, c signed, possibly a multi-char (?)
@@ -448,7 +492,8 @@ sub typecode{'c'};
 sub _minmax { ( -127, 128 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_char\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
+  return chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
+  $_[1];
 }
 
 # single character, c unsigned, possibly a multi-char (?)
@@ -460,7 +505,8 @@ sub typecode{'C'};
 sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_uchar\n" if $Debug;
-  $_[0]->{_value} = chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
+  return chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
+  $_[1];
 }
 
 package Ctypes::Type::c_short;
@@ -660,11 +706,12 @@ use strict;
 use warnings;
 use Carp;
 use Scalar::Util qw|blessed|;
+our $Debug;
 
 sub TIESCALAR {
   my $class = shift;
   my $object = shift;
-  my $self = [ $object ];
+  my $self = [ $object, $object->{_value} ];
   return bless $self => $class;
 }
 
@@ -698,20 +745,17 @@ sub STORE {
   if( not defined $arg ) {
     print "    Assigned undef. All goes null.\n" if $Debug;
     $object->{_datasafe} = 0;
-    $object->{_value} = 0;
+    $self->[1] = 0;
     $object->{_data} = "\0" x 8 x $object->{_size}; # stay right length
     if( $object->{_owner} ) {
       $object->{_owner}->_update_($object->{_data}, $object->{_index});
     }
-    return $object->{_value};
+    return $self->[1];
   }
 
   my $typecode = $object->{_typecode};
   print "    Using typecode $typecode\n" if $Debug;
   print "    1) arg is ", $arg, "\n" if $Debug;
-  # return 1 on success, 0 on fail, -1 if (numeric but) out of range
-  #my $is_valid = Ctypes::_valid_for_type($arg,$typecode);
-  #print "    Calling validate...\n" if $Debug;
   my ($invalid, $result) = $object->validate($arg);
   $arg = $result unless $invalid;
 
@@ -728,25 +772,43 @@ sub STORE {
       carp( $invalid, ' (got ', $arg, ')');
     }
   }
-  print "    2) arg is $result, which is ",
-    unpack('b*', $result), " or ", ord($result), "\n" if $Debug;
+  print "    2) arg is $result\n",
+    "    binary:\n\t", unpack('b*', $result), "\n",
+    "    ordinal:\n\t", ord($result), "\n"
+    if $Debug;
+#
+# Put the $object's values in order
+#
   eval { $object->{_data} = pack( $object->packcode, $result ); }; # overflow warning
-  $object->{_value} = unpack( $object->packcode, $object->{_data} );
+  $self->[1] = unpack( $object->packcode, $object->{_data} );
   $object->{_input} = $arg;
+#
+# This object might be part of an Array or Struct;
+# if so update the binary data in that as well.
+#
   if( $object->{_owner} ) {
-    print "    Have owner, updating with\n",
-      unpack('b*', $object->{_data}), "\n    or ",
-      unpack($object->{_typecode},$object->{_data}), " to you and me\n" if $Debug;
+    print "    Have owner, updating with:\n",
+      "    binary:\n\t", unpack('b*', $object->{_data}), "\n",
+      "    typed:\n\t", unpack($object->{_typecode},$object->{_data}), "\n"
+      if $Debug;
     $object->{_owner}->_update_($object->{_data}, $object->{_index});
   }
   print "  Returning ok...\n" if $Debug;
-  return $object->{_value};
+  return $self->[1];
 }
 
 sub FETCH {
   my $self = shift;
   my $object = $self->[0];
   print "In ", $object->{_name}, "'s FETCH, from ", (caller(1))[0..3], "\n" if $Debug;
+#
+# If this object is part of a larger complex type object (like an Array
+# or a Struct), it's possible that that owning object's binary data has
+# been operated upon by a library.
+# 
+# Call update now to ensure propagation of those changes to this object
+# (both binary data and Perl-space 'value' will be updated).
+#
   if ( defined $object->{_owner}
        or $object->{_datasafe} == 0 ) {
     print "    Can't trust data, updating...\n" if $Debug;
@@ -754,8 +816,7 @@ sub FETCH {
   }
   croak("Error updating value!") if $object->{_datasafe} != 1;
   print "    ", $object->name, "'s Fetch returning ", $object->{_value}, "\n" if $Debug;
-  $object->_hook_fetch($object->{_value});
-  return $object->{_value};
+  return $object->_hook_fetch($self->[1]);
 }
 
 1;
