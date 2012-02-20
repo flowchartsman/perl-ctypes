@@ -540,7 +540,7 @@ sub FETCH {
   } else {
     print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
     print "\n" if $Debug;
-    return $self->{VALUES}[$index];
+    return ${$self->{VALUES}[$index]};
   }
 }
 
