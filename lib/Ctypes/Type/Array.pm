@@ -532,7 +532,7 @@ sub FETCH {
                                # it will pull from us, because we _owner it
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
-  if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
+  if( $self->{VALUES}[$index]->isa('Ctypes::Type::Simple') ) {
   print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
   carp "    ", $self->{object}{_name}, "\n" if $Debug;
   carp "    ", $self->{VALUES}[$index], "\n" if $Debug;
@@ -540,7 +540,7 @@ sub FETCH {
   } else {
     print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
     print "\n" if $Debug;
-    return ${$self->{VALUES}[$index]};
+    return $self->{VALUES}[$index];
   }
 }
 
