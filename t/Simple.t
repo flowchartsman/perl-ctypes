@@ -460,15 +460,8 @@ my $types = {
 };
 
 my $i = 0;
-for( %$types ) {
-  push @types_to_test, $_ if $i % 2 != 0;
-  $i++;
-}
+push @types_to_test, values %$types;
 
-for( @types_to_test ) {
-  SimpleTest($_);
-}
+SimpleTest($_) for @types_to_test;
 
 done_testing();
-
-
