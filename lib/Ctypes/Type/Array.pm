@@ -81,7 +81,7 @@ sub _get_members_typed {
   my $members = [];
   my $newval;
   # A.a) Required type is a Ctypes Type
-  if( ref($deftype) eq 'Ctypes::Type::Simple' ) {
+  if( $deftype->isa('Ctypes::Type::Simple') ) {
     for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
     $newval = _arg_to_type( $_, $deftype );
     if( defined $newval ) {
