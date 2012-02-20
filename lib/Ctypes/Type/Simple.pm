@@ -217,8 +217,6 @@ Accessor / mutator for the value of the variable the object
 represents. C<value> is an lvalue method, so you can assign to it
 directly, all the appropriate type checking will still be done.
 
-=back
-
 =cut
 
 sub value : lvalue {
@@ -390,7 +388,8 @@ sub _hook_store {
   return ($invalid, $arg);
 }
 
-# may change the $object->{_value}
+=back
+
 =head1 INTERNAL METHODS
 
 These are documented here solely for the understanding and ongoing
@@ -437,6 +436,8 @@ sub _minmax_const {
   $v2 = undef if $invalid2;
   return ($v1, $v2);
 }
+
+=back
 
 =head1 SEE ALSO
 

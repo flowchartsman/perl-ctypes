@@ -770,7 +770,9 @@ Returns an array of values. For more complex ranges, the basic arguments
 as many arrayrefs as you like, and the array returned will be a
 combination of those ranges.
 
-=h3 Arguments:
+=back
+
+=head3 Arguments:
 
 =over
 
@@ -918,6 +920,8 @@ sub create_range {
 }
 
 package Ctypes;
+
+=over
 
 =item find_function (libraryhandle, functionname)
 
@@ -1161,10 +1165,8 @@ your bug as I make changes.
 =head1 SUPPORT
 
 You can see the proposed API and keep up to date with development at
-L<http://blogs.perl.org/users/doubi> or by following <at>doubious_code
-on Twitter (if anyone knows a microblogging client that lets me manage
-my Twitter, Facebook and Iden.ti.ca from the one interface, please let
-me know :-)
+L<http://blogs.perl.org/users/doubi> or by following <at>doubious
+on Twitter or <at>doubi on Identi.ca.
 
 You can find documentation for this module with the perldoc command.
 
