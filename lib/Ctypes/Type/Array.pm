@@ -229,6 +229,7 @@ sub new {
   my $self = $class->_new( {
     _name         => lc($name) . '_Array',
     _typecode     => 'p',
+    _sizecode     => 'p',
     _can_resize   => 0,
     _endianness   => '',
     _length       => $#$in + 1,
@@ -281,6 +282,7 @@ my %access = (
       1 ], # <--- this makes '_can_resize' settable
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
+  sizecode          => ['_sizecode'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -300,6 +302,22 @@ for my $func (keys(%access)) {
     }
     return $self->{$key};
   }
+}
+
+=item packcode
+
+In contrast to other types, the packcode of Arrays is dynamic.
+Following the documentation of pack codes given in L<pack>,
+C<packcode> returns 'P' plus the length of the C<data> it
+contains.
+
+For example, an array of four four-byte C<c_int>s would return
+the packcode 'C<P16>'.
+
+=cut
+
+sub packcode {
+  return 'P' . length( $_[0]->data );
 }
 
 =item copy
