@@ -157,13 +157,15 @@ sub new {
   } );
 
   my $arg = shift;
+  my( $invalid, $validated_arg ) = undef;
   print "In Type::Simple constructor: typecode [ $typecode ]",
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
   if (defined $arg) {
     $self->{_datasafe} = 0; # force initial _update_ and validate data
-    my ($invalid, $arg) = $self->_hook_store($arg);
+    ($invalid, $validated_arg) = $self->_hook_store($arg);
   }
-  $self->{_value} = $arg;
+  $self->{_input} = $arg;
+  $self->{_value} = $validated_arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
   return $self;
 }

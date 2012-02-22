@@ -166,8 +166,11 @@ sub call {
   for(my $i=0 ; $i<=$#args ; $i++) {
     # valid ffi sizecode's
     if( $argtypes[$i] =~ /[dDfFiIjJlLnNqQsSvV]/ and
-        not looks_like_number($args[$i]) ) {
-      die "$i-th argument $args[$i] is no number";
+        not looks_like_number( $args[$i] ) ) {
+      $args[$i] = $args[$i]->value()
+        or die "$i-th argument $args[$i] is no number";
+      die "$i-th argument $args[$i] is no number"
+        unless looks_like_number( $args[$i] );
     }
   }
   return _call( $func, $sig, @args );
