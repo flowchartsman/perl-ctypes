@@ -91,9 +91,9 @@ Due to Ctypes' current implementation (mainly Perl, as opposed
 to mainly C), there is a limit to the arbitrariness of these
 memory locations. You can use Pointers to access locations within
 the C<data> fields of Ctypes objects, but you can't stray out
-into uncharted memory. This might be viewed by positively or
-negatively by different people. In any case, the situation would
-likely change should Ctypes move to a mainly C implementation.
+into uncharted memory. This has its advantages and disadvantages.
+In any case, the situation would likely change should Ctypes move
+to a mainly C implementation.
 
 You access memory with Pointers using B<array dereferencing>.
 If the type of the pointer is the same as the type of the object
@@ -163,8 +163,8 @@ Like with Arrays and Structs, you'll rarely use Ctypes::Type::Pointer->new
 directly since L<Ctypes> exports the C<Pointer> function by default.
 
 Pointers can be instantiated in two ways. First, you can pass a Ctypes
-for which you want to create a pointer. The Pointer will be typed according
-to that object.
+object to which you want to create a pointer. The Pointer will be
+typed according to that object.
 
 Alternatively, you can pass a Ctype to indicate the type in the first
 position, and the object at which to point in the second position. In this
@@ -286,10 +286,10 @@ sub _update_ {
 =item contents
 
 This accessor returns the object to which the Pointer points (as
-opposed to the I<value> represented by that object). C<$ptr->contents>
-is a synonym for C<$$ptr>, but since it doesn't require the double-
-sigil syntax it can be used e.g. when accessing members of compound
-objects like Arrays.
+opposed to the I<value> represented by that object). C<$ptr-E<gt>
+contents> is a synonym for C<$$ptr>, but since it doesn't require
+the double-sigil syntax it can be used e.g. when accessing members
+of compound objects like L<Arrays|Ctypes::Type::Array>.
 
 =item type
 
