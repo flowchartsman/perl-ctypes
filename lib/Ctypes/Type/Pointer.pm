@@ -11,7 +11,7 @@ use overload
   fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug;
+our $Debug;
 
 =head1 NAME
 
@@ -198,13 +198,14 @@ sub new {
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
+  $type = Ctypes::Type::Simple->new( $type ) if $type =~ /^\w$/;
   my $typecode = $type->typecode if ref($type);
   #if( not Ctypes::sizeof($type) ) {
   #  carp("Invalid Array type specified (first position argument)");
   #  return undef;
   #}
   my $self = $class->_new( {
-     _name        => $type.'_Pointer',
+     _name        => $type->name . '_Pointer',
      _size        => Ctypes::sizeof('p'),
      _offset      => 0,
      _contents    => $contents,
@@ -212,6 +213,7 @@ sub new {
      _type        => $type,
      _typecode    => 'p',
   } );
+#  $contents->{_owner} = $self;    # this might break things - why?
   $self->{_rawcontents} =
     tie $self->{_contents}, 'Ctypes::Type::Pointer::contents', $self;
   $self->{_rawbytes} =
@@ -219,6 +221,7 @@ sub new {
           'Ctypes::Type::Pointer::bytes',
           $self;
   $self->{_contents} = $contents;
+#  $self->{_datasafe} = 1;    # this too
   return $self;
 }
 
@@ -364,6 +367,7 @@ use warnings;
 use strict;
 use Carp;
 use Ctypes;
+our $Debug;
 
 sub TIESCALAR {
   print "In Bytes' TIESCALAR\n" if $Debug;
@@ -411,6 +415,7 @@ use warnings;
 use strict;
 use Carp;
 use Ctypes;
+our $Debug;
 
 sub TIEARRAY {
   my $class = shift;
@@ -448,8 +453,14 @@ sub STORE {
   my $insert = pack($self->{_owner}{_type}->packcode,$arg);
   print "\tinsert is ", unpack('b*',$insert), "\n" if $Debug;
   if( length($insert) != $self->{_owner}{_type}->size ) {
-    carp("You're about to break something...");
-# ??? What would be useful feedback here? Aside from just not doing it..
+    carp("You're about to insert data of length "
+      . length($insert)
+      . " into a pointer of type "
+      . $self->{_owner}->name
+      . " (size "
+      . $self->{_owner}{_type}->size
+      . ")..."
+    );
   }
   print "\tdata before and after insert:\n" if $Debug;
   print unpack('b*',$$data), "\n" if $Debug;

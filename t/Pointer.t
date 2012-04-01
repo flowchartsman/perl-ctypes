@@ -50,7 +50,7 @@ my $double = c_double(1);
 my $intp = Pointer( c_int, $double );
 is( $intp->type, 'i', 'Specify Pointer type with Pointer( <type> <obj> )' );
 my $longp = Pointer( 'l', $double );
-is( $intp->type, 'i', 'Specify Pointer type with Pointer( <typecode> <obj> )' );
+is( $longp->type, 'l', 'Specify Pointer type with Pointer( <typecode> <obj> )' );
 
 is( $$ushortp[0], 25, 'Get value with $$ptr[0]' );
 # XXX
