@@ -157,7 +157,7 @@ sub new {
   } );
 
   my $arg = shift;
-  my( $invalid, $validated_arg ) = undef;
+  my( $invalid, $validated_arg ) = ( undef, 0 ); # 0 will be assigned if no $arg
   print "In Type::Simple constructor: typecode [ $typecode ]",
     $arg ? ", arg [ $arg ]" : '', "\n" if $Debug;
   if (defined $arg) {
@@ -165,8 +165,10 @@ sub new {
     ($invalid, $validated_arg) = $self->_hook_store($arg);
   }
   $self->{_input} = $arg;
-  $self->{_value} = $validated_arg;
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
+  $self->{_value} = $validated_arg;
+  die "Error: value not internalized"
+    if not defined $self->{_rawvalue}->[1];
   return $self;
 }
 
@@ -255,6 +257,7 @@ sub _update_ {
   print "    I am pwnd by ", $self->{_owner}->{_name}, "\n" if $self->{_owner} and $Debug;
   if( not defined $arg ) {
     if( $self->{_owner} ) {
+#    if ( $self->{_owner} and not $self->{_datasafe} == 1 ) {
       print "    Have owner, getting updated data...\n" if $Debug;
       my $owners_data = ${$self->{_owner}->data};
       print "    Here's where I think I am in my pwner's data:\n" if $Debug;
