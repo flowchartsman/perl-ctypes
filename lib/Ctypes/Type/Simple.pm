@@ -278,7 +278,9 @@ sub _update_ {
       $self->{_data} = pack($self->packcode, $self->{_value});
     }
   } else {
-    $self->{_data} = pack($self->packcode, $arg );
+# Don't need to pack() anything; _data should only ever be
+# be pased raw bytes.
+    $self->{_data} = $arg;
     if( $self->owner ) {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
