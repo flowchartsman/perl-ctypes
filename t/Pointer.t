@@ -2,7 +2,7 @@
 
 use warnings;
 use strict;
-use Test::More tests => 24;
+use Test::More tests => 25;
 use Ctypes;
 use Ctypes::Callback;
 use Ctypes::Function;
@@ -124,6 +124,7 @@ note( "Multiple indirection..." );
 $disarray = Array( 2, 4, 5, 1, 3 );
 $arrptr = Pointer( $disarray );
 my $arrptr2 = Pointer( $arrptr );
+isa_ok( $arrptr2, 'Ctypes::Type::Pointer' );
 
 $qsort->($arrptr2, $#$disarray+1, Ctypes::sizeof('s'), $cb->ptr);
 $arrptr2->_update_; # Ctypes has the hooks for doing this

@@ -362,6 +362,15 @@ for my $func (keys(%access)) {
   }
 }
 
+=item sizecode
+
+Returns the sizecode of the Pointer object; i.e., the sizecode
+of all Pointer objects; i.e., 'p'.
+
+=cut
+
+sub sizecode {'p'}
+
 package Ctypes::Type::Pointer::contents;
 use warnings;
 use strict;
