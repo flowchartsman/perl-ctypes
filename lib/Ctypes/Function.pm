@@ -332,7 +332,7 @@ sub call {
 # FUNCFLAG_PYTHONAPI
 
   # callargs should be changed in place?
-  my $result = Ctypes::call($self->{func}, $self->{sig}, @callargs);
+  my $result = _call( $self, @callargs );
 
 # XXX <insert 'errcheck protocol' here>
 

@@ -53,7 +53,7 @@ my $longp = Pointer( 'l', $double );
 is( $longp->type, 'l', 'Specify Pointer type with Pointer( <typecode> <obj> )' );
 
 is( $$ushortp[0], 25, 'Get value with $$ptr[0]' );
-# XXX
+
 $$ushortp[0] = 30;
 is( $$ushort, 30, 'Modify val of original object via $$ptr[x] = y' );
 
