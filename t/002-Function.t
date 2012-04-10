@@ -30,10 +30,8 @@ SKIP: {
       'Function restype specified with Type object' );
 }
 my $letter_y = c_int($y);
-diag '$to_upper2->( c_int($y) )';
 $ret = $to_upper2->( $letter_y );
 is( $ret, ord("Y"), 'Function returns native type instead of Type object');
 
-diag '$to_upper2->( c_int("y") )';
 $ret = $to_upper2->( c_int("y") );
 is( $ret, ord("Y"), 'implicit c_char => c_int conversion');

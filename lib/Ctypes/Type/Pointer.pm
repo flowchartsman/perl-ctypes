@@ -11,7 +11,7 @@ use overload
   fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug;
+our $Debug;
 
 =head1 NAME
 
@@ -91,9 +91,9 @@ Due to Ctypes' current implementation (mainly Perl, as opposed
 to mainly C), there is a limit to the arbitrariness of these
 memory locations. You can use Pointers to access locations within
 the C<data> fields of Ctypes objects, but you can't stray out
-into uncharted memory. This might be viewed by positively or
-negatively by different people. In any case, the situation would
-likely change should Ctypes move to a mainly C implementation.
+into uncharted memory. This has its advantages and disadvantages.
+In any case, the situation would likely change should Ctypes move
+to a mainly C implementation.
 
 You access memory with Pointers using B<array dereferencing>.
 If the type of the pointer is the same as the type of the object
@@ -163,8 +163,8 @@ Like with Arrays and Structs, you'll rarely use Ctypes::Type::Pointer->new
 directly since L<Ctypes> exports the C<Pointer> function by default.
 
 Pointers can be instantiated in two ways. First, you can pass a Ctypes
-for which you want to create a pointer. The Pointer will be typed according
-to that object.
+object to which you want to create a pointer. The Pointer will be
+typed according to that object.
 
 Alternatively, you can pass a Ctype to indicate the type in the first
 position, and the object at which to point in the second position. In this
@@ -198,13 +198,14 @@ sub new {
 
   return undef unless Ctypes::is_ctypes_compat($contents);
 
+  $type = Ctypes::Type::Simple->new( $type ) if $type =~ /^\w$/;
   my $typecode = $type->typecode if ref($type);
   #if( not Ctypes::sizeof($type) ) {
   #  carp("Invalid Array type specified (first position argument)");
   #  return undef;
   #}
   my $self = $class->_new( {
-     _name        => $type.'_Pointer',
+     _name        => $type->name . '_Pointer',
      _size        => Ctypes::sizeof('p'),
      _offset      => 0,
      _contents    => $contents,
@@ -212,6 +213,7 @@ sub new {
      _type        => $type,
      _typecode    => 'p',
   } );
+#  $contents->{_owner} = $self;    # this might break things - why?
   $self->{_rawcontents} =
     tie $self->{_contents}, 'Ctypes::Type::Pointer::contents', $self;
   $self->{_rawbytes} =
@@ -219,6 +221,7 @@ sub new {
           'Ctypes::Type::Pointer::bytes',
           $self;
   $self->{_contents} = $contents;
+#  $self->{_datasafe} = 1;    # this too
   return $self;
 }
 
@@ -286,10 +289,10 @@ sub _update_ {
 =item contents
 
 This accessor returns the object to which the Pointer points (as
-opposed to the I<value> represented by that object). C<$ptr->contents>
-is a synonym for C<$$ptr>, but since it doesn't require the double-
-sigil syntax it can be used e.g. when accessing members of compound
-objects like Arrays.
+opposed to the I<value> represented by that object). C<$ptr-E<gt>
+contents> is a synonym for C<$$ptr>, but since it doesn't require
+the double-sigil syntax it can be used e.g. when accessing members
+of compound objects like L<Arrays|Ctypes::Type::Array>.
 
 =item type
 
@@ -359,11 +362,21 @@ for my $func (keys(%access)) {
   }
 }
 
+=item sizecode
+
+Returns the sizecode of the Pointer object; i.e., the sizecode
+of all Pointer objects; i.e., 'p'.
+
+=cut
+
+sub sizecode {'p'}
+
 package Ctypes::Type::Pointer::contents;
 use warnings;
 use strict;
 use Carp;
 use Ctypes;
+our $Debug;
 
 sub TIESCALAR {
   print "In Bytes' TIESCALAR\n" if $Debug;
@@ -411,6 +424,7 @@ use warnings;
 use strict;
 use Carp;
 use Ctypes;
+our $Debug;
 
 sub TIEARRAY {
   my $class = shift;
@@ -448,8 +462,14 @@ sub STORE {
   my $insert = pack($self->{_owner}{_type}->packcode,$arg);
   print "\tinsert is ", unpack('b*',$insert), "\n" if $Debug;
   if( length($insert) != $self->{_owner}{_type}->size ) {
-    carp("You're about to break something...");
-# ??? What would be useful feedback here? Aside from just not doing it..
+    carp("You're about to insert data of length "
+      . length($insert)
+      . " into a pointer of type "
+      . $self->{_owner}->name
+      . " (size "
+      . $self->{_owner}{_type}->size
+      . ")..."
+    );
   }
   print "\tdata before and after insert:\n" if $Debug;
   print unpack('b*',$$data), "\n" if $Debug;

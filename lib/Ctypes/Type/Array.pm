@@ -81,7 +81,7 @@ sub _get_members_typed {
   my $members = [];
   my $newval;
   # A.a) Required type is a Ctypes Type
-  if( ref($deftype) eq 'Ctypes::Type::Simple' ) {
+  if( $deftype->isa('Ctypes::Type::Simple') ) {
     for(my $i = 0; defined(local $_ = $$in[$i]); $i++) {
     $newval = _arg_to_type( $_, $deftype );
     if( defined $newval ) {
@@ -229,6 +229,7 @@ sub new {
   my $self = $class->_new( {
     _name         => lc($name) . '_Array',
     _typecode     => 'p',
+    _sizecode     => 'p',
     _can_resize   => 0,
     _endianness   => '',
     _length       => $#$in + 1,
@@ -281,6 +282,7 @@ my %access = (
       1 ], # <--- this makes '_can_resize' settable
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
+  sizecode          => ['_sizecode'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
@@ -300,6 +302,22 @@ for my $func (keys(%access)) {
     }
     return $self->{$key};
   }
+}
+
+=item packcode
+
+In contrast to other types, the packcode of Arrays is dynamic.
+Following the documentation of pack codes given in L<pack>,
+C<packcode> returns 'P' plus the length of the C<data> it
+contains.
+
+For example, an array of four four-byte C<c_int>s would return
+the packcode 'C<P16>'.
+
+=cut
+
+sub packcode {
+  return 'P' . length( $_[0]->data );
 }
 
 =item copy
@@ -532,7 +550,7 @@ sub FETCH {
                                # it will pull from us, because we _owner it
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
-  if( ref($self->{VALUES}[$index]) eq 'Ctypes::Type::Simple' ) {
+  if( $self->{VALUES}[$index]->isa('Ctypes::Type::Simple') ) {
   print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
   carp "    ", $self->{object}{_name}, "\n" if $Debug;
   carp "    ", $self->{VALUES}[$index], "\n" if $Debug;

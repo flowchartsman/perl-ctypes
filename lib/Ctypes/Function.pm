@@ -332,7 +332,7 @@ sub call {
 # FUNCFLAG_PYTHONAPI
 
   # callargs should be changed in place?
-  my $result = Ctypes::call($self->{func}, $self->{sig}, @callargs);
+  my $result = _call( $self, @callargs );
 
 # XXX <insert 'errcheck protocol' here>
 
@@ -363,16 +363,9 @@ sub _form_sig {
   }
   if(defined $self->{argtypes}) {
     for(my $i = 0; $i<=$#{$self->{argtypes}} ; $i++) {
-      if( ref($self->{argtypes}[$i]) ) {
-        if( ref($self->{argtypes}[$i]) ) {
-          $sig_parts[$i+2] = $self->{argtypes}[$i]->sizecode;
-        }
-        # Can't represent non-Type objects as typecodes!
-        return undef;
-      }
-      # Don't know how this would happen, but...
-      return undef if length $self->{argtypes}[$i] > 1;
-      $sig_parts[$i+2] = $self->{argtypes}[$i];
+      $sig_parts[$i+2] = ref($self->{argtypes}[$i])
+        ? $self->{argtypes}[$i]->sizecode
+        : $self->{argtypes}[$i]; # Assume valid; _check_valid_types'd in new()
     }
   }
   return join('',@sig_parts);

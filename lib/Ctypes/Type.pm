@@ -347,8 +347,6 @@ for all Type objects. Sets/returns 1 or 0. See the
 L<strict_input/Ctypes::Type::Simple/strict_input> object method
 for how to do this to individual objects
 
-=back
-
 =cut
 
 {
@@ -366,6 +364,8 @@ for how to do this to individual objects
 }
 
 =item sub is_a_number
+
+=back
 
 =cut
 

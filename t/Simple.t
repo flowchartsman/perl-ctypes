@@ -137,12 +137,12 @@ sub SimpleTest {
   is( $x->name, $name, 'Correct name' );
 
   subtest "$name will not accept references" => sub {
-    plan tests => 2;
+    plan tests => 3;
     $input = 95;
     $$x = $input;
     eval{  $$x = [1, 2, 3] };
     is( $$x, $get_return->($input) );
-    is( unpack('b*',${$x->data}), unpack('b*', pack($x->packcode, 95)) );
+    is( unpack('b*',${$x->data}), unpack('b*', pack($x->packcode, $input)) );
     like( $@, qr/$name: cannot take references \(got ARRAY.*\)/ );
   };
 
@@ -460,15 +460,8 @@ my $types = {
 };
 
 my $i = 0;
-for( %$types ) {
-  push @types_to_test, $_ if $i % 2 != 0;
-  $i++;
-}
+push @types_to_test, values %$types;
 
-for( @types_to_test ) {
-  SimpleTest($_);
-}
+SimpleTest($_) for @types_to_test;
 
 done_testing();
-
-
