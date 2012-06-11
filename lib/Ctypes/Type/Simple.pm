@@ -497,7 +497,12 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'c'};
 #sub packcode{'c'};
 sub typecode{'c'};
-sub _minmax { ( -127, 128 ) }
+sub _minmax {
+  Ctypes::Type::Simple::_minmax_const(
+    Ctypes::constant('CHAR_MIN'),
+    Ctypes::constant('CHAR_MAX')
+  );
+}
 sub _hook_fetch {
   print "In _hook_fetch c_char\n" if $Debug;
   return chr($_[1]) if Ctypes::Type::is_a_number($_[1]);

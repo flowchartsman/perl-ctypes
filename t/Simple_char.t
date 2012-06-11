@@ -152,7 +152,7 @@ subtest "$name->strict_input prevents overflow of characters" => sub {
     eval { $$x = $input };
     is( $$x, chr($MAX) );
     is( ${$x->data}, pack($x->packcode, $MAX ) );
-    like( $@, qr/$name: character values must be 0 <= ord\(x\) <= $MAX \(got $input\)/ );
+    like( $@, qr/$name: character values must be integers 0 <= ord\(x\) <= $MAX \(got $input\)/ );
   }
   done_testing();
 };
@@ -177,7 +177,7 @@ subtest "$name->strict_input: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, chr(95) );
     is( ${$x->data}, pack($x->packcode, 95 ) );
-    $like = $name . ': single characters only, and must be 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
+    $like = $name . ': single characters only, and must be integers 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
     substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
     like( $@, qr/$like/ );
@@ -248,7 +248,7 @@ subtest "$name: strict_input_all prevents overflow of characters" => sub {
     is( $$x, 'P' );
     is( ${$x->data}, pack($x->packcode, ord('P') ) );
     my $like = chr($_);
-    like( $@, qr/$name: character values must be 0 <= ord\(x\) <= $MAX \(got $like\)/ );
+    like( $@, qr/$name: character values must be integers 0 <= ord\(x\) <= $MAX \(got $like\)/ );
   }
   done_testing();
 };
@@ -273,7 +273,7 @@ subtest "$name: strict_input_all: multi-character error" => sub {
     eval { $$x = $input };
     is( $$x, 'P' );
     is( ${$x->data}, pack($x->packcode, ord('P') ) );
-    $like = $name . ': single characters only, and must be 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
+    $like = $name . ': single characters only, and must be integers 0 <= ord\(x\) <= ' . $MAX . ' \(got ' . $input . '\)';
     substr( $like, ( index($like, 'oubi') - 1 ), 0, '\\' )
       if $input =~ qr{\^|\$|\.|\+|\*|\?|\(|\)|\[|\]|\\};
     like( $@, qr/$like/ );
