@@ -418,21 +418,21 @@ sub SimpleTest {
 
 }
 
-my $types = {
-#    c_byte => {
-#      instantiator => 'c_byte',
-#      packcode     => 'c',
-#      sizecode     => 'c',
-#      typecode     => 'b',
-#      name         => 'c_byte',
-#      MAX          => 127,
-#      MIN          => -128,
-#  
-#      ret_input    => 1,
-#      is_signed    => 1,
-#      extra        => 128,
-#              },
-  c_ubyte => {
+my $types = [
+  {
+    instantiator => 'c_byte',
+    packcode     => 'c',
+    sizecode     => 'c',
+    typecode     => 'b',
+    name         => 'c_byte',
+    MAX          => 127,
+    MIN          => -128,
+
+    ret_input    => 1,
+    is_signed    => 1,
+    extra        => 128,
+            },
+  {
     instantiator => 'c_ubyte',
     packcode     => 'C',
     sizecode     => 'C',
@@ -445,21 +445,21 @@ my $types = {
     is_unsigned  => 1,
     extra        => 256,
   },
-#    c_char => {
-#      instantiator => 'c_char',
-#      packcode     => 'c',
-#      sizecode     => 'c',
-#      typecode     => 'c',
-#      name         => 'c_char',
-#      MAX          => 127,
-#      MIN          => -128,
-#  
-#      ret_char     => 1,
-#      is_signed    => 1,
-#      extra        => 128,
-#    },
-};
+  {
+    instantiator => 'c_char',
+    packcode     => 'c',
+    sizecode     => 'c',
+    typecode     => 'c',
+    name         => 'c_char',
+    MAX          => 127,
+    MIN          => -128,
 
-SimpleTest($_) for values %$types;
+    ret_char     => 1,
+    is_signed    => 1,
+    extra        => 128,
+  },
+];
+
+SimpleTest($_) for $types->[0 .. 1];
 
 done_testing();
