@@ -279,6 +279,7 @@ sub SimpleTest {
   subtest "$name->strict_input prevents overflow with characters" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_);
+      print "Input: ", $input, "\n";
       $$x = $input;
       is( $$x, $get_return->($input) );
       is( ${$x->data}, pack($x->packcode, $_ ) );
@@ -431,37 +432,34 @@ my $types = {
     is_signed    => 1,
     extra        => 128,
             },
-  c_ubyte => {
-    instantiator => 'c_ubyte',
-    packcode     => 'C',
-    sizecode     => 'C',
-    typecode     => 'B',
-    name         => 'c_ubyte',
-    MAX          => 255,
-    MIN          => 0,
-
-    ret_input    => 1,
-    is_unsigned  => 1,
-    extra        => 256,
-  },
-  c_char => {
-    instantiator => 'c_char',
-    packcode     => 'c',
-    sizecode     => 'c',
-    typecode     => 'c',
-    name         => 'c_char',
-    MAX          => 127,
-    MIN          => -128,
-
-    ret_char     => 1,
-    is_signed    => 1,
-    extra        => 128,
-  },
+#    c_ubyte => {
+#      instantiator => 'c_ubyte',
+#      packcode     => 'C',
+#      sizecode     => 'C',
+#      typecode     => 'B',
+#      name         => 'c_ubyte',
+#      MAX          => 255,
+#      MIN          => 0,
+#  
+#      ret_input    => 1,
+#      is_unsigned  => 1,
+#      extra        => 256,
+#    },
+#    c_char => {
+#      instantiator => 'c_char',
+#      packcode     => 'c',
+#      sizecode     => 'c',
+#      typecode     => 'c',
+#      name         => 'c_char',
+#      MAX          => 127,
+#      MIN          => -128,
+#  
+#      ret_char     => 1,
+#      is_signed    => 1,
+#      extra        => 128,
+#    },
 };
 
-my $i = 0;
-push @types_to_test, values %$types;
-
-SimpleTest($_) for @types_to_test;
+SimpleTest($_) for values %$types;
 
 done_testing();

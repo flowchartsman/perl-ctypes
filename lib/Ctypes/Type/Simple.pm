@@ -466,12 +466,13 @@ use base 'Ctypes::Type::Simple';
 sub sizecode{'c'};
 sub packcode{'c'};
 sub typecode{ $Ctypes::USE_PERLTYPE ? 'c' : 'b'};
-sub _minmax { ( -127, 128 ) }
+sub _minmax { ( -128, 127 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_byte\n" if $Debug;
-# Not sure what the unless is_a_number test does here?
-# What if last assignment was e.g. a float?
-  return ord($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+# If the value assigned was a character, give a character back.
+# Otherwise give a number back (stored as a number internally).
+# XXX What if last assignment was e.g. a float?
+  return chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
   $_[1];
 }
 
@@ -769,15 +770,14 @@ sub STORE {
   my $typecode = $object->{_typecode};
   print "    Using typecode $typecode\n" if $Debug;
   print "    1) arg is ", $arg, "\n" if $Debug;
-  my ($invalid, $result) = $object->validate($arg);
-  $arg = $result unless $invalid;
+  my ($invalid, $validated_arg) = $object->validate($arg);
 
   print "    validate() returned ", $invalid ? "'$invalid'\n" : "ok\n" if $Debug;
   if( defined $invalid ) {
     no strict 'refs';
     if( ($object->strict_input == 1)
         or (Ctypes::Type::strict_input_all() == 1)
-        or (not defined $result) ) {
+        or (not defined $validated_arg) ) {
       print "Unable to ameliorate input. strict input or validate couldn't convert\n" if $Debug;
       croak( $invalid, ' (got ', $arg, ')');
       return undef;
@@ -785,14 +785,14 @@ sub STORE {
       carp( $invalid, ' (got ', $arg, ')');
     }
   }
-  print "    2) arg is $result\n",
-    "    binary:\n\t", unpack('b*', $result), "\n",
-    "    ordinal:\n\t", ord($result), "\n"
+  print "    2) arg is $validated_arg\n",
+    "    binary:\n\t", unpack('b*', $validated_arg), "\n",
+    "    ordinal:\n\t", ord($validated_arg), "\n"
     if $Debug;
 #
 # Put the $object's values in order
 #
-  eval { $object->{_data} = pack( $object->packcode, $result ); }; # overflow warning
+  eval { $object->{_data} = pack( $object->packcode, $validated_arg ); }; # overflow warning
   $self->[1] = unpack( $object->packcode, $object->{_data} );
   $object->{_input} = $arg;
 #
