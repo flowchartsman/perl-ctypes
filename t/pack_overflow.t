@@ -2,6 +2,7 @@
 
 use strict;
 use warnings;
+no warnings 'pack';
 use Config;
 
 my $uchar_max = 2 ** 8 - 1;

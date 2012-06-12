@@ -264,10 +264,18 @@ you the size of the whole array, i.e. sizeof(<member_type>) * number
 of members. You can use C<member_size> to return the size each of
 the items the Array holds (or is typed to hold).
 
+=item sizecode
+
+Return the sizecode, which for Arrays is always 'p'. 
+
 =item length
 
 A convenience method returning the number of items in the array
 (simply another, less sigiltastic way of saying C<$#$array + 1>).
+
+=item size
+
+Returns the combined size of all members of the array.
 
 =cut
 
@@ -283,6 +291,7 @@ my %access = (
   member_type       => ['_member_type'],
   member_size       => ['_member_size'],
   sizecode          => ['_sizecode'],
+  size              => ['_size'],
              );
 for my $func (keys(%access)) {
   no strict 'refs';
