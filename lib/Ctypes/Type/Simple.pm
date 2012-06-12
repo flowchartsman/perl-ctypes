@@ -554,7 +554,7 @@ sub _minmax {
 # Alias to c_ulong where equal; I
 package Ctypes::Type::c_uint;
 use base 'Ctypes::Type::Simple';
-#sub sizecode{'i'};
+sub sizecode{'i'};
 sub packcode{'I'};
 sub typecode{'I'};
 sub _minmax {
@@ -574,7 +574,7 @@ sub _minmax {
 
 package Ctypes::Type::c_ulong;
 use base 'Ctypes::Type::Simple';
-#sub sizecode{'l'};
+sub sizecode{'l'};
 sub packcode{'L'};
 sub typecode{'L'};
 sub _minmax {
