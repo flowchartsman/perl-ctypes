@@ -485,11 +485,8 @@ sub typecode{ $Ctypes::USE_PERLTYPES ? 'C' : 'B'};
 sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   print "In _hook_fetch c_ubyte\n" if $Debug;
-  my $ret = $_[1];
-  $ret = ord($_[1]) unless Ctypes::Type::is_a_number($_[1]);
-  $ret += 127 if $ret < 1;
-  $ret &= 255 if $ret > 255;
-  $ret;
+  return chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+  $_[1];
 }
 
 # single character, c signed, possibly a multi-char (?)

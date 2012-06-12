@@ -419,32 +419,32 @@ sub SimpleTest {
 }
 
 my $types = {
-  c_byte => {
-    instantiator => 'c_byte',
-    packcode     => 'c',
-    sizecode     => 'c',
-    typecode     => 'b',
-    name         => 'c_byte',
-    MAX          => 127,
-    MIN          => -128,
-
-    ret_input    => 1,
-    is_signed    => 1,
-    extra        => 128,
-            },
-#    c_ubyte => {
-#      instantiator => 'c_ubyte',
-#      packcode     => 'C',
-#      sizecode     => 'C',
-#      typecode     => 'B',
-#      name         => 'c_ubyte',
-#      MAX          => 255,
-#      MIN          => 0,
+#    c_byte => {
+#      instantiator => 'c_byte',
+#      packcode     => 'c',
+#      sizecode     => 'c',
+#      typecode     => 'b',
+#      name         => 'c_byte',
+#      MAX          => 127,
+#      MIN          => -128,
 #  
 #      ret_input    => 1,
-#      is_unsigned  => 1,
-#      extra        => 256,
-#    },
+#      is_signed    => 1,
+#      extra        => 128,
+#              },
+  c_ubyte => {
+    instantiator => 'c_ubyte',
+    packcode     => 'C',
+    sizecode     => 'C',
+    typecode     => 'B',
+    name         => 'c_ubyte',
+    MAX          => 255,
+    MIN          => 0,
+
+    ret_input    => 1,
+    is_unsigned  => 1,
+    extra        => 256,
+  },
 #    c_char => {
 #      instantiator => 'c_char',
 #      packcode     => 'c',
