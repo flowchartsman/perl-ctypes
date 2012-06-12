@@ -715,6 +715,7 @@ sub size { $_[0]->{_size} }
 package Ctypes::Type::Simple::value;
 use strict;
 use warnings;
+no warnings 'pack';
 use Carp;
 use Scalar::Util qw|blessed|;
 our $Debug;

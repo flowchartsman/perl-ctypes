@@ -1,6 +1,7 @@
 #!perl
 
 use Test::More;
+use Test::Warn;
 use Carp;
 BEGIN { use_ok( Ctypes ) }
 
@@ -148,13 +149,10 @@ sub SimpleTest {
 
   unless( $is_float ) {
     subtest "$name drops numbers after decimal point" => sub {
-      plan tests => 4;
+      plan tests => 3;
       $input = 95.2;
-      $$x = $input;
-      is( $$x, $get_return->($input) );
-      is( ${$x->data}, pack($x->packcode, 95 ) );
-      $input = 95.8;
-      $$x = $input;
+      warnings_exist { $$x = $input }
+        [ { carped => qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $input\)/} ];
       is( $$x, $get_return->($input) );
       is( ${$x->data}, pack($x->packcode, 95 ) );
     };
@@ -165,7 +163,8 @@ sub SimpleTest {
   # **reference to the standard?
   subtest "$name: number overflow" => sub {
     for( $range->( $MIN - $extra, $MIN - 1 ) ) {
-      $$x = $_;
+      warnings_exist { $$x = $_ }
+        [ { carped => qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/} ];
       isnt( $$x, $get_return->($_) );
       ok( $$x >= $MIN );
     }
@@ -175,7 +174,8 @@ sub SimpleTest {
       is( ${$x->data}, pack($x->packcode, $_ ) );
     }
     for( $range->( $MAX + 1, $MAX + $extra ) ) {
-      $$x = $_;
+      warnings_exist { $$x = $_ }
+        [ { carped => qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/} ];
       isnt( $$x, $get_return->($_) );
       ok( $$x <= $MAX );
     }
@@ -184,26 +184,29 @@ sub SimpleTest {
 
   subtest "$name: character overflow" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
-	$input = chr($_);
-	$$x = $input;
-	is( $$x, $get_return->($input) );
-	is( ${$x->data}, pack($x->packcode, $_ ) );
+      $input = chr($_);
+      $$x = $input;
+      is( $$x, $get_return->($input) );
+      is( ${$x->data}, pack($x->packcode, $_ ) );
     }
     for( $range->( $MAX + 1, $MAX + $extra) ) {
-	$input = chr($_);
-	$$x = $input;
-	isnt( $$x, $get_return->($input) );
-	ok( $$x <= $MAX );
+      $input = chr($_);
+      warnings_exist { $$x = $input }
+        [ qr/$name: character values must be integers 0 <= ord\(x\) <= $MAX \(got $input\)/ ];
+      isnt( $$x, $get_return->($input) );
+      ok( $$x <= $MAX );
     }
     done_testing();
   };
 
   subtest "$name: characters after first discarded" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
-	$input = chr($_) . 'oubi';
-	$$x = $input;
-	is( $$x, $get_return->($input) );
-	is( ${$x->data}, pack($x->packcode, $_ ) );
+      $input = chr($_) . 'oubi';
+      $like = "$name: single characters only";
+      warnings_exist { $$x = $input }
+        [ { carped => qr/$like/} ];
+      is( $$x, $get_return->($input) );
+      is( ${$x->data}, pack($x->packcode, $_ ) );
     }
     done_testing();
   };
@@ -258,7 +261,6 @@ sub SimpleTest {
   subtest "$name->strict_input prevents overflow with characters" => sub {
     for( $range->( 0, $MAX, $cover, $weight, $want_int ) ) {
       $input = chr($_);
-      print "Input: ", $input, "\n";
       $$x = $input;
       is( $$x, $get_return->($input) );
       is( ${$x->data}, pack($x->packcode, $_ ) );
@@ -389,7 +391,6 @@ sub SimpleTest {
     }
     done_testing();
   };
-
 }
 
 my $MAX = Ctypes::constant('PERL_SHORT_MAX');
@@ -559,6 +560,6 @@ my $types = [
   },
 ];
 
-SimpleTest($_) for ( @$types );
+SimpleTest($_) for ( @$types ); # [ $#types ];
 
 done_testing();
