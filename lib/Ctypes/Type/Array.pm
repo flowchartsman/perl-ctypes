@@ -218,7 +218,7 @@ sub new {
     _get_members_typed($deftype, $in) :
     _get_members_untyped( $in );
 
-  if( not defined @{$inputs_typed} ) {
+  if( !@{$inputs_typed} ) {
     croak("Could not create Array from arguments supplied: see warnings");
   }
 
