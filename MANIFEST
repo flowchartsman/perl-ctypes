@@ -29,16 +29,6 @@ t/002-Function.t
 t/Array.t
 t/Pointer.t
 t/Simple.t
-t/Simple_byte.t
-t/Simple_char.t
-t/Simple_int.t
-t/Simple_long.t
-t/Simple_short.t
-t/Simple_ubyte.t
-t/Simple_uchar.t
-t/Simple_uint.t
-t/Simple_ulong.t
-t/Simple_ushort.t
 t/Struct.t
 t/Union.t
 t/callbacks.t
