@@ -2,14 +2,13 @@ package Ctypes::Type::Array;
 use strict;
 use warnings;
 use Carp;
-use Ctypes;
+use Ctypes::Util qw|_debug|;
 use Scalar::Util qw|looks_like_number|;
 use overload '@{}'    => \&_array_overload,
              '${}'    => \&_scalar_overload,
              fallback => 'TRUE';
 
 our @ISA = qw|Ctypes::Type|;
-my $Debug;
 
 =head1 NAME
 
@@ -133,7 +132,7 @@ sub _get_members_untyped {
         return undef;
       }
       if( $ref ne 'Ctypes::Type::Simple' ) {
-        $invalid = Ctypes::_check_invalid_types( [ $_ ] );
+        $invalid = Ctypes::Util::_check_invalid_types( [ $_ ] );
         if( not $invalid ) {
           $found_type = $ref;
         } else {
@@ -153,7 +152,7 @@ sub _get_members_untyped {
 
   my $members = [];
   # Now, check for non-numerics...
-  my $lcd = Ctypes::_check_type_needed(@$in);   # 'lowest common denomenator'
+  my $lcd = Ctypes::Util::_check_type_needed(@$in);   # 'lowest common denomenator'
   croak "no lcd of @$in" unless $lcd;
   # Now create type objects for all members...
   for(my $i = 0; defined($$in[$i]); $i++ ) {
@@ -208,10 +207,10 @@ sub new {
     $deftype = shift;
     croak("Array type must be specified as Ctypes Type or similar object")
       unless ref($deftype);
-    Ctypes::_check_invalid_types( [ $deftype ] );
+    Ctypes::Util::_check_invalid_types( [ $deftype ] );
     $in = shift;
   } else {  # no specification of array type, guess reasonable defaults
-    $in = Ctypes::_make_arrayref(@_);
+    $in = Ctypes::Util::_make_arrayref(@_);
   }
 
   my $inputs_typed = defined $deftype ?
@@ -341,16 +340,16 @@ sub copy {
   for( 0..$#$self ) {
     $arr[$_] = $self->{_rawmembers}->{VALUES}->[$_];
   }
-  return new Ctypes::Type::Array( @arr );
+  return Ctypes::Type::Array->new( @arr );
 }
 
 sub data {
   my $self = shift;
-  print "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
+  _debug( 4, "In ", $self->{_name}, "'s _DATA(), from ", join(", ",(caller(1))[0..3]), "\n"  );
 if( defined $self->{_data}
       and $self->_datasafe == 1 ) {
-    print "    _data already defined and safe\n" if $Debug;
-    print "    returning ", unpack('b*',$self->{_data}), "\n" if $Debug;
+    _debug( 5, "    _data already defined and safe\n"  );
+    _debug( 5, "    returning ", unpack('b*',$self->{_data}), "\n"  );
     return \$self->{_data};
   }
 # TODO This is where a check for an endianness property would come in.
@@ -362,7 +361,7 @@ if( defined $self->{_data}
         ${$_->_as_param_};
     }
     $self->{_data} = join('',@data);
-    print "  ", $self->{_name}, "'s _data returning ok...\n" if $Debug;
+    _debug( 4, "  ", $self->{_name}, "'s _data returning ok...\n"  );
     $self->_datasafe(0);
     return \$self->{_data};
   } else {
@@ -395,12 +394,12 @@ sub _as_param_ { return $_[0]->data(@_) }
 
 sub _update_ {
   my($self, $arg, $index) = @_;
-  print "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n" if $Debug;
-  print "  self is: ", $self, "\n" if $Debug;
-  print "  current data looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
-  print "  arg is: $arg\n" if $arg and $Debug;
-  print "  which is\n", unpack('b*',$arg), "\n  to you and me\n" if $arg and $Debug;
-  print "  and index is: $index\n" if $index and $Debug;
+  _debug( 4, "In ", $self->{_name}, "'s _UPDATE_, from ", join(", ",(caller(0))[0..3]), "\n"  );
+  _debug( 4, "  self is: ", $self, "\n"  );
+  _debug( 4, "  current data looks like:\n", unpack('b*',$self->{_data}), "\n"  );
+  _debug( 4, "  arg is: $arg\n" ) if $arg;
+  _debug( 4, "  which is\n", unpack('b*',$arg), "\n  to you and me\n") if $arg;
+  _debug( 4, "  and index is: $index\n") if $index;
   if( not defined $arg ) {
     if( $self->{_owner} ) {
     $self->{_data} = substr( ${$self->{_owner}->data},
@@ -413,15 +412,15 @@ sub _update_ {
       if( $pad > 0 ) {
         $self->{_data} .= "\0" x $pad;
       }
-      print "  Putting arg where I think it should go...\n" if $Debug;
+      _debug( 5, "  Putting arg where I think it should go...\n"  );
       substr( $self->{_data},
               $index,
               length($arg)
             ) = $arg;
-      print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+      _debug( 5, "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n"  );
     } else {
       $self->{_data} = $arg; # if data given with no index, replaces all
-  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
+      _debug( 5, "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n"  );
     }
   }
 
@@ -430,8 +429,8 @@ sub _update_ {
   # Could C::B::C help with this???
   if( defined $arg and $self->{_owner} ) {
   my $success = undef;
-  print "  Sending data back upstream:\n" if $arg and $Debug;
-  print "    Index is ", $self->{_index}, "\n" if $arg and $Debug;
+  _debug( 5, "  Sending data back upstream:\n") if $arg;
+  _debug( 5, "    Index is ", $self->{_index}, "\n") if $arg;
     $success =
       $self->{_owner}->_update_(
         $self->{_data},
@@ -444,13 +443,13 @@ sub _update_ {
     }
   }
   $self->_datasafe(1);
-  print "BLARG: ", $self->{_rawmembers}, "\n" if $Debug;
+  _debug( 5, "BLARG: ", $self->{_rawmembers}, "\n"  );
   for(@{$self->{_rawmembers}->{VALUES}}) {
-    print "    Telling $_ it's not safe\n" if $Debug;
+    _debug( 5, "    Telling $_ it's not safe\n"  );
     $_->_datasafe(0);
   }
-  print "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n" if $Debug;
-  print "    ", $self->{_name}, "'s _Update_ returning ok\n" if $Debug;
+  _debug( 4, "  In ", $self->name, ", data NOW looks like:\n", unpack('b*',$self->{_data}), "\n"  );
+  _debug( 4, "    ", $self->{_name}, "'s _Update_ returning ok\n"  );
   return 1;
 }
 
@@ -471,6 +470,7 @@ use strict;
 use warnings;
 use Carp;
 use Ctypes::Type::Array;
+use Ctypes::Util qw|_debug|;
 
 sub TIEARRAY {
   my $class = shift;
@@ -483,7 +483,7 @@ sub TIEARRAY {
 
 sub STORE {
   my( $self, $index, $arg ) = @_;
-  print "In ", $self->{object}{_name}, "'s STORE, from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
+  _debug( 4, "In ", $self->{object}{_name}, "'s STORE, from ", join(", ",(caller(1))[0..3]), "\n"  );
 
   if( $index > ($self->{object}{_length} - 1)
       and $self->{object}{_can_resize} = 0 ) {
@@ -529,12 +529,12 @@ sub STORE {
     # one would make use of the disappearing object's _needsfree attribute.
   }
   my $datum = ${$val->data}; # BEFORE setting owner, that's important!
-  print "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n" if $Debug;
-  print "    ", __PACKAGE__ . ":" . __LINE__, ": In data form, that's\n",unpack('b*',$datum),"\n" if $Debug;
+  _debug( 5, "    Arg is ", $val, " / ", ref($val), " / ", ref($val) ? $val->name : '', " / ", ${$val}, "\n"  );
+  _debug( 5, "    ", __PACKAGE__ . ":" . __LINE__, ": In data form, that's\n",unpack('b*',$datum),"\n"  );
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index}
     = $index * $self->{object}->{_member_size};
-  print "    Setting {VALUES}[$index] to $val\n" if $Debug;
+  _debug( 4, "    Setting {VALUES}[$index] to $val\n"  );
   $self->{VALUES}[$index] = $val;
   $self->{VALUES}[$index]->{_owner} = $self->{object};
   $self->{VALUES}[$index]->{_index} = $index * $self->{object}->{_member_size};
@@ -551,22 +551,22 @@ sub STORE {
 
 sub FETCH {
   my($self, $index) = @_;
-  print "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n" if $Debug;
+  _debug( 4, "In ", $self->{object}{_name}, "'s FETCH, looking for [ $index ], called from ", join(", ",(caller(1))[0..3]), "\n"  );
   if( defined $self->{object}{_owner}
       or $self->{object}{_datasafe} == 0 ) {
-    print "    Can't trust data, updating...\n" if $Debug;
+    _debug( 5, "    Can't trust data, updating...\n"  );
     $self->{object}->_update_; # Don't need to update member we're FETCHing;
                                # it will pull from us, because we _owner it
   }
   croak("Error updating values!") if $self->{object}{_datasafe} != 1;
   if( $self->{VALUES}[$index]->isa('Ctypes::Type::Simple') ) {
-  print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
-  carp "    ", $self->{object}{_name}, "\n" if $Debug;
-  carp "    ", $self->{VALUES}[$index], "\n" if $Debug;
+    _debug( 5, "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n"  );
+    _debug( 5, "    ", $self->{object}{_name}, "\n");
+    _debug( 5, "    ", $self->{VALUES}[$index], "\n");
     return ${$self->{VALUES}[$index]};
   } else {
-    print "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n" if $Debug;
-    print "\n" if $Debug;
+    _debug( 5, "    ", $self->{object}{_name}, "'s FETCH[ $index ] returning ", $self->{VALUES}[$index], "\n"  );
+    _debug( 4, "\n"  );
     return $self->{VALUES}[$index];
   }
 }

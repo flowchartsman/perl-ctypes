@@ -2,7 +2,7 @@ package Ctypes::Function;
 
 use strict;
 use warnings;
-use Ctypes qw|_make_arrayref _check_invalid_types|;
+use Ctypes::Util qw|_make_arrayref _check_invalid_types|;
 use overload '&{}' => \&_call_overload;
 use Scalar::Util qw|blessed looks_like_number|;
 use Carp;
@@ -586,8 +586,8 @@ sub new {
       $$argtypes = [ split(//, substr($$sig, 2)) ]  unless $$argtypes;
   }
   $$restype = 'i' unless defined $$restype;
-  $$argtypes = Ctypes::_make_arrayref($$argtypes) if defined($$argtypes);
-  my $errpos = Ctypes::_check_invalid_types($$argtypes);
+  $$argtypes = Ctypes::Util::_make_arrayref($$argtypes) if defined($$argtypes);
+  my $errpos = Ctypes::Util::_check_invalid_types($$argtypes);
   croak("Invalid argtype at position $errpos: " . $$argtypes->[$errpos] )
     if $errpos;
 

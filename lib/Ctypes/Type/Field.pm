@@ -10,8 +10,6 @@ use overload
   '&{}'    => \&_code_overload,
   fallback => 'TRUE';
 
-my $Debug = 0;
-
 sub _array_overload {
   return \@{$_[0]->{_rawcontents}->{VALUE}};
 }
@@ -68,7 +66,7 @@ for my $func (keys(%access)) {
   *$func = sub {
     my $self = shift;
     my $arg = shift;
-    print "In $func accessor\n" if $Debug;
+    _debug( 5, "In $func accessor\n"  );
     croak("The $key method only takes one argument") if @_;
     if($access{$func}[1] and defined($arg)){
       eval{ $access{$func}[1]->($arg); };
@@ -79,7 +77,7 @@ for my $func (keys(%access)) {
     if($access{$func}[2] and defined($arg)) {
       $self->{_rawcontents}->{VALUE}->{$key} = $arg;
     }
-    print "    $func returning $key...\n" if $Debug;
+    _debug( 5, "    $func returning $key...\n"  );
     return $self->{_rawcontents}->{VALUE}->$func;
   }
 }
@@ -111,9 +109,9 @@ sub AUTOLOAD {
   if ( $AUTOLOAD =~ /.*::(.*)/ ) {
     return if $1 eq 'DESTROY';
     my $func = $1;
-    print "Trying to AUTOLOAD for $func in FIELD\n" if $Debug;
+    _debug( 5, "Trying to AUTOLOAD for $func in FIELD\n"  );
     my $self = shift;
-    print "args: ", @_, "\n" if @_ and $Debug;
+    _debug( 5, "args: ", @_, "\n") if @_;
     return $self->{_rawcontents}->{VALUE}->$func(@_);
   }
 }
@@ -121,9 +119,10 @@ sub AUTOLOAD {
 package Ctypes::Type::Field::contents;
 use strict;
 use warnings;
-use Scalar::Util qw|blessed|;
-use Data::Dumper;
 use Carp;
+use Ctypes::Util qw|_debug|;
+use Data::Dumper;
+use Scalar::Util qw|blessed|;
 
 sub TIESCALAR {
   my $class = shift;
@@ -137,30 +136,30 @@ sub TIESCALAR {
 sub STORE {
   croak("Field's STORE must take an argument") if scalar @_ < 2;
   my( $self, $val ) = ( shift, shift );
-  print "In ", $self->{_obj}{_obj}{_name}, "'s Field::STORE with arg '$val',\n" if $Debug;
-  print "    called from ", (caller(1))[0..3], "\n" if $Debug;
+  _debug( 5, "In ", $self->{_obj}{_obj}{_name}, "'s Field::STORE with arg '$val',\n"  );
+  _debug( 5, "    called from ", (caller(1))[0..3], "\n"  );
   croak("Fields can only be assigned single values") if @_;
   my $need_manual_update = 0;
   if(!ref($val)) {
-    print "    \$val had no ref\n" if $Debug;
+    _debug( 5, "    \$val had no ref\n"  );
     if( not defined $val ) {
-      print "    \$val not defined\n" if $Debug;
+      _debug( 5, "    \$val not defined\n"  );
       if( not defined $self->{VALUE} ) {
         croak( "Fields must be initialised with a Ctypes object" );
       } else {
-        print "    setting {VALUE} to undef\n" if $Debug;
+        _debug( 5, "    setting {VALUE} to undef\n"  );
         ${$self->{VALUE}} = undef;
       }
     }
     if( not defined $self->{VALUE} ) {
-      print "    Initialising {VALUE} with plain scalar...\n" if $Debug;
+      _debug( 5, "    Initialising {VALUE} with plain scalar...\n"  );
       my $tc = Ctypes::_check_type_needed( $val );
       $val = new Ctypes::Type::Simple( $tc, $val );
       $self->{VALUE} = $val;
       $need_manual_update = 1;
     } else {
       if( $self->{VALUE}->isa('Ctypes::Type::Simple') ) {
-        print "    Setting simple type to \$val\n" if $Debug;
+        _debug( 5, "    Setting simple type to \$val\n"  );
         ${$self->{VALUE}} = $val;
       } else {
         croak( "Tried to squash ", $self->{VALUE},
@@ -168,11 +167,11 @@ sub STORE {
       }
     }
   } else {  # $val is a ref
-    print "    \$val is a ref\n" if $Debug;
+    _debug( 5, "    \$val is a ref\n"  );
     if( blessed($val) ) {
       if ( $val->isa('Ctypes::Type') ) {
         $val = $val->copy;
-        print "    \$val copied successfully\n" if $val and $Debug;
+        _debug( 5, "    \$val copied successfully\n" ) if $val;
         $self->{VALUE}->_set_owner(undef) if defined $self->{VALUE};
         $self->{VALUE}->_set_index(undef) if defined $self->{VALUE};
         $self->{VALUE} = $val;
@@ -204,17 +203,17 @@ sub STORE {
     $self->{_obj}{_obj}->_update_( $datum,
                                    $self->{_obj}{_index} );
     $self->{VALUE}->_set_owner( $self->{_obj}{_obj} );
-    print "    Setting index ", $self->{_obj}{_index}, " for $val\n" if $Debug;
+    _debug( 5, "    Setting index ", $self->{_obj}{_index}, " for $val\n"  );
     $self->{VALUE}->_set_index( $self->{_obj}{_index} );
-    print "      Got index ", $self->{VALUE}->index, "\n" if $Debug;
+    _debug( 5, "      Got index ", $self->{VALUE}->index, "\n"  );
   }
   return $self->{VALUE};
 }
 
 sub FETCH {
   my $self = shift;
-  print "In ", $self->{_obj}{_obj}->name, "'s ", $self->{_obj}{_key},
-    " field FETCH,\n\tcalled from ", (caller(1))[0..3], "\n" if $Debug;
+  _debug( 5, "In ", $self->{_obj}{_obj}->name, "'s ", $self->{_obj}{_key},
+    " field FETCH,\n\tcalled from ", (caller(1))[0..3], "\n");
   if( defined $self->{VALUE}
       and $self->{VALUE}->isa('Ctypes::Type::Simple') ) {
     return ${$self->{VALUE}};

@@ -8,7 +8,7 @@ our @ISA = qw|Exporter|;
 our @EXPORT_OK = qw|&_types &strict_input_all|;
 
 # This should be customizable, should it?
-use Ctypes;
+use Ctypes::Util qw|_debug|;
 use Ctypes::Type::Simple;
 use Ctypes::Type::Array;
 use Ctypes::Type::Pointer;
@@ -16,7 +16,6 @@ use Ctypes::Type::Struct;
 use Scalar::Util qw|looks_like_number|;
 use B qw|svref_2object|;
 use Encode;
-my $Debug = 1;
 use utf8;
 
 =head1 NAME

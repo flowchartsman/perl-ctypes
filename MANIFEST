@@ -20,6 +20,7 @@ lib/Ctypes/Type/Pointer.pm
 lib/Ctypes/Type/Simple.pm
 lib/Ctypes/Type/Struct.pm
 lib/Ctypes/Type/Union.pm
+lib/Ctypes/Util.pm
 lib/Ctypes/WinTypes.pm
 obj_util.c
 ppport.h

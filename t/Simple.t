@@ -4,6 +4,7 @@ use Test::More;
 use Test::Warn;
 use Carp;
 BEGIN { use_ok( Ctypes ) }
+use Ctypes::Util qw|create_range|;
 
 
 #

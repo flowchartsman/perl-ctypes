@@ -7,7 +7,6 @@ use Ctypes;
 use Ctypes::Type::Struct;
 use Data::Dumper;
 use t_POINT;
-my $Debug = 1;
 
 my $struct = Struct([
   f1 => c_char('P'),
