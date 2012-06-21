@@ -176,7 +176,7 @@ sub new {
         }
       }
       _debug( 5, "    Got these extra fields:\n" );
-      _debug( join( "\n\t", @$extra_fields ) );
+      _debug( 5, join( "\n\t", @$extra_fields ) );
       if( scalar @$extra_fields % 2 ) {
         croak( "_fields_ must be key => value pairs!" );
       }
@@ -196,7 +196,6 @@ sub new {
 # two lines, so ::_Fields and ::_Values keep a reference to
 # the object, not the as-yet-unblessed hash.
 #
-  $DB::single = 1; 
   $self = $class->_new( $self );
   $self->{_fields} = new Ctypes::Type::Struct::_Fields($self);
   $self->{_values} = new Ctypes::Type::Struct::_Values($self);

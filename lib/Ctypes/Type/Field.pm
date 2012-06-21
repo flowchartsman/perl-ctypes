@@ -199,6 +199,7 @@ sub STORE {
   }
   if( $need_manual_update == 1 ) {
     $self->{VALUE}->_set_owner(undef);
+    $DB::single = 1;
     my $datum = ${$self->{VALUE}->data};
     $self->{_obj}{_obj}->_update_( $datum,
                                    $self->{_obj}{_index} );

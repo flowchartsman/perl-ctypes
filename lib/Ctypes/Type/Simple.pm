@@ -4,6 +4,7 @@ use warnings;
 use Carp;
 use Ctypes::Util qw|_debug|;
 use Ctypes::Type qw|&_types &strict_input_all|;
+use Devel::Peek;
 our @ISA = qw|Ctypes::Type|;
 use fields qw|alignment name _typecode size
               strict_input val _as_param_|;
@@ -271,23 +272,29 @@ sub _update_ {
       _debug( 5, "    My data is now:\n", unpack('b*', $self->{_data}), "\n"  );
       _debug( 5, "    Which is ", unpack($self->packcode,$self->{_data}), " as a number");
       $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
-    } else {
+    }# else {
 #
 # This needs thought... might not make sense.
 # Where would $self->{_value} get a new, correct value?
 #
-      $self->{_data} = pack($self->packcode, $self->{_value});
-    }
+#      _debug( 1, "self->data before: ", unpack('b*', $self->{_data}) );
+#      $self->{_data} = pack($self->packcode, $self->{_value});
+#      _debug( 1, "self->data after : ", unpack('b*', $self->{_data}) );
+#    }
   } else {
-# Don't need to pack() anything; _data should only ever be
-# be pased raw bytes.
+# Don't need to pack() anything; _update_ should only ever be
+# be passed raw bytes.
     $self->{_data} = $arg;
     if( $self->owner ) {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
+  _debug( 5, "Self->data: ", $self->{_data} );
+  _debug( 5, "Self->data: ", unpack( 'b*', $self->{_data} ) );
+  Dump $self->{_data};
   $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
   _debug( 5, "    VALUE is _update_d to " . $self->{_rawvalue}->[1] . "\n"  );
+  Dump $self->{_rawvalue}->[1];
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -430,7 +437,7 @@ of inconsistent data.
 
 sub _hook_fetch {
   my $obj = shift;
-  _debug( 4, "In _hook_fetch $obj->name\n"  );
+  _debug( 4, "In _hook_fetch ", $obj->name  );
   $_[0];
   #my $value = $obj->{_value};
 }
@@ -800,7 +807,7 @@ sub STORE {
 # if so update the binary data in that as well.
 #
   if( $object->{_owner} ) {
-    _debug( "    Have owner, updating with:\n",
+    _debug( 5, "    Have owner, updating with:\n",
       , "    binary:\n\t", unpack('b*', $object->{_data}), "\n"
       , "    typed:\n\t",  unpack($object->{_typecode},$object->{_data}), "\n" );
     $object->{_owner}->_update_($object->{_data}, $object->{_index});
@@ -812,8 +819,7 @@ sub STORE {
 sub FETCH {
   my $self = shift;
   my $object = $self->[0];
-  _debug( 4, "In ", $object->{_name}, "'s FETCH, from "
-    , (caller(1))[0..3] , "\n" );
+  _debug( 4, "In ", $object->{_name}, "'s FETCH, from ", join(", ",(caller(0))[0..3]) );
 #
 # If this object is part of a larger complex type object (like an Array
 # or a Struct), it's possible that that owning object's binary data has
@@ -829,7 +835,7 @@ sub FETCH {
   }
   croak("Error updating value!") if $object->{_datasafe} != 1;
   _debug( 4, "    ", $object->name, "'s Fetch returning "
-    , $object->{_value}, "\n" );
+    , $self->[1], "\n" );
   return $object->_hook_fetch($self->[1]);
 }
 
