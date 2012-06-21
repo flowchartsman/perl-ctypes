@@ -1,5 +1,5 @@
 package Ctypes::Type::Field;
-use Ctypes;
+use Ctypes::Util qw|_debug|;
 use Ctypes::Type::Struct;
 use Carp;
 use Data::Dumper;
@@ -153,8 +153,8 @@ sub STORE {
     }
     if( not defined $self->{VALUE} ) {
       _debug( 5, "    Initialising {VALUE} with plain scalar...\n"  );
-      my $tc = Ctypes::_check_type_needed( $val );
-      $val = new Ctypes::Type::Simple( $tc, $val );
+      my $tc = Ctypes::Util::_check_type_needed( $val );
+      $val = Ctypes::Type::Simple->new( $tc, $val );
       $self->{VALUE} = $val;
       $need_manual_update = 1;
     } else {

@@ -678,6 +678,7 @@ use base 'Ctypes::Type::c_ulonglong';
 # null terminated string, A?
 package Ctypes::Type::c_char_p;
 use base 'Ctypes::Type::Simple';
+use Ctypes::Util qw|_debug|;
 sub sizecode{'p'};
 sub packcode{'A?'};
 sub typecode{ $Ctypes::USE_PERLTYPES ? 'A' : 's'};

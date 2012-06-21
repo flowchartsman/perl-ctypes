@@ -191,9 +191,15 @@ sub new {
                _subclass   => $progeny,
                _alignment  => 0,
                _data       => '', };
+#
+# Need to do this to get a blessed Type before the following
+# two lines, so ::_Fields and ::_Values keep a reference to
+# the object, not the as-yet-unblessed hash.
+#
+  $DB::single = 1; 
+  $self = $class->_new( $self );
   $self->{_fields} = new Ctypes::Type::Struct::_Fields($self);
   $self->{_values} = new Ctypes::Type::Struct::_Values($self);
-  $self = $class->_new( $self );
   #bless $self => $class;
   #my $base = Ctypes::Type->_new;
   #for( keys(%$base) ) {
