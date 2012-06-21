@@ -427,7 +427,7 @@ sub _debug {
   croak( "debug() expects numeric debug level as 1st arg" )
     unless looks_like_number( $level );
   return unless $level <= $debuglvl;
-  print @_; # ( substr( $_[$#_], -1, 1 ) eq "\n" ? '' : "\n" );
+  print @_, ( substr( $_[$#_], -1, 1 ) eq "\n" ? '' : "\n" );
 }
 
 1;
