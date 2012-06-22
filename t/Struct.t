@@ -18,7 +18,7 @@ note( 'Simple construction (arrayref)' );
 
 isa_ok( $struct, 'Ctypes::Type::Struct' );
 is( $struct->name, 'Struct' );
-is( $struct->{f1}, 'P' ); #3
+is( $struct->{f1}, 'P' );
 is( $struct->{f2}, 10 );
 is( $struct->{f3}, 90000 );
 my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
@@ -203,13 +203,12 @@ note( 'Pointers' );
 
 my $ptr = Pointer( Array( 5, 4, 3, 2, 1 ) );
 my $arr = Array( 10, 20, 30, 40, 50 );
-print "FOOOOOOOOOOOOOOOOOOOOB!\n";
 my $stct = Struct([ pointer => $ptr,
                     array   => $arr, ]);
 $total = 0;
 $total += $_ for( @{ $$stct->{array} } );
 is( $total, 150 );
- $total += $_ for( @{ $$stct->{pointer}->deref } );
+$total += $_ for( @{ $$stct->{pointer}->deref } );
 is( $total, 165 );
 $$stct->{array}->[0] = 60;
 is( $stct->fields->[1], '<Field type=short_Array, ofs=4, size=10>' );

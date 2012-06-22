@@ -127,10 +127,10 @@ sub _code_overload {
 
 #
 # Remember the properties of input.
-# Calls XS function _grok_input_flags, which works
+# Calls XS function _save_input_flags, which works
 # as follows:
-#   See if input is a SvIOK/SvNOK AND SvPOK
-#     If so, see if it looks like a number
+#   See if input scalar is a number AND a string
+#     If so, see if the string looks like a number
 #       If so, take the number value
 #       If not, take the string value
 #     If not, respect the appropriate flag
@@ -181,8 +181,7 @@ sub new {
     _input           => {},
   } );
 
-  my $arg = '';
-  $arg = shift;
+  my $arg = shift;
   my( $invalid, $validated_arg ) = ( undef, 0 ); # 0 will be assigned if no $arg
 ##### Copious debugging
   _debug( 5, "    Saving arg..." );
@@ -191,15 +190,10 @@ sub new {
   _debug( 5, "      D::D");
   print Dumper $arg if $Ctypes::Util::debuglvl;
   _debug( 5, "      D::P" );
-#  Dump( $arg ) if $Ctypes::Util::debuglvl;
+  Dump( $arg ) if $Ctypes::Util::debuglvl;
 #####
-# Think this might have been old logic... not STORE does all checks?
-#  if (defined $arg) {
-#    $self->{_datasafe} = 0; # force initial _update_ and validate data
-#    ($invalid, $validated_arg) = $self->_hook_store($arg);
-#  }
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
-  $self->{_value} = $arg; # validated_arg
+  $self->{_value} = $arg; # validation done in STORE
   return $self;
 }
 
@@ -238,9 +232,6 @@ Return a copy of the object.
 sub copy {
   _debug( 5, "In Simple::copy\n"  );
   my $value = $_[0]->value;
-  my $tmp = $value;
-  $value = $tmp;
-#  _debug( 5, "    Value is $value\n"  );
   return Ctypes::Type::Simple->new( $_[0]->typecode, $value );
 }
 
@@ -294,9 +285,9 @@ sub _as_param_ { &data(@_) }
 sub _update_ {
   my $self = $_[0];
   _debug( 4, "In ", $self->{_name}, "'s _UPDATE_...\n"  );
-  _debug( 5, "    I am pwnd by ", $self->{_owner}->{_name} ) if $self->{_owner};
+  _debug( 5, "    Owned by ", $self->{_owner}->{_name} ) if $self->{_owner};
   if( not exists $_[1] ) {
-    _debug( 5, "    No binary argument..." );
+    _debug( 5, "    No (binary) argument..." );
     if( $self->{_owner} ) {
 #    if ( $self->{_owner} and not $self->{_datasafe} == 1 ) {
       _debug( 5, "    Have owner, getting updated data...\n"  );
@@ -313,27 +304,19 @@ sub _update_ {
       _debug( 5, "    My data is now:\n", unpack('b*', $self->{_data}), "\n"  );
       _debug( 5, "    Which is ", unpack($self->packcode,$self->{_data}), " as a number");
       $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
-    } # else {
-#
-# This needs thought... might not make sense.
-# Where would $self->{_value} get a new, correct value?
-#
-#      $self->{_data} = pack($self->packcode, $self->{_value});
-#    }
-  } else {
-# Don't need to pack() anything; _data should only ever be
-# be pased raw bytes.
-    $self->{_data} = $_[1];
+    }
+  } else { # we WERE passed an argument
+    $self->{_data} = $_[1]; # args must be binary, no pack needed
     if( $self->owner ) {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
   _debug( 5, "Self->data: ", $self->{_data} );
   _debug( 5, "Self->data: ", unpack( 'b*', $self->{_data} ) );
-#  Dump $self->{_data} if $Ctypes::Util::debuglvl;
+  Dump $self->{_data} if $Ctypes::Util::debuglvl;
   $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
   _debug( 5, "    VALUE is _update_d to ", $self->{_rawvalue}->[1], "\n"  );
-#  Dump $self->{_rawvalue}->[1] if $Ctypes::Util::debuglvl;
+  Dump $self->{_rawvalue}->[1] if $Ctypes::Util::debuglvl;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -796,14 +779,13 @@ sub TIESCALAR {
 }
 
 sub STORE {
-  croak("STORE must take a value") if scalar @_ != 2;
+  croak("Simple Types can only be assigned a single value") if scalar @_ != 2;
   my $self = $_[0];
   my $object = $self->[0];
   my $arg = $_[1];
   my $orig_arg = $arg;
   _debug( 4, "In ", $object->{_name}, "'s STORE with arg [ ", $arg, " ],\n"  );
   _debug( 5, "    called from ", (join ", ", ((caller(0))[0..3]) ), "\n" );
-  croak("Simple Types can only be assigned a single value") if exists $_[2];
 
   # Deal with being assigned other Type objects and the like...
 #    if(my $ref = ref($arg)) {
@@ -827,10 +809,10 @@ sub STORE {
     _debug( 5, "    Assigned undef. All goes null.\n"  );
     $object->{_datasafe} = 0;
     _debug( 5, "Rawvalue before assignment:" );
-#    Dump $self->[1] if $Ctypes::Util::debuglvl;
+    Dump $self->[1] if $Ctypes::Util::debuglvl;
     $self->[1] = 0;
     _debug( 5, "Rawvalue after assignment:" );
-#    Dump $self->[1] if $Ctypes::Util::debuglvl;
+    Dump $self->[1] if $Ctypes::Util::debuglvl;
     $object->{_data} = "\0" x 8 x $object->{_size}; # stay right length
     if( $object->{_owner} ) {
       $object->{_owner}->_update_($object->{_data}, $object->{_index});
@@ -902,11 +884,8 @@ sub FETCH {
   _debug( 5, "#    " . $object->{_name} . "'s FETCH: Input:" );
   print Dumper $object->{_input} if $Ctypes::Util::debuglvl;
   _debug( 5, "#    " . $object->{_name} . "'s FETCH: Self->[1]:" );
-#  Dump( $self->[1] ) if $Ctypes::Util::debuglvl;
+  Dump( $self->[1] ) if $Ctypes::Util::debuglvl;
   my $to_return = $self->[1];
-#  $object->_load_input_properties( $to_return ); 
-#  print "#    " . $object->{_name} . "'s FETCH: to_return:\n";
-#  Dump( $to_return );
   return $object->_hook_fetch( $to_return );
 }
 

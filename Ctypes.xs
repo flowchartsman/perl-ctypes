@@ -1051,36 +1051,6 @@ CODE:
 OUTPUT:
   RETVAL
 
-int
-_correct_flags(input_sv, output_sv)
-    SV* input_sv
-    SV* output_sv
-  CODE:
-    debug_warn("#[%s:%i] Entered _correct_flags", __FILE__, __LINE__);
-    if(SvIOK(input_sv)) {
-      debug_warn("#    IOK ON");
-      SvIOK_only(output_sv);
-    } else {
-      debug_warn("#    IOK OFF");
-      SvIOK_off(output_sv);
-    }
-    if(SvNOK(input_sv)) {
-      debug_warn("#    NOK ON");
-      SvNOK_only(output_sv);
-    } else {
-      debug_warn("#    NOK OFF");
-      SvNOK_off(output_sv);
-    }
-    if(SvPOK(input_sv)) {
-      debug_warn("#    POK ON");
-      SvPOK_only(output_sv);
-    } else {
-      debug_warn("#    POK OFF");
-      SvPOK_off(output_sv);
-    }
-  OUTPUT:
-    output_sv
-
 HV*
 _save_input_flags(input_hash,input_sv)
     HV* input_hash
@@ -1191,10 +1161,16 @@ _load_input_flags(input_hash,output_sv)
       }
     } else if( hv_exists( input_hash, "PV", 2 ) ) {
       debug_warn("#    It's meant to be PV");
-      string = SvPV( output_sv, len );
-      sv_setpv( output_sv, string );
-      debug_warn("#    Setting SvPOK_only");
-      SvPOK_only(output_sv);
+/* Problems happened when output_sv was already a string
+   type holding the null string \0. Don't know why... just
+   deal with it by not mucking around if the scalar's
+   already the type it should be. */
+      if( ! SvPOK( output_sv ) ) {
+        string = SvPV( output_sv, len );
+        sv_setpv( output_sv, string );
+        debug_warn("#    Setting SvPOK_only");
+        SvPOK_only(output_sv);
+      }
     }
   OUTPUT:
     output_sv
