@@ -3,6 +3,7 @@
 use warnings;
 use strict;
 use Test::More tests => 25;
+use Test::Warn;
 use Ctypes;
 use Ctypes::Callback;
 use Ctypes::Function;
@@ -67,7 +68,8 @@ subtest 'Wrongly sized deref' => sub {
 
 is( $ushortp->offset, 1, 'offset getter' );
 is( $ushortp->offset(5), 5, 'offset setter, but...' );
-is( $$ushortp[0], undef, '...you can\'t read random memory' );
+warnings_exist { $$ushortp[0] }
+  qr/Pointer cannot look past end of data/, "...you can't read random memory";
 subtest 'Set -ve offset and index forwards' => sub {
   plan tests => 2;
   is( $ushortp->offset(-5), -5, 'Can set -ve indices on object');
@@ -80,7 +82,6 @@ TODO: {
 # Why does Test::More's diag() make this blow up but print() doesn't?
 # In any case, 
   $ushortp->offset(5);
-  print "# from print:", $$ushortp[-4], "\n";
   eval { diag( "# from diag: ", $$ushortp[-4] ); };
   diag( $@ ) if $@;
 }

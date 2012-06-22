@@ -261,7 +261,6 @@ Return a copy of the Struct object.
 
 sub copy {
   my $self = shift;
-  warn "copy nyi";
   $self;
 }
 

@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 no warnings 'pack';
+use Test::More skip_all => "Only for reference";
 use Config;
 
 my $uchar_max = 2 ** 8 - 1;

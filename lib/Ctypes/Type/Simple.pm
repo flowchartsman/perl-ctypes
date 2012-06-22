@@ -838,8 +838,8 @@ sub STORE {
     if( ($object->strict_input == 1)
         or (Ctypes::Type::strict_input_all() == 1)
         or (not defined $validated_arg) ) {
-      _debug( 5, "Unable to ameliorate input. strict input or validate couldn't convert\n"  );
-      croak( $invalid, ' (got ', $arg, ')');
+      _debug( 5, "Unable to ameliorate input. strict input or validate couldn't convert" );
+      croak( $invalid . ' (got ' . $arg . ')');
       return undef;
     } else {
       carp( $invalid, ' (got ', $arg, ')');
