@@ -6,6 +6,7 @@ use Ctypes::Util qw|_debug|;
 use Ctypes::Type::Field;
 use Carp;
 use Data::Dumper;
+# use Data::Dumper;
 use overload
   '${}'    => \&_scalar_overload,
   '%{}'    => \&_hash_overload,
@@ -687,7 +688,7 @@ use strict;
 use Scalar::Util qw|blessed|;
 use Ctypes::Util qw|_debug|;
 use Carp;
-use Data::Dumper;
+# use Data::Dumper;
 
 sub TIEHASH {
   my $class = ref($_[0]) || $_[0];  shift;

@@ -101,7 +101,6 @@ sub SimpleTest {
       if( Ctypes::Type::is_a_number($input) ){
         return chr($input);
       } else {
-        diag "O HAI\n" if $Ctypes::Type::Simple::Debug;
         return substr($input, 0, 1);
       }
     }

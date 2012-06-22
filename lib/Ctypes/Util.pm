@@ -417,7 +417,7 @@ sub _find_nearest {
 #
 # Set up debugging facilities (inspired largely by Debug::Simple)
 #
-my( $debuglvl );
+our( $debuglvl );
 my $result = GetOptions(
   'debug=i' => \$debuglvl,
 );

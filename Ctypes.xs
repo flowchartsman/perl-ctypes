@@ -1051,6 +1051,154 @@ CODE:
 OUTPUT:
   RETVAL
 
+int
+_correct_flags(input_sv, output_sv)
+    SV* input_sv
+    SV* output_sv
+  CODE:
+    debug_warn("#[%s:%i] Entered _correct_flags", __FILE__, __LINE__);
+    if(SvIOK(input_sv)) {
+      debug_warn("#    IOK ON");
+      SvIOK_only(output_sv);
+    } else {
+      debug_warn("#    IOK OFF");
+      SvIOK_off(output_sv);
+    }
+    if(SvNOK(input_sv)) {
+      debug_warn("#    NOK ON");
+      SvNOK_only(output_sv);
+    } else {
+      debug_warn("#    NOK OFF");
+      SvNOK_off(output_sv);
+    }
+    if(SvPOK(input_sv)) {
+      debug_warn("#    POK ON");
+      SvPOK_only(output_sv);
+    } else {
+      debug_warn("#    POK OFF");
+      SvPOK_off(output_sv);
+    }
+  OUTPUT:
+    output_sv
+
+HV*
+_save_input_flags(input_hash,input_sv)
+    HV* input_hash
+    SV* input_sv
+  INIT:
+    UV* valuep;
+    STRLEN len;
+    int gn;
+    SV* marker;
+  CODE:
+/*
+  See if it's a number AND a string
+    If so, see if it looks like a number
+      If so, take the number value
+      If not, take the string value
+*/
+  debug_warn("#[%s:%i] Entered _save_input_flags", __FILE__, __LINE__);
+    if( SvOK(input_sv) ) {
+      hv_clear(input_hash);
+      marker = newSViv(1);
+      if( SvNIOK(input_sv) && SvPOK(input_sv) ) {
+        debug_warn("#    Input both number and string");
+        SvPV(input_sv, len);
+        if( gn = grok_number( SvPV(input_sv, len), len, valuep ) ) {
+          debug_warn("#    String looks like a number!");
+/*          if( gn & IS_NUMBER_IN_UV ) {
+            debug_warn("#    Setting IV");
+            hv_store( input_hash, "IV", 2, marker, 0 );
+          } else {  */
+            debug_warn("#    Setting NV");
+            hv_store( input_hash, "NV", 2, marker, 0 );
+/*          }  */
+        } else {
+          debug_warn("#    Didn't look like a number; setting PV");
+          hv_store( input_hash, "PV", 2, marker, 0 );
+        }
+      } else {
+        if( SvIOK(input_sv) ) {
+          debug_warn("#    Setting IV");
+          hv_store( input_hash, "IV", 2, marker, 0 );
+        } else if( SvNOK(input_sv) ) {
+          debug_warn("#    Setting NV");
+          hv_store( input_hash, "NV", 2, marker, 0 );
+        } else if( SvPOK(input_sv) ) {
+          debug_warn("#    Setting PV");
+          hv_store( input_hash, "PV", 2, marker, 0 );
+        }
+      }
+    } else {
+      debug_warn("#    Undef arg, returning...");
+    }
+  OUTPUT:
+    input_hash
+
+SV*
+_load_input_flags(input_hash,output_sv)
+    HV* input_hash
+    SV* output_sv
+  INIT:
+    double number;
+    char* string;
+    UV* valuep;
+    STRLEN len;
+    int gn;
+  CODE:
+  debug_warn("#[%s:%i] Entered _load_input_flags", __FILE__, __LINE__);
+/*  All numbers currently designated as NV for simplicity
+    if( hv_exists( input_hash, "IV", 2 ) ) {
+      debug_warn("#    IOK ON");
+      SvIOK_only(output_sv);
+    } else */
+    if( hv_exists( input_hash, "NV", 2 ) ) {
+      debug_warn("#    It's meant to be NV");
+      if( SvIOK( output_sv ) ) {
+        debug_warn("#      Copying IV -> NV");
+        number = (double)SvIV(output_sv);
+        sv_setnv( output_sv, number );
+        debug_warn("#      Setting SvNOK_only");
+        SvNOK_only(output_sv);
+      } else
+      if( SvUOK( output_sv ) ) {
+        debug_warn("#      Copying UV -> NV");
+        number = (double)SvUV(output_sv);
+        sv_setnv( output_sv, number );
+        debug_warn("#      Setting SvNOK_only");
+        SvNOK_only(output_sv);
+      } else
+      if( SvNOK( output_sv ) ) {
+        debug_warn("#      Setting SvNOK_only");
+        SvNOK_only(output_sv);
+      } else
+      if( SvPOK( output_sv ) ) {
+        debug_warn("#      Attempting to grok/copy PV -> NV");
+        SvPV(output_sv, len);
+        if( gn = grok_number( SvPV(output_sv, len), len, valuep ) ) {
+          if( gn == 1 ) { /* IS_NUMBER_IN_UV, but no other flags */
+            sv_setnv( output_sv, (double)(*valuep) );
+          }
+          else {
+            croak("# _load_input_flags: output should be NV, but couldn't interpret string representation.");
+          }
+        }
+        else {
+          croak("# _load_input_flags: output should be NV, but couldn't interpret string representation.");
+        }
+        debug_warn("#      Setting SvNOK_only");
+        SvNOK_only(output_sv);
+      }
+    } else if( hv_exists( input_hash, "PV", 2 ) ) {
+      debug_warn("#    It's meant to be PV");
+      string = SvPV( output_sv, len );
+      sv_setpv( output_sv, string );
+      debug_warn("#    Setting SvPOK_only");
+      SvPOK_only(output_sv);
+    }
+  OUTPUT:
+    output_sv
+
 void
 validate(arg_sv, typecode)
   SV* arg_sv;

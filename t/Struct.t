@@ -18,7 +18,7 @@ note( 'Simple construction (arrayref)' );
 
 isa_ok( $struct, 'Ctypes::Type::Struct' );
 is( $struct->name, 'Struct' );
-is( $struct->{f1}, 'P' );
+is( $struct->{f1}, 'P' ); #3
 is( $struct->{f2}, 10 );
 is( $struct->{f3}, 90000 );
 my $size = Ctypes::sizeof('c') + Ctypes::sizeof('i')
@@ -57,7 +57,7 @@ is( $alignedstruct->align, 8 );
 like( $@, qr/Invalid argument for _alignment method: 7/,
   '->align validation ok' );
 
-my $point = new t_POINT( 30, 40 );
+my $point = t_POINT->new( 30, 40 );
 subtest 'Positional parameterised initialisation' => sub {
   plan tests => 6;
   isa_ok( $point, 't_POINT' );
@@ -96,7 +96,7 @@ is( $struct->[1], 10 );
 $struct->values->[1] = 30;
 is( $struct->[1], 30 );
 
-my $data = pack('C',80) . pack('i',30) . pack('l',90000);
+my $data = pack('c',80) . pack('i',30) . pack('l',90000);
 is( ${$struct->data}, $data, '->data looks alright' );
 my $twentyfive = pack('i',25);
 my $dataref = $struct->data;
@@ -126,7 +126,7 @@ is( $struct->fields->{f3}->name, 'c_long'  );
 is( $struct->fields->{f1}->size, 1 );
 is( $struct->fields->{f2}->size, 4 );
 is( $struct->fields->{f3}->size, 4 );
-is( $struct->fields->{f1}->typecode, 'C', "typecode field f1 - C unsigned char from pack" );
+is( $struct->fields->{f1}->typecode, 'c', "typecode field f1 - c unsigned char from pack" );
 is( $struct->fields->{f2}->typecode, 'i' );
 is( $struct->fields->{f3}->typecode, 'l' );
 is( $struct->fields->{f1}->owner, $struct );
@@ -140,7 +140,7 @@ is( $struct->fields->[2]->name, 'c_long'  );
 is( $struct->fields->[0]->size, 1 );
 is( $struct->fields->[1]->size, 4 );
 is( $struct->fields->[2]->size, 4 );
-is( $struct->fields->[0]->typecode, 'C', "typecode field 0 - C unsigned char from pack" );
+is( $struct->fields->[0]->typecode, 'c', "typecode field 0 - c unsigned char from pack" );
 is( $struct->fields->[1]->typecode, 'i' );
 is( $struct->fields->[2]->typecode, 'l' );
 is( $struct->fields->[0]->owner, $struct );
@@ -182,7 +182,7 @@ is( $garden->{flowerbed}->fields->{roses},
 is( $$garden->{flowerbed}->{roses},
     '3','$$garden->{flowerbed}->fields->{roses} gives 3' );
 is( $garden->{flowerbed}->{roses},
-    '3','$garden->{flowerbed}->fields->{roses} also gives 3' );
+    '3','$garden->{flowerbed}->{roses} also gives 3' );
 
 my $home = Struct({ fields => [
   house => 40,
@@ -203,12 +203,13 @@ note( 'Pointers' );
 
 my $ptr = Pointer( Array( 5, 4, 3, 2, 1 ) );
 my $arr = Array( 10, 20, 30, 40, 50 );
+print "FOOOOOOOOOOOOOOOOOOOOB!\n";
 my $stct = Struct([ pointer => $ptr,
                     array   => $arr, ]);
 $total = 0;
 $total += $_ for( @{ $$stct->{array} } );
 is( $total, 150 );
-$total += $_ for( @{ $$stct->{pointer}->deref } );
+ $total += $_ for( @{ $$stct->{pointer}->deref } );
 is( $total, 165 );
 $$stct->{array}->[0] = 60;
 is( $stct->fields->[1], '<Field type=short_Array, ofs=4, size=10>' );

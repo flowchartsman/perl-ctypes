@@ -4,6 +4,7 @@ use warnings;
 use Carp;
 use Ctypes::Util qw|_debug|;
 use Ctypes::Type qw|&_types &strict_input_all|;
+use Data::Dumper;
 use Devel::Peek;
 our @ISA = qw|Ctypes::Type|;
 use fields qw|alignment name _typecode size
@@ -124,6 +125,28 @@ sub _code_overload {
   return sub { $self->{_value} = $_[0] }
 }
 
+#
+# Remember the properties of input.
+# Calls XS function _grok_input_flags, which works
+# as follows:
+#   See if input is a SvIOK/SvNOK AND SvPOK
+#     If so, see if it looks like a number
+#       If so, take the number value
+#       If not, take the string value
+#     If not, respect the appropriate flag
+#
+sub _save_input_properties {
+  # my( $self, $arg ) = @_;
+  $_[0]->{_input} = {};
+  Ctypes::Type::_save_input_flags( $_[0]->{_input}, $_[1] );
+  $_[0]->{_input}->{orig} = $_[1];
+}
+
+sub _load_input_properties {
+  # my( $self, $arg ) = @_;
+  Ctypes::Type::_load_input_flags( $_[0]->{_input}, $_[1] );
+  $_[1];
+}
 
 =over
 
@@ -149,26 +172,34 @@ sub new {
     $name = $class =~ /(c_\w+|)/;
     $typecode = $Ctypes::Type::_defined{$name};
   }
+  _debug( 4, "In Type::Simple constructor: typecode [ $typecode ]" );
   croak("Ctypes::Type::Simple error: Need typecode") if not defined $typecode;
   my $self = $class->_new( {
     _typecode        => $typecode,
     _name            => $name,
     _strict_input    => 0,
+    _input           => {},
   } );
 
-  my $arg = shift;
+  my $arg = '';
+  $arg = shift;
   my( $invalid, $validated_arg ) = ( undef, 0 ); # 0 will be assigned if no $arg
-  _debug( 4, "In Type::Simple constructor: typecode [ $typecode ]",
-    $arg ? ", arg [ $arg ]" : '', "\n" );
-  if (defined $arg) {
-    $self->{_datasafe} = 0; # force initial _update_ and validate data
-    ($invalid, $validated_arg) = $self->_hook_store($arg);
-  }
-  $self->{_input} = $arg;
+##### Copious debugging
+  _debug( 5, "    Saving arg..." );
+  $self->_save_input_properties( $arg );  ## Essential!
+  _debug( 5, "    arg was:");
+  _debug( 5, "      D::D");
+  print Dumper $arg if $Ctypes::Util::debuglvl;
+  _debug( 5, "      D::P" );
+#  Dump( $arg ) if $Ctypes::Util::debuglvl;
+#####
+# Think this might have been old logic... not STORE does all checks?
+#  if (defined $arg) {
+#    $self->{_datasafe} = 0; # force initial _update_ and validate data
+#    ($invalid, $validated_arg) = $self->_hook_store($arg);
+#  }
   $self->{_rawvalue} = tie $self->{_value}, 'Ctypes::Type::Simple::value', $self;
-  $self->{_value} = $validated_arg;
-  die "Error: value not internalized"
-    if not defined $self->{_rawvalue}->[1];
+  $self->{_value} = $arg; # validated_arg
   return $self;
 }
 
@@ -209,7 +240,7 @@ sub copy {
   my $value = $_[0]->value;
   my $tmp = $value;
   $value = $tmp;
-  _debug( 5, "    Value is $value\n"  );
+#  _debug( 5, "    Value is $value\n"  );
   return Ctypes::Type::Simple->new( $_[0]->typecode, $value );
 }
 
@@ -251,11 +282,21 @@ sub data {
 
 sub _as_param_ { &data(@_) }
 
+#
+# NB: _update_ should only ever take an argument of *binary data*
+#     which can be assigned to $obj->{_data} directly.
+#
+#     This is so that the process works the same way with more
+#     complex, aggregate types.
+#
+#     Nothing should need packed here!
+#
 sub _update_ {
-  my( $self, $arg ) = @_;
+  my $self = $_[0];
   _debug( 4, "In ", $self->{_name}, "'s _UPDATE_...\n"  );
   _debug( 5, "    I am pwnd by ", $self->{_owner}->{_name} ) if $self->{_owner};
-  if( not defined $arg ) {
+  if( not exists $_[1] ) {
+    _debug( 5, "    No binary argument..." );
     if( $self->{_owner} ) {
 #    if ( $self->{_owner} and not $self->{_datasafe} == 1 ) {
       _debug( 5, "    Have owner, getting updated data...\n"  );
@@ -272,29 +313,27 @@ sub _update_ {
       _debug( 5, "    My data is now:\n", unpack('b*', $self->{_data}), "\n"  );
       _debug( 5, "    Which is ", unpack($self->packcode,$self->{_data}), " as a number");
       $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
-    }# else {
+    } # else {
 #
 # This needs thought... might not make sense.
 # Where would $self->{_value} get a new, correct value?
 #
-#      _debug( 1, "self->data before: ", unpack('b*', $self->{_data}) );
 #      $self->{_data} = pack($self->packcode, $self->{_value});
-#      _debug( 1, "self->data after : ", unpack('b*', $self->{_data}) );
 #    }
   } else {
-# Don't need to pack() anything; _update_ should only ever be
-# be passed raw bytes.
-    $self->{_data} = $arg;
+# Don't need to pack() anything; _data should only ever be
+# be pased raw bytes.
+    $self->{_data} = $_[1];
     if( $self->owner ) {
       $self->owner->_update_($self->{_data}, $self->{_index});
     }
   }
   _debug( 5, "Self->data: ", $self->{_data} );
   _debug( 5, "Self->data: ", unpack( 'b*', $self->{_data} ) );
-  Dump $self->{_data};
+#  Dump $self->{_data} if $Ctypes::Util::debuglvl;
   $self->{_rawvalue}->[1] = unpack($self->packcode, $self->{_data});
-  _debug( 5, "    VALUE is _update_d to " . $self->{_rawvalue}->[1] . "\n"  );
-  Dump $self->{_rawvalue}->[1];
+  _debug( 5, "    VALUE is _update_d to ", $self->{_rawvalue}->[1], "\n"  );
+#  Dump $self->{_rawvalue}->[1] if $Ctypes::Util::debuglvl;
   $self->{_datasafe} = 1;
   return 1;
 }
@@ -370,7 +409,7 @@ sub _hook_store {
     return ("$name: wrong _minmax", $arg);
   }
   if( Ctypes::Type::is_a_number($arg) ) {
-    if( $arg !~ /^[+-]?\d+$/ ) {
+    if( $arg !~ /^[+-]?\d+$/ ) { # XXX fix to better rx's
       $invalid = "$name: numeric values must be integers " .
         "$MIN <= x <= $MAX";
       $arg = sprintf("%u",$arg);
@@ -478,7 +517,7 @@ sub _hook_fetch {
 # If the value assigned was a character, give a character back.
 # Otherwise give a number back (stored as a number internally).
 # XXX What if last assignment was e.g. a float?
-  return chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+  return chr($_[1]) if exists $_[0]->{_input}->{PV};
   $_[1];
 }
 
@@ -492,7 +531,8 @@ sub typecode{ $Ctypes::USE_PERLTYPES ? 'C' : 'B'};
 sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   _debug( 4, "In _hook_fetch c_ubyte\n"  );
-  return chr($_[1]) unless Ctypes::Type::is_a_number($_[0]->{_input});
+  return $_[0]->_load_input_properties( chr($_[1]) )
+    if exists $_[0]->{_input}->{PV};
   $_[1];
 }
 
@@ -511,8 +551,12 @@ sub _minmax {
 }
 sub _hook_fetch {
   _debug( 4, "In _hook_fetch c_char\n"  );
-  return chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
-  $_[1];
+# For char types, we want to return a PV (string) type scalar
+# regardless of the input type.
+  delete  $_[0]->{_input}->{IV} if exists $_[0]->{_input}->{IV};
+  delete  $_[0]->{_input}->{NV} if exists $_[0]->{_input}->{NV};
+  $_[0]->{_input}->{PV} = 1;
+  return $_[0]->_load_input_properties( chr($_[1] ) );
 }
 
 # single character, c unsigned, possibly a multi-char (?)
@@ -525,8 +569,12 @@ sub typecode{'C'};
 sub _minmax { ( 0, 255 ) }
 sub _hook_fetch {
   _debug( 4, "In _hook_fetch c_uchar\n"  );
-  return chr($_[1]) if Ctypes::Type::is_a_number($_[1]);
-  $_[1];
+# For char types, we want to return a PV (string) type scalar
+# regardless of the input type.
+  delete  $_[0]->{_input}->{IV} if exists $_[0]->{_input}->{IV};
+  delete  $_[0]->{_input}->{NV} if exists $_[0]->{_input}->{NV};
+  $_[0]->{_input}->{PV} = 1;
+  return $_[0]->_load_input_properties( chr($_[1] ) );
 }
 
 package Ctypes::Type::c_short;
@@ -559,6 +607,10 @@ sub _minmax {
   Ctypes::Type::Simple::_minmax_const
       (Ctypes::constant('PERL_INT_MIN'),
        Ctypes::constant('PERL_INT_MAX') ) }
+sub _hook_fetch {
+  return 0 unless defined $_[1];
+  return $_[0]->_load_input_properties( $_[1] );
+}
 
 # Alias to c_ulong where equal; I
 package Ctypes::Type::c_uint;
@@ -570,6 +622,10 @@ sub _minmax {
   Ctypes::Type::Simple::_minmax_const
       (Ctypes::constant('PERL_UINT_MIN'),
        Ctypes::constant('PERL_UINT_MAX') ) }
+sub _hook_fetch {
+  return 0 unless defined $_[1];
+  return $_[0]->_load_input_properties( $_[1] );
+}
 
 package Ctypes::Type::c_long;
 use base 'Ctypes::Type::Simple';
@@ -729,6 +785,8 @@ no warnings 'pack';
 use Carp;
 use Ctypes::Util qw |_debug|;
 use Scalar::Util qw|blessed|;
+use Data::Dumper;
+use Devel::Peek;
 
 sub TIESCALAR {
   my $class = shift;
@@ -739,12 +797,13 @@ sub TIESCALAR {
 
 sub STORE {
   croak("STORE must take a value") if scalar @_ != 2;
-  my $self = shift;
+  my $self = $_[0];
   my $object = $self->[0];
-  my $arg = shift;
+  my $arg = $_[1];
+  my $orig_arg = $arg;
   _debug( 4, "In ", $object->{_name}, "'s STORE with arg [ ", $arg, " ],\n"  );
-  _debug( 5, "    called from ", (caller(1))[0..3], "\n" );
-  croak("Simple Types can only be assigned a single value") if @_;
+  _debug( 5, "    called from ", (join ", ", ((caller(0))[0..3]) ), "\n" );
+  croak("Simple Types can only be assigned a single value") if exists $_[2];
 
   # Deal with being assigned other Type objects and the like...
 #    if(my $ref = ref($arg)) {
@@ -767,7 +826,11 @@ sub STORE {
   if( not defined $arg ) {
     _debug( 5, "    Assigned undef. All goes null.\n"  );
     $object->{_datasafe} = 0;
+    _debug( 5, "Rawvalue before assignment:" );
+#    Dump $self->[1] if $Ctypes::Util::debuglvl;
     $self->[1] = 0;
+    _debug( 5, "Rawvalue after assignment:" );
+#    Dump $self->[1] if $Ctypes::Util::debuglvl;
     $object->{_data} = "\0" x 8 x $object->{_size}; # stay right length
     if( $object->{_owner} ) {
       $object->{_owner}->_update_($object->{_data}, $object->{_index});
@@ -801,7 +864,7 @@ sub STORE {
 #
   eval { $object->{_data} = pack( $object->packcode, $validated_arg ); }; # overflow warning
   $self->[1] = unpack( $object->packcode, $object->{_data} );
-  $object->{_input} = $arg;
+  $object->_save_input_properties( $orig_arg );
 #
 # This object might be part of an Array or Struct;
 # if so update the binary data in that as well.
@@ -812,7 +875,7 @@ sub STORE {
       , "    typed:\n\t",  unpack($object->{_typecode},$object->{_data}), "\n" );
     $object->{_owner}->_update_($object->{_data}, $object->{_index});
   }
-  _debug( 4, "  Returning ok...\n"  );
+  _debug( 4, "  Returning ok [ ", $self->[1], " ]...\n"  );
   return $self->[1];
 }
 
@@ -836,7 +899,15 @@ sub FETCH {
   croak("Error updating value!") if $object->{_datasafe} != 1;
   _debug( 4, "    ", $object->name, "'s Fetch returning "
     , $self->[1], "\n" );
-  return $object->_hook_fetch($self->[1]);
+  _debug( 5, "#    " . $object->{_name} . "'s FETCH: Input:" );
+  print Dumper $object->{_input} if $Ctypes::Util::debuglvl;
+  _debug( 5, "#    " . $object->{_name} . "'s FETCH: Self->[1]:" );
+#  Dump( $self->[1] ) if $Ctypes::Util::debuglvl;
+  my $to_return = $self->[1];
+#  $object->_load_input_properties( $to_return ); 
+#  print "#    " . $object->{_name} . "'s FETCH: to_return:\n";
+#  Dump( $to_return );
+  return $object->_hook_fetch( $to_return );
 }
 
 1;
