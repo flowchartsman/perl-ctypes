@@ -383,6 +383,7 @@ sub _hook_store {
   my $invalid = undef;
   my $tc = $self->typecode;
   my $name = $self->name;
+  my $integer_only = $name =~ /double|float/ ? 0 : 1;
   _debug( 4, "In _hook_store $name\n" );
   return ( "$name: cannot take references", undef )
     if ref($arg);
@@ -393,17 +394,21 @@ sub _hook_store {
     return ("$name: wrong _minmax", $arg);
   }
   if( Ctypes::Type::is_a_number($arg) ) {
-    if( $arg !~ /^[+-]?\d+$/ ) { # XXX fix to better rx's
-      $invalid = "$name: numeric values must be integers " .
-        "$MIN <= x <= $MAX";
-      $arg = sprintf("%u",$arg);
+    if( $integer_only ) {
+      if( $arg !~ /^[+-]?\d+$/ ) { # XXX fix to better rx's
+        $invalid = "$name: numeric values must be "
+          . ( $integer_only ? "integers " : '' )
+          . "$MIN <= x <= $MAX";
+        $arg = sprintf("%u",$arg);
+      }
     }
     if( $arg < $MIN or $arg > $MAX ) {
-      $invalid = "$name: numeric values must be integers " .
-        "$MIN <= x <= $MAX"
+        $invalid = "$name: numeric values must be "
+          . ( $integer_only ? "integers " : '' )
+          . "$MIN <= x <= $MAX"
           if not defined $invalid;
     }
-  } else { # XXX single char allowed only if char in the name
+  } else {
     if( length($arg) == 1 ) {
       _debug( 5, "    1 char long, good\n" );
       $arg = ord($arg);

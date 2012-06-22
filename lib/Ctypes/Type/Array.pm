@@ -44,7 +44,7 @@ in this case the Perl array sigil 'C<@>'
 sub _arg_to_type {
   my( $arg, $type ) = @_;
   croak("_arg_to_type error: need typecode!") if not defined $type;
-  $type = $type->{_typecode} if ref($type); # take typecode or obj
+  $type = $type->{_typecode} if ref($type); # take typecode or obj XXX brittle
   my $out = undef;
   if( !ref($arg) ) {     # Perl native type
     # new() will handle casting and blow up if inappropriate
