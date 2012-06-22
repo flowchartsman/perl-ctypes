@@ -182,6 +182,7 @@ sub new {
   } );
 
   my $arg = shift;
+  $arg = 0 unless defined $arg;
   my( $invalid, $validated_arg ) = ( undef, 0 ); # 0 will be assigned if no $arg
 ##### Copious debugging
   _debug( 5, "    Saving arg..." );
@@ -814,6 +815,7 @@ sub STORE {
     _debug( 5, "Rawvalue after assignment:" );
     Dump $self->[1] if $Ctypes::Util::debuglvl;
     $object->{_data} = "\0" x 8 x $object->{_size}; # stay right length
+    _debug( 5, "  data is: ", unpack( 'b*', $object->{_data} ) );
     if( $object->{_owner} ) {
       $object->{_owner}->_update_($object->{_data}, $object->{_index});
     }

@@ -1,7 +1,7 @@
 package Ctypes::Type::Union;
 use strict;
 use warnings;
-use Ctypes;
+use Ctypes::Util qw|_debug|;
 use base qw|Ctypes::Type::Struct|;
 
 use Carp;
