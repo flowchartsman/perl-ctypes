@@ -391,7 +391,7 @@ sub _hook_store {
 
   my ($MIN,$MAX) = $self->_minmax();
   unless (defined $MIN) {
-    return ("$name: wrong _minmax", $arg);
+    return ("$name: _minmax failed", $arg);
   }
   if( Ctypes::Type::is_a_number($arg) ) {
     if( $integer_only ) {
@@ -643,7 +643,7 @@ sub packcode{'f'};
 sub typecode{'f'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
-      (Ctypes::constant('FLT_MIN'),
+      (Ctypes::constant('CTYPES_FLT_MIN'),
        Ctypes::constant('FLT_MAX') ) }
 
 package Ctypes::Type::c_double;
@@ -653,7 +653,7 @@ use base 'Ctypes::Type::Simple';
 sub typecode{'d'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
-      (Ctypes::constant('DBL_MIN'),
+      (Ctypes::constant('CTYPES_DBL_MIN'),
        Ctypes::constant('DBL_MAX') ) }
 
 package Ctypes::Type::c_longdouble;
@@ -663,7 +663,7 @@ sub packcode{'D'};
 sub typecode{ $Ctypes::USE_PERLTYPES ? 'D' : 'g'};
 sub _minmax {
   Ctypes::Type::Simple::_minmax_const
-      (Ctypes::constant('LDBL_MIN'),
+      (Ctypes::constant('CTYPES_LDBL_MIN'),
        Ctypes::constant('LDBL_MAX') ) }
 
 package Ctypes::Type::c_longlong;

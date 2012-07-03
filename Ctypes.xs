@@ -17,6 +17,7 @@
 #include "ffi.h"
 #include "limits.h"
 #include "Ctypes.h"
+#include "Ctypes_float_minima.h"
 #include "obj_util.c"
 #include "util.c"
 
