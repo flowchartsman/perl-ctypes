@@ -55,8 +55,7 @@ sub SimpleTest {
 
   # What does this type return?
 
-  my( $ret_input, $ret_char, $ret_num,
-      $is_float, $is_integer );
+  my( $ret_input, $ret_char, $ret_num, $is_float );
 
   $ret_input = $typehash->{ret_input} if exists $typehash->{ret_input};
   $ret_char = $typehash->{ret_char} if exists $typehash->{ret_char};
@@ -75,20 +74,15 @@ sub SimpleTest {
   diag "ret_char: $ret_char" if $Ctypes::Type::Simple::Debug;
   diag "ret_input: $ret_input" if $Ctypes::Type::Simple::Debug;
 
-  $is_integer = 1 if exists $typehash->{is_integer};
   $is_float = 1 if exists $typehash->{is_float};
-  croak( "Types cannot be both integer and float" )
-    if $is_integer && $is_float;
 
-  $is_integer = 1 unless $is_float;
-  diag "is integer: $is_integer\n" if $Ctypes::Type::Simple::Debug;
   diag "is float: $is_float\n" if $Ctypes::Type::Simple::Debug;
 
   my $get_return = sub {
     my $input = shift;
     if( $ret_input ) {
       if( Ctypes::Type::is_a_number($input) ){
-        if( $is_integer ) {
+        unless( $is_float ) {
           return int( $input );
         } else {
           return $input;
@@ -106,7 +100,7 @@ sub SimpleTest {
     }
     if( $ret_num ) {
       if( Ctypes::Type::is_a_number($input) ) {
-        if( $is_integer ) {
+        unless( $is_float ) {
           return int( $input );
         } else {
           return $input;
@@ -407,7 +401,6 @@ my $types = [
 
     ret_input    => 1,
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 128,
             },
@@ -422,7 +415,6 @@ my $types = [
 
     ret_input    => 1,
     is_signed    => 0,
-    is_integer   => 1,
     # For test value range:
     extra        => 256,
   },
@@ -437,7 +429,6 @@ my $types = [
 
     ret_char     => 1,
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 128,
   },
@@ -452,7 +443,6 @@ my $types = [
 
     ret_char     => 1,
     is_signed    => 0,
-    is_integer   => 1,
     # For test value range:
     extra        => 256,
   },
@@ -466,7 +456,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_SHORT_MIN'))[1],
 
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 100,
     cover        => 100,
@@ -483,7 +472,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_USHORT_MIN'))[1],
 
     is_signed    => 0,
-    is_integer   => 1,
     # For test value range:
     extra        => 100,
     cover        => 100,
@@ -500,7 +488,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_INT_MIN'))[1],
 
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 50,
     cover        => 100,
@@ -517,7 +504,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_UINT_MIN'))[1],
 
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 100,
     cover        => 100,
@@ -534,7 +520,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_LONG_MIN'))[1],
 
     is_signed    => 1,
-    is_integer   => 1,
     # For test value range:
     extra        => 50,
     cover        => 100,
@@ -551,7 +536,6 @@ my $types = [
     MIN          => (Ctypes::constant('PERL_ULONG_MIN'))[1],
 
     is_signed    => 0,
-    is_integer   => 1,
     # For test value range:
     extra        => 50,
     cover        => 100,
