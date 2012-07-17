@@ -6,6 +6,9 @@ use Carp;
 BEGIN { use_ok( Ctypes ) }
 use Ctypes::Util qw|create_range|;
 
+use Math::BigFloat;
+use Regexp::Common;
+
 
 #
 # Takes a hash of properties of Simple types
@@ -55,11 +58,13 @@ sub SimpleTest {
 
   # What does this type return?
 
-  my( $ret_input, $ret_char, $ret_num, $is_float );
+  my( $ret_input, $ret_char, $ret_num, $is_float, $epsilon );
 
   $ret_input = $typehash->{ret_input} if exists $typehash->{ret_input};
   $ret_char = $typehash->{ret_char} if exists $typehash->{ret_char};
   $ret_num = $typehash->{ret_num} if exists $typehash->{ret_num};
+
+  $epsilon = $typehash->{epsilon} if exists $typehash->{epsilon};
 
   my $ret_check =
     $ret_input ? 1 : 0 +
@@ -78,10 +83,14 @@ sub SimpleTest {
 
   diag "is float: $is_float\n" if $Ctypes::Type::Simple::Debug;
 
+  $epsilon = 1 unless $epsilon;
+
   my $get_return = sub {
     my $input = shift;
     if( $ret_input ) {
-      if( Ctypes::Type::is_a_number($input) ){
+      if( Ctypes::Type::is_a_number($input)
+        or ( ref($input) eq 'Math::BigInt' )
+        or ( ref($input) eq 'Math::BigFloat' ) ) {
         unless( $is_float ) {
           return int( $input );
         } else {
@@ -92,14 +101,18 @@ sub SimpleTest {
       }
     }
     if( $ret_char ) {
-      if( Ctypes::Type::is_a_number($input) ){
+      if( Ctypes::Type::is_a_number($input)
+        or ( ref($input) eq 'Math::BigInt' )
+        or ( ref($input) eq 'Math::BigFloat' ) ) {
         return chr($input);
       } else {
         return substr($input, 0, 1);
       }
     }
     if( $ret_num ) {
-      if( Ctypes::Type::is_a_number($input) ) {
+      if( Ctypes::Type::is_a_number($input)
+        or ( ref($input) eq 'Math::BigInt' )
+        or ( ref($input) eq 'Math::BigFloat' ) ) {
         unless( $is_float ) {
           return int( $input );
         } else {
@@ -141,7 +154,7 @@ sub SimpleTest {
     like( $@, qr/$name: cannot take references \(got ARRAY.*\)/ );
   };
 
-  unless( $is_float ) {
+  unless( $is_float == 1 ) {
     subtest "$name drops numbers after decimal point" => sub {
       plan tests => 3;
       $input = 95.2;
@@ -156,20 +169,33 @@ sub SimpleTest {
   # so these tests can't really be any better.
   # **reference to the standard?
   subtest "$name: number overflow" => sub {
-    for( $range->( $MIN - $extra, $MIN - 1 ) ) {
+    for( $range->( $MIN - $extra, $MIN - $epsilon ) ) {
       warnings_exist { $$x = $_ }
-        [ { carped => qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/} ];
+        [ { carped => qr/
+                        $name:\ numeric\ values\ must\ be
+                        \ (integers\ )? $RE{num}{real}
+                        \ <=\ x\ <=\ $RE{num}{real}
+                        \ \(got\ $RE{num}{real}\)
+                        /x } ];
       isnt( $$x, $get_return->($_) );
       ok( $$x >= $MIN );
     }
     for( $range->( $MIN, $MAX, $cover, $weight, $want_int ) ) {
       $$x = $_;
+    SKIP: {
+      skip "Todo: make this work for floats", 1 if $is_float;
       is( $$x, $get_return->($_) );
+    }
       is( ${$x->data}, pack($x->packcode, $_ ) );
     }
     for( $range->( $MAX + 1, $MAX + $extra ) ) {
       warnings_exist { $$x = $_ }
-        [ { carped => qr/$name: numeric values must be integers $MIN <= x <= $MAX \(got $_\)/} ];
+        [ { carped => qr/
+                        $name:\ numeric\ values\ must\ be
+                        \ (integers\ )? $RE{num}{real}
+                        \ <=\ x\ <=\ $RE{num}{real}
+                        \ \(got\ $RE{num}{real}\)
+                        /x } ];
       isnt( $$x, $get_return->($_) );
       ok( $$x <= $MAX );
     }
@@ -542,8 +568,28 @@ my $types = [
     weight       => 1,
     want_int     => 1,
   },
+# TODO: Various problems with testing float types
+#      { #10
+#        instantiator => 'c_float',
+#        packcode     => 'f',
+#        sizecode     => 'f',
+#        typecode     => 'f',
+#        name         => 'c_float',
+#        MAX          => Math::BigFloat->new( (Ctypes::constant('FLT_MAX'))[1] ),
+#        MIN          => Math::BigFloat->new( (Ctypes::constant('CTYPES_FLT_MIN'))[1] ),
+#        epsilon      => Math::BigFloat->new( (Ctypes::constant('FLT_EPSILON'))[1] ),
+#    
+#        is_signed    => 1,
+#        is_float     => 1,
+#        # For test value range:
+#        extra        => 10,
+#        cover        => 100,
+#        weight       => 1,
+#        want_int     => 0,
+#      },
 ];
 
-SimpleTest($_) for ( @$types ); # [ $#types ];
-
+# Comment as appropriate
+# SimpleTest( $types->[9] ); # convenient testing of new type
+SimpleTest($_) for ( @$types ); # testing all types
 done_testing();

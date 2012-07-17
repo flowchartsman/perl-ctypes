@@ -70,6 +70,7 @@ WriteMakefile(
     ABSTRACT_FROM     => 'lib/Ctypes.pm',
     AUTHOR            => 'Ryan Jendoubi <ryan d\x{00f6}t jendoubi at gmail d\x{00f6}t com, Reini Urban',
     PREREQ_PM         => {},
+    BUILD_REQUIRES    => {"Regexp::Common" => 0},
     LIBS              => $libdir ? [ "-L$libdir -lffi" ] : [ "-lffi" ],
     INC               => $incdir ? "-I. -I$incdir" : "-I.",
     realclean         => {FILES => "Ctypes_float_minima.h"},
@@ -218,8 +219,9 @@ if  (eval {require ExtUtils::Constant; 1}) {
                  PERL_USHORT_MAX PERL_INT_MIN PERL_INT_MAX PERL_UINT_MIN
                  PERL_UINT_MAX PERL_LONG_MIN PERL_LONG_MAX PERL_ULONG_MIN
                  PERL_ULONG_MAX PERL_UCHAR_MIN PERL_UCHAR_MAX CHAR_MIN CHAR_MAX
-                 FLT_MAX CTYPES_FLT_MIN DBL_MAX CTYPES_DBL_MIN
-                 LDBL_MAX CTYPES_LDBL_MIN|,
+                 FLT_MAX CTYPES_FLT_MIN FLT_EPSILON
+                 DBL_MAX CTYPES_DBL_MIN DBL_EPSILON
+                 LDBL_MAX CTYPES_LDBL_MIN LDBL_EPSILON|,
               {name=>"FFI_BAD_ABI", macro=>"1"},
               {name=>"FFI_BAD_TYPEDEF", macro=>"1"},
               {name=>"FFI_OK", macro=>"1"});
