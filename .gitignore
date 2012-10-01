@@ -35,3 +35,5 @@ cygwin/
 *.zip
 .test*
 Ctypes*.tar.gz
+.prove
+.perlcritic
