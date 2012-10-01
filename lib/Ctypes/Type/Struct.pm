@@ -119,15 +119,6 @@ initialisations where the default alignment and endianness is acceptable.
                      field3 => c_double(999999999999999999),
                    ]);
 
-You might wonder why the hashref form doesn't look like this. The reason
-is that we need the hashref form for specifying specific attributes of
-the Struct, like C<align> and C<endianness (NYI)>, which would of course
-cause problems if you wanted to make a Struct with a field called 'align'.
-So with the arrayref syntax, we make use of the fact that Perl's C<=E<gt>>
-operator is mostly just a synonym for the comma operator to pass a simple
-list of arguments which looks like named key-value pairs to the human
-reader.
-
 The hashref syntax currently supports only two named attributes:
 
 =over
