@@ -2,6 +2,10 @@ package Ctypes;
 use strict;
 use warnings;
 
+=pod
+
+=encoding utf8
+
 =head1 NAME
 
 Ctypes - Call and wrap C libraries and functions from Perl, using Perl
@@ -873,6 +877,463 @@ assumed to be zero-terminated.
 
 =back
 
+=head1 API Comparison
+
+Ctypes:
+
+    my $function = Ctypes::Function->new( 'libc', 'sqrt', 'sig' );
+
+P5NCI:
+
+    my $function  = P5NCI::load_func( $library, 'func', 'sig' );
+    my $double_double = $lib->load_function( 'func', 'sig' );
+
+C::DynaLib:
+
+    $func = $lib->DeclareSub( $symbol_name[, $return_type [, @arg_types] ] );
+    $func = DeclareSub( $function_pointer[, $return_type [, @arg_types] ] );
+
+FFI.pm:
+
+    $lib = FFI::Library->new("mylib");
+    $fn = $lib->function("fn", "signature");
+
+=head1 TODO
+
+=head2 General
+
+Basically you can help porting the mess from the old over-architectured OO layout 
+to the new class layout.
+
+  done: Simple and partially Pointer
+  todo: Array, Struct, Field, Union, and fix the "not so simple" Simple types.
+
+See http://gitorious.org/perl-ctypes/perl-ctypes/commits/classify
+
+=over
+
+=item * Convert to using actual C-space storage for basic types
+
+Python has an abstract base class with some basic methods, and the same
+C structure underlying all C type classes.
+
+    struct tagCDataObject {
+       (PyObject_HEAD               /* Standard Python object fields */)
+
+        char *b_ptr;                /* pointer to memory block */
+        Py_ssize_t b_size;          /* size of memory block in bytes */
+        Py_ssize_t b_length;        /* number of fields of this object */
+        Py_ssize_t b_index;         /* index of this object into the base
+                                       objects b_object list */
+
+        int b_needsfree;            /* does the object own its memory block? */
+        CDataObject *b_base;        /* pointer to base object or NULL */
+        PyObject *b_objects;        /* references we need to keep */
+        union value b_value;        /* a small default buffer */
+    }
+
+=item * Expand range of basic Types (see below for list)
+
+=over
+
+=item * Tests for all basic Types
+
+=back
+
+=item * Raise general code quality to encourage contributions
+
+=over
+
+=item * More consistent method names
+
+=item * Resolve or properly document all XXX's and ???'s
+
+=back
+
+=item * Checking if correct arguments are supplied for argtypeless
+calls?
+
+=item * Special library defaults for Strawberry Perl (requrest from
+kthakore / SDL)
+
+=item * Thread safety?
+
+=item * Setup scripts (auto-generation of wrapper modules from headers)
+
+=item * Raw data injection into functions (request from Shmuel Fomberg)
+
+=over
+
+=item * Type::Blob?
+
+=back
+
+=back
+
+=head2 XS Cleanup
+
+=over
+
+=item * I<Check for void pointers after each Newxc>
+
+=item * Finish Ctypes::valid_for_type function for other than int
+
+=over
+
+=item - This may be done?
+
+=item - What about Pointers?
+
+=item - What about UTF8?
+
+=back
+
+=back
+
+=head2 Function / Library objects
+
+=over
+
+=item * Test/implement more complex "output arguments" functionality
+
+=item * Cache function (in lib?) on CDLL->lib->func()
+
+=item * Allow a sub as a restype (if func returns integer) in order
+to perform error checking.
+
+=over
+
+=item This is actually marked as deprecated, use errcheck attr now?
+
+=back
+
+=item * Python Ctypes requires everything but integers, strings and
+unicode strings "to be wrapped in their corresponding ctypes type,
+so that they can be converted to the required C data type".
+
+Python Types:
+
+=over
+
+=item Sequence types: str, unicode, list, tuple, buffer, xrange
+
+=item Numeric Types: int, float, long, complex
+
+=item Dicts
+
+=item Files
+
+=item Iterators, generators, Sets, memoryview, contextmanager
+
+=item Modules, Classes, Functions, Methods, Code, Type, Null,
+Boolean, Ellipsis
+
+=back
+
+We could maybe choose a sensible defaults?
+
+=over
+
+=item Numbers => depends on IOK/NOK
+
+=item Strings => char* (check SvUTF8)
+
+=item Arrays => lowest common denominator? (logic exists
+in Ctypes::Array)
+
+=over
+
+=item int, double, or char*
+
+=item (logic exists in Ctypes::Array):
+
+1) discern LCD
+
+2) pack() appropriately
+
+3) pass packed data
+
+4) unpack() & modify original array
+
+=back
+
+=item Hashes => Build a Ctypes::Struct?
+
+=back
+
+An alternative would be to merge the two logics: if there are
+argtypes, accept anything and coerce. If there aren't argtypes,
+require ctypes obj wrapping.
+
+=back
+
+=head2 Callbacks
+
+=over
+
+=item * Make signature style more like Function's
+
+=item * Update POD
+
+=item * accessor methods
+
+=back
+
+=head2 Type objects
+
+=over
+
+=item * Casting
+
+Should use same backend func as Ctypes::cast. Current implementation
+is ok, needs filled it out.
+
+Cast will return a COPY of the casted object.
+
+Python Ctypes does implicit casting of variables returned from foreign
+function calls:
+
+    "Fundamental data types, when returned as foreign function call
+    results, or, for example, by retrieving structure field members
+    or array items, are transparently converted to native Python
+    types. In other words, if a foreign function has a restype of
+    c_char_p, you will always receive a Python string, not a c_char_p
+    instance.
+
+    "Subclasses of fundamental data types do not inherit this behavior.
+    So, if a foreign functions restype is a subclass of c_void_p, you
+    will receive an instance of this subclass from the function call.
+    Of course, you can get the value of the pointer by accessing the
+    value attribute."
+
+=back
+
+=head2 Arrays
+
+=over
+
+=item * Second (Python-style) API:
+
+    TenPointsArrayType = POINT * 10;    # POINT is a class
+    arr = TenPointsArrayType();         # Step 2, get actual array!
+
+=back
+
+=head2 Pointers
+
+Python Ctypes may converts pointers-to-type to the type itself in
+_build_callargs; see Python's _ctypes.c 3136-3156
+
+=head2 Structs / Unions
+
+=over
+
+=item * Bit fields
+
+=item * Change endianness on-demand
+
+=back
+
+=head2 Constants
+
+Thin wrapper around ExtUtils::Constant?
+
+=head2 Windows Conveniences
+
+=over
+
+=item COM objects?
+
+=item Structured Exception Handling?
+
+=item OLEDLL?
+
+=item Defaulting to returning HRESULT
+
+=item Auto-raise WindowsError on failure
+
+=back
+
+=head2 Header inspection
+
+=over
+
+=item L<GCC::TranslationUnit|GCC::TranslationUnit>?
+
+=item External C parser like C::B::C?
+
+=item Setup scripts (auto-generation of wrapper modules from
+headers)
+
+=back
+
+=head2 Full list of Simple data types to be implemented
+
+=over
+
+=item * Ctypes::c_int8
+
+    - ffi_type_sint8
+    - pack c
+    Represents the C 8-bit signed int datatype.
+    Usually an alias for c_byte.
+
+=item * Ctypes::c_uint8
+
+    - ffi_type_uint8
+    - pack C
+    Represents the C 8-bit unsigned int datatype.
+    Usually an alias for c_ubyte.
+
+=item * Ctypes::c_int16
+
+    - ffi_type_sint16
+    Represents the C 16-bit signed int datatype.
+    Usually an alias for c_short.
+
+=item * Ctypes:c_uint16
+
+    - ffi_type_uint16
+    Represents the C 16-bit unsigned int datatype.
+    Usually an alias for c_ushort.
+
+=item * Ctypes::c_int32
+
+    Represents the C 32-bit signed int datatype.
+    Usually an alias for c_int.
+
+=item * Ctypes::c_uint32
+
+    Represents the C 32-bit unsigned int datatype.
+    Usually an alias for c_uint.
+
+=item * Ctypes::c_int64
+
+    Represents the C 64-bit signed int datatype.
+    Usually an alias for c_longlong.
+
+=item * Ctypes::c_uint64
+
+    Represents the C 64-bit unsigned int datatype.
+   Usually an alias for c_ulonglong.
+
+=item * Ctypes::c_float
+
+    - ffi_type_float
+    - f
+    Represents the C double datatype.
+    The constructor accepts an optional numeric initializer.
+
+=item * Ctypes::c_double
+
+    - ffi_type_double
+    - d
+    Represents the C double datatype.
+    The constructor accepts an optional numeric initializer.
+
+=item * Ctypes::c_byte
+
+     - ffi_type_uint8
+     - C
+    Represents the C signed char datatype, and interprets the value as small integer.
+    The constructor accepts an optional integer initializer
+    Overflow checking Is done.
+    Also accepts character initializer - **what does this mean for unicode?
+
+=item * Ctypes::c_char
+
+    - ffi_type_uchar / ffi_type_schar (inspect $Config{'stdchar'})
+    - C or c (inspect $Config{'stdchar'}, $Config{'charbits'}, $Config{'charsize'}
+    Represents the C char datatype, and interprets the value as a single character.
+    The constructor accepts an optional string initializer, the length of the string must be exactly one character.
+
+=item * Ctypes::c_char_p
+
+    Represents the C char * datatype, which must be a pointer to a zero-terminated string.
+    The constructor accepts an integer address, or a string.
+    **what are addresses? How should they be expressed in Perl-land?
+
+=item * Ctypes::c_ushort
+
+    Represents the C unsigned short datatype.
+    The constructor accepts an optional integer initializer
+    (No) overflow checking is done.
+
+=item * Ctypes::c_short
+
+    Represents the C signed short datatype.
+    The constructor accepts an optional integer initializer.
+    (No) overflow checking is done.
+
+=item * Ctypes::c_int
+
+    - ffi_type_sint
+    Represents the C signed int datatype.
+    The constructor accepts an optional integer initializer.
+    (No) overflow checking is done.
+    On platforms where sizeof(int) == sizeof(long) it is an alias to c_long.
+
+=item * Ctypes::c_uint
+
+    Represents the C unsigned int datatype.
+    The constructor accepts an optional integer initializer
+    (No) overflow checking is done.
+    On platforms where sizeof(int) == sizeof(long) it is an alias for c_ulong.
+
+=item * Ctypes::c_ulong
+
+    Represents the C unsigned long datatype.
+    The constructor accepts an optional integer initializer.
+    (No) overflow checking is done.
+
+=item * Ctypes::c_long
+
+    Represents the C signed long datatype.
+    The constructor accepts an optional integer initializer
+    (No) overflow checking is done.
+
+=item * Ctypes::c_longlong
+
+    Represents the C signed long long datatype.
+    The constructor accepts an optional integer initializer
+    (No) overflow checking is done.
+
+=item * Ctypes::c_size_t
+
+    Represents the C size_t datatype.
+
+=item * Ctypes::c_ubyte
+
+    Represents the C unsigned char datatype, it interprets the value as small integer.
+    The constructor accepts an optional integer initializer.
+    (No) overflow checking is done.
+
+=item * Ctypes::c_ulonglong
+
+    Represents the C unsigned long long datatype.
+    The constructor accepts an optional integer initializer.
+    (No) overflow checking is done.
+
+=item * Ctypes::c_void_p
+
+    Represents the C void * type.
+    The value is represented as integer.
+    The constructor accepts an optional integer initializer.
+
+=item * Ctypes::c_wchar
+
+    Represents the C wchar_t datatype
+    Interprets the value as a single character unicode string.
+    The constructor accepts an optional string initializer.
+    The length of the string must be exactly one character.
+
+=item * Ctypes::c_wchar_p
+
+    Represents the C wchar_t * datatype, which must be a pointer to a zero-terminated wide character string.
+    The constructor accepts an integer address, or a string.
+
+=back
+
 =head1 AUTHOR
 
 Ryan Jendoubi C<< <ryan.jendoubi at gmail.com> >>
@@ -921,10 +1382,14 @@ L<http://search.cpan.org/dist/Ctypes/>
 
 =head1 SEE ALSO
 
-There are 4 other Perl ffi libraries:
-  L<Win32::API>, L<C::DynaLib>, L<FFI> and L<P5NCI>.
+The 4 other Perl ffi libraries: L<Win32::API>, L<C::DynaLib>,
+L<FFI> and L<P5NCI>.
 
-You'll need the headers and/or description of the foreign library.
+The Python, Ruby, Javascript and Pure integrations with
+L<libffi|http://sourceware.org/libffi/>.
+
+You'll need the headers and/or description of the foreign
+library.
 
 =head1 ACKNOWLEDGEMENTS
 
@@ -934,7 +1399,7 @@ and Shlomi Fish for giving me the opportunity to work on the project.
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2010 Ryan Jendoubi.
+Copyright 2010—2012 Ryan Jendoubi.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the Artistic License 2.0.
